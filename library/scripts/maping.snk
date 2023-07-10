@@ -1,0 +1,113 @@
+import os
+from load_exp_info import load_exp_info
+from load_config import load_config
+from log_entry import log_entry
+import datetime
+
+
+log_filename=datetime.datetime.now().strftime("%Y%m%d_%H%M%S")+'.log'
+
+exp_info,sample_dict=load_exp_info(log_filename)
+MATseq_config=load_config(log_filename)
+bowtie_threads=MATseq_config['bowtie_threads']
+
+
+SQN_project_number=exp_info['SQN_project_number']
+
+SAMPLES=[]
+for filename in(os.listdir('temp/unique_fastq/')):
+	if filename.endswith('_R1.fastq'):
+		SAMPLES.append(filename.replace('_R1.fastq',''))
+
+
+log_entry(str(len(SAMPLES))+' samples identified',True,log_filename)
+
+
+#this tells snakemake what all the final files are so I dont have to deal with the wildcard error
+rule all:
+	input:
+		expand("temp/sam/{sample}.sam", sample=SAMPLES),
+		expand('temp/bed/{sample}.bed', sample=SAMPLES),
+		expand('temp/read_counts/{sample}_genecount.csv',sample=SAMPLES),
+		expand('logs/bowtie2/{sample}.log',sample=SAMPLES),
+		'experiment/results/read_counts_analysis/'+SQN_project_number+'_raw_reads.xlsx',
+		'experiment/results/read_counts_analysis/'+SQN_project_number+'_raw_reads.csv',
+		'experiment/results/stats/'+SQN_project_number+'_seqstats.xlsx',
+		'experiment/results/MLPC_prediction/'+SQN_project_number+'_MLPC_prediction.xlsx',
+		'experiment/results/MLPC_prediction/'+SQN_project_number+'_MLPC_prediction.csv'
+
+
+
+rule Bowtie2_map:
+	input:
+		right="temp/unique_fastq/{sample}_R1.fastq",
+		left="temp/unique_fastq/{sample}_R3.fastq"
+
+	output:
+		"temp/sam/{sample}.sam"
+
+	log:
+		"logs/bowtie2/{sample}.log"
+
+	shell:
+		"bowtie2 -x library/genomes/GRCh38_cds -1 {input.right} -2 {input.left} -p {bowtie_threads} --fr  --no-discordant --no-mixed -3 50 -5 10 -S {output} --no-unal 2>{log}"
+		
+rule Seq_stats: #note: this rule assumes that the demultiplexing was made prior to this pipeline
+	input:
+		dedupstats='experiment/results/stats/deduping_stats.csv',
+		seqlogs=expand('logs/bowtie2/{sample}.log',sample=SAMPLES),
+	
+	log:
+	  log_filename,
+		
+	output:
+		"experiment/results/stats/"+SQN_project_number+'_seqstats.xlsx'
+	script:
+		"parses_sequencing_stats.py"
+
+rule sam_to_bed:
+	resources:
+		load=1
+
+	input:
+		"temp/sam/{sample}.sam"
+	output:
+		"temp/bed/{sample}.bed"
+	script:
+		'sam_to_bed.py'
+
+rule count_genes_from_Bed:
+	input:
+		"temp/bed/{sample}.bed"
+	output:
+		"temp/read_counts/{sample}_genecount.csv"
+	script:
+		'count_genes_from_Bed.py'
+		
+		
+rule merge_all_gene_counts:
+    input:
+      filenames=expand('temp/read_counts/{sample}_genecount.csv', sample=SAMPLES),
+      
+    log:
+        log_filename,
+        
+    output:
+        'experiment/results/read_counts_analysis/'+SQN_project_number+'_raw_reads.xlsx',
+        'experiment/results/read_counts_analysis/'+SQN_project_number+'_raw_reads.csv',
+    script:
+        'merge_all_gene_counts.py'
+        
+
+rule MLPC_classification:
+    input:
+      'experiment/results/read_counts_analysis/'+SQN_project_number+'_raw_reads.csv',
+      
+    log:
+        log_filename,
+        
+    output:
+        'experiment/results/MLPC_prediction/'+SQN_project_number+'_MLPC_prediction.xlsx',
+        'experiment/results/MLPC_prediction/'+SQN_project_number+'_MLPC_prediction.csv',
+    script:
+        'MLPC_classification.py'

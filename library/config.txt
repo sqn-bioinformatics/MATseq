@@ -1,0 +1,2 @@
+prompt_download_new_files : True
+bowtie_threads : 8
