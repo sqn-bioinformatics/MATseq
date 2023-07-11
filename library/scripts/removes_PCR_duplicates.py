@@ -141,7 +141,8 @@ def removedups_NO_loading(ddR1,ddR2,ddR3,sample,run):
     del ddR1 #clears memory
     del ddR2 #clears memory
     del ddR3 #clears memory
-    log_entry('run deduped in '+("--- %s seconds ---" % (time.time() - start_time)),True,log_filename)
+    log_entry(f'run deduped in {time.time() - start_time:.2f} seconds', True, log_filename)
+
     
     return(dedupedR1,dedupedR2,dedupedR3,ninitial,nfinal)
 
@@ -222,7 +223,7 @@ for sample in samplelist:
       stats.append(dict(zip(stats_columns,[sample,'merged',ninitial,nfinal])))
       gc.collect()
     
-    log_entry('saving dedupped fastq files',True,log_filename)
+    log_entry('saving deduped fastq files',True,log_filename)
         
     open('temp/unique_fastq/'+sample+'_R1.fastq','w').writelines(ddR1)
     del ddR1
@@ -232,7 +233,7 @@ for sample in samplelist:
     
     open('temp/unique_fastq/'+sample+'_R3.fastq','w').writelines(ddR3)
     del ddR3
-    log_entry('dedupped fastq files saved',True,log_filename)
+    log_entry('deduped fastq files saved',True,log_filename)
     gc.collect()
     
     log_entry(sample+' deduped!',True,log_filename)

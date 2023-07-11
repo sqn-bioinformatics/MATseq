@@ -7,6 +7,6 @@ def load_config(log_filename):
             config=(yaml.safe_load(stream))
         except yaml.YAMLError as exc:
             print(exc)
-            print('ERROR during config.txt loading')
+            print('error loading ofconfig.txt')
     log_entry('MATseq configuration loaded',True,log_filename)
     return(config)

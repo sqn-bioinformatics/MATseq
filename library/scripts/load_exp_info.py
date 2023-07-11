@@ -8,7 +8,7 @@ def load_exp_info(log_filename):
                       ].to_dict()['values']
     
     if exp_info['GS_project_number']=='':
-        log_entry('ERROR: no project number\n parse_exp_info.py TERMINATED',True,log_filename)
+        log_entry('error absence of project number\n parse_exp_info.py TERMINATED',True,log_filename)
         exit()
 
     sample_dict=conditions_pd.iloc[conditions_pd.index.get_loc('GS_sample_id')+1:
