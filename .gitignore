@@ -1,0 +1,18 @@
+#ignore /bin
+/bin
+ 
+#ignore conda-meta
+/conda-meta
+
+#ignore all logs
+**/logs
+logs
+**/*.pyc
+
+#ignore config
+config.txt
+
+#ignore all .txt
+**/*.txt
+
+
