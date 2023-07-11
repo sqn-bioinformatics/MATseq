@@ -9,7 +9,6 @@ __license__ = "MIT"
 from os import path
 import re
 from tempfile import TemporaryDirectory
-
 from snakemake.shell import shell
 
 log = snakemake.log_fmt_shell(stdout=True, stderr=True)
@@ -19,6 +18,7 @@ def basename_without_ext(file_path):
     """Returns basename of file path, without the file extension."""
 
     base = path.basename(file_path)
+
     # Remove file extension(s) (similar to the internal fastqc approach)
     base = re.sub("\\.gz$", "", base)
     base = re.sub("\\.bz2$", "", base)
@@ -31,8 +31,10 @@ def basename_without_ext(file_path):
     return base
 
 
-# Run fastqc, since there can be race conditions if multiple jobs
-# use the same fastqc dir, we create a temp dir.
+"""Run fastqc, since there can be race conditions if multiple jobs
+
+Use the same fastqc dir, we create a temp dir.
+"""
 with TemporaryDirectory() as tempdir:
     shell(
         "fastqc {snakemake.params} -t {snakemake.threads} "
@@ -47,6 +49,5 @@ with TemporaryDirectory() as tempdir:
 
     if snakemake.output.html != html_path:
         shell("mv {html_path:q} {snakemake.output.html:q}")
-
     if snakemake.output.zip != zip_path:
         shell("mv {zip_path:q} {snakemake.output.zip:q}")
