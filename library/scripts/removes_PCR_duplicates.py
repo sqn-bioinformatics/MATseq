@@ -5,22 +5,27 @@ import pandas as pd
 from log_entry import log_entry
 from functools import wraps
 import re
-path = ''
+
+path = ""
+
 
 class FileNotFoundForRun(FileNotFoundError):
     pass
+
 
 # Load reads
 def load_reads(filepath):
     with open(filepath) as file:
         return file.readlines()
 
+
 # Save reads
 def save_reads(filepath, reads):
-    with open(filepath, 'w') as file:
+    with open(filepath, "w") as file:
         file.writelines(reads)
 
-#Find unique reads
+
+# Find unique reads
 def uniquereads_finder(lst):
     seen = set()
     seen_add = seen.add
@@ -32,6 +37,7 @@ def change_header(fastq, run):
         fastq[i] = fastq[i].replace("\n", "_" + run + "\n")
     return fastq
 
+
 def load_reads_if_multiple_runs(func):
     @wraps(func)
     def wrapper(sample, list_of_runs, is_merged):
@@ -42,12 +48,23 @@ def load_reads_if_multiple_runs(func):
             # Locates runs for sample
             R1_reads, R2_reads, R3_reads = [], [], []
             for run in list_of_runs:
-                filenamelist = os.listdir(path + 'temp/raw_fastq')
-                pattern = r'{}_{}_CTGATCGT-GCGCATAT_L001_R\d'
-                filename = next((file_name[:-9] for file_name in filenamelist if run in file_name and sample in file_name and bool(re.match(pattern.format(run, sample), file_name))), None)
+                filenamelist = os.listdir(path + "temp/raw_fastq")
+                pattern = rf"{run}_{sample}_[A-Z-]{{17}}_\D\d{{3}}_R\d[.]fastq"
+                filename = next(
+                    (
+                        file_name[:-9]
+                        for file_name in filenamelist
+                        if run in file_name
+                        and sample in file_name
+                        and bool(re.match(pattern, file_name))
+                    ),
+                    None,
+                )
 
                 if filename is None:
-                    raise FileNotFoundForRun(f"File not found for run '{run}' and sample '{sample}'.")
+                    raise FileNotFoundForRun(
+                        f"File not found for run '{run}' and sample '{sample}'."
+                    )
                 R1_path = os.path.join(path, "temp/raw_fastq", filename + "_R1.fastq")
                 R2_path = os.path.join(path, "temp/raw_fastq", filename + "_R2.fastq")
                 R3_path = os.path.join(path, "temp/raw_fastq", filename + "_R3.fastq")
@@ -115,10 +132,11 @@ def remove_duplicates(R1_reads, R2_reads, R3_reads, sample, run):
 
     return dedupedR1, dedupedR2, dedupedR3, ninitial, nfinal
 
+
 log_filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
 
 # Loads all fastq filenames into a pandas dataframe
-filenamelist=os.listdir(path+'temp/raw_fastq')
+filenamelist = os.listdir(path + "temp/raw_fastq")
 columns = ["run_ref", "sample_name"]
 filename_df = pd.DataFrame(
     [dict(zip(columns, filename.split("_")[:2])) for filename in filenamelist]
@@ -131,27 +149,41 @@ samplelist = filename_df["sample_name"].unique().tolist()
 if "unique_fastq" not in os.listdir(os.path.join(path, "temp")):
     os.mkdir(os.path.join(path, "temp/unique_fastq"))
 
- 
-stats_columns=['sample','initial','unique']
+
+stats_columns = ["sample", "initial", "unique"]
 stats_df = pd.DataFrame(columns=stats_columns)
 
 for sample in samplelist:
     log_entry("starting to dedup sample " + sample, True, log_filename)
     # Creates a list with the different runs.
     # each run is composed of 3 files (R1 - forward read, R2 - UMI and R3 - reverse read)
-    list_of_runs = filename_df[filename_df["sample_name"]==sample]['run_ref'].unique()
-    log_entry(f'{len(list_of_runs)}' +' runs found for sample '+ sample, True, log_filename)
-    
+    list_of_runs = filename_df[filename_df["sample_name"] == sample]["run_ref"].unique()
+    log_entry(
+        f"{len(list_of_runs)}" + " runs found for sample " + sample, True, log_filename
+    )
+
     if len(list_of_runs) > 1 and ddR1:
-        dedupedR1_temp, dedupedR2_temp, dedupedR3_temp, ninitial, nfinal = remove_duplicates(sample, list_of_runs, is_merged=True)
+        (
+            dedupedR1_temp,
+            dedupedR2_temp,
+            dedupedR3_temp,
+            ninitial,
+            nfinal,
+        ) = remove_duplicates(sample, list_of_runs, is_merged=True)
     else:
-        dedupedR1_temp, dedupedR2_temp, dedupedR3_temp, ninitial, nfinal = remove_duplicates(sample, list_of_runs, is_merged=False)
+        (
+            dedupedR1_temp,
+            dedupedR2_temp,
+            dedupedR3_temp,
+            ninitial,
+            nfinal,
+        ) = remove_duplicates(sample, list_of_runs, is_merged=False)
 
     # Add deduplicated reads to current working fastq
     ddR1 = []
     ddR2 = []
     ddR3 = []
-    
+
     ddR1.extend(dedupedR1_temp)
     ddR2.extend(dedupedR2_temp)
     ddR3.extend(dedupedR3_temp)
@@ -159,7 +191,15 @@ for sample in samplelist:
     del dedupedR1_temp, dedupedR2_temp, dedupedR3_temp
 
     # Adds stats to stats data frame
-    stats_df = pd.concat([stats_df, pd.DataFrame({"sample": sample, "initial": ninitial, "unique": nfinal}, index=[0])], ignore_index=True)
+    stats_df = pd.concat(
+        [
+            stats_df,
+            pd.DataFrame(
+                {"sample": sample, "initial": ninitial, "unique": nfinal}, index=[0]
+            ),
+        ],
+        ignore_index=True,
+    )
 
 
 log_entry("saving deduped fastq files", True, log_filename)
@@ -167,12 +207,11 @@ log_entry("saving deduped fastq files", True, log_filename)
 save_reads(os.path.join(path, "temp/unique_fastq", sample + "_R1.fastq"), ddR1)
 save_reads(os.path.join(path, "temp/unique_fastq", sample + "_R2.fastq"), ddR2)
 save_reads(os.path.join(path, "temp/unique_fastq", sample + "_R3.fastq"), ddR3)
-    
+
 del ddR1, ddR2, ddR3
 
 log_entry("deduped fastq files saved", True, log_filename)
 log_entry(sample + " deduped!", True, log_filename)
-
 
 results_dir = "experiment/results"
 stats_dir = os.path.join(results_dir, "stats")
