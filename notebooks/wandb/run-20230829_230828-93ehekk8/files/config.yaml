@@ -1,0 +1,66 @@
+wandb_version: 1
+
+batch_size:
+  desc: null
+  value: 12
+dropout_rates:
+  desc: null
+  value: 0.5
+epochs:
+  desc: null
+  value: 280
+l1:
+  desc: null
+  value: 84
+l2:
+  desc: null
+  value: 6
+learning_rate:
+  desc: null
+  value: 0.03030178321522796
+weights_limit:
+  desc: null
+  value: 0.04840095654876801
+activation:
+  desc: null
+  value: relu
+loss:
+  desc: null
+  value: categorical_crossentropy
+optimizer:
+  desc: null
+  value: adam
+_wandb:
+  desc: null
+  value:
+    python_version: 3.10.12
+    cli_version: 0.15.9
+    framework: keras
+    is_jupyter_run: true
+    is_kaggle_kernel: false
+    start_time: 1693343308.474574
+    t:
+      1:
+      - 2
+      - 3
+      - 5
+      - 12
+      - 53
+      - 55
+      2:
+      - 2
+      - 3
+      - 5
+      - 12
+      - 53
+      - 55
+      3:
+      - 2
+      - 16
+      - 23
+      - 37
+      4: 3.10.12
+      5: 0.15.9
+      8:
+      - 1
+      - 5

@@ -1,0 +1,542 @@
+Model: "small_NN"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #
+=================================================================
+ input_1 (InputLayer)        [(None, 500)]             0
+ unit_normalization (UnitNo  (None, 500)               0
+ rmalization)
+ dense (Dense)               (None, 56)                28056
+ dropout (Dropout)           (None, 56)                0
+ dense_1 (Dense)             (None, 56)                3192
+ dropout_1 (Dropout)         (None, 56)                0
+ dense_2 (Dense)             (None, 9)                 513
+=================================================================
+Total params: 31761 (124.07 KB)
+Trainable params: 31761 (124.07 KB)
+Non-trainable params: 0 (0.00 Byte)
+_________________________________________________________________
+Epoch 1/300
+1/1 [==============================] - ETA: 0s - loss: 3.7551 - accuracy: 0.1250 - auc: 0.5398INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 2s 2s/step - loss: 3.7551 - accuracy: 0.1250 - auc: 0.5398 - val_loss: 3.7248 - val_accuracy: 0.0000e+00 - val_auc: 0.5316
+Epoch 2/300
+1/1 [==============================] - ETA: 0s - loss: 3.7207 - accuracy: 0.0938 - auc: 0.5367INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 1s/step - loss: 3.7207 - accuracy: 0.0938 - auc: 0.5367 - val_loss: 3.6906 - val_accuracy: 0.2222 - val_auc: 0.5787
+Epoch 3/300
+1/1 [==============================] - ETA: 0s - loss: 3.6868 - accuracy: 0.1562 - auc: 0.5690INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 746ms/step - loss: 3.6868 - accuracy: 0.1562 - auc: 0.5690 - val_loss: 3.6575 - val_accuracy: 0.2222 - val_auc: 0.6142
+Epoch 4/300
+1/1 [==============================] - ETA: 0s - loss: 3.6476 - accuracy: 0.2188 - auc: 0.5828INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 732ms/step - loss: 3.6476 - accuracy: 0.2188 - auc: 0.5828 - val_loss: 3.6256 - val_accuracy: 0.2222 - val_auc: 0.6157
+Epoch 5/300
+1/1 [==============================] - ETA: 0s - loss: 3.6133 - accuracy: 0.3125 - auc: 0.6589INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 793ms/step - loss: 3.6133 - accuracy: 0.3125 - auc: 0.6589 - val_loss: 3.5946 - val_accuracy: 0.2222 - val_auc: 0.6196
+Epoch 6/300
+1/1 [==============================] - ETA: 0s - loss: 3.5822 - accuracy: 0.3750 - auc: 0.6606INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 792ms/step - loss: 3.5822 - accuracy: 0.3750 - auc: 0.6606 - val_loss: 3.5636 - val_accuracy: 0.2222 - val_auc: 0.6327
+Epoch 7/300
+1/1 [==============================] - ETA: 0s - loss: 3.5497 - accuracy: 0.2188 - auc: 0.6705INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 795ms/step - loss: 3.5497 - accuracy: 0.2188 - auc: 0.6705 - val_loss: 3.5328 - val_accuracy: 0.3333 - val_auc: 0.6289
+Epoch 8/300
+1/1 [==============================] - ETA: 0s - loss: 3.5026 - accuracy: 0.4062 - auc: 0.7582INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 847ms/step - loss: 3.5026 - accuracy: 0.4062 - auc: 0.7582 - val_loss: 3.5024 - val_accuracy: 0.4444 - val_auc: 0.6157
+Epoch 9/300
+1/1 [==============================] - ETA: 0s - loss: 3.4791 - accuracy: 0.3438 - auc: 0.7152INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 761ms/step - loss: 3.4791 - accuracy: 0.3438 - auc: 0.7152 - val_loss: 3.4722 - val_accuracy: 0.4444 - val_auc: 0.6150
+Epoch 10/300
+1/1 [==============================] - ETA: 0s - loss: 3.4521 - accuracy: 0.3438 - auc: 0.7303INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 756ms/step - loss: 3.4521 - accuracy: 0.3438 - auc: 0.7303 - val_loss: 3.4422 - val_accuracy: 0.4444 - val_auc: 0.6713
+Epoch 11/300
+1/1 [==============================] - ETA: 0s - loss: 3.4131 - accuracy: 0.4375 - auc: 0.7711INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 1s/step - loss: 3.4131 - accuracy: 0.4375 - auc: 0.7711 - val_loss: 3.4127 - val_accuracy: 0.4444 - val_auc: 0.6559
+Epoch 12/300
+1/1 [==============================] - ETA: 0s - loss: 3.3704 - accuracy: 0.5000 - auc: 0.7910INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 831ms/step - loss: 3.3704 - accuracy: 0.5000 - auc: 0.7910 - val_loss: 3.3833 - val_accuracy: 0.4444 - val_auc: 0.6721
+Epoch 13/300
+1/1 [==============================] - ETA: 0s - loss: 3.3572 - accuracy: 0.4062 - auc: 0.7685INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 762ms/step - loss: 3.3572 - accuracy: 0.4062 - auc: 0.7685 - val_loss: 3.3542 - val_accuracy: 0.4444 - val_auc: 0.7014
+Epoch 14/300
+1/1 [==============================] - ETA: 0s - loss: 3.3212 - accuracy: 0.4375 - auc: 0.7858INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 764ms/step - loss: 3.3212 - accuracy: 0.4375 - auc: 0.7858 - val_loss: 3.3261 - val_accuracy: 0.4444 - val_auc: 0.7068
+Epoch 15/300
+1/1 [==============================] - ETA: 0s - loss: 3.2896 - accuracy: 0.4375 - auc: 0.7996INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 1s/step - loss: 3.2896 - accuracy: 0.4375 - auc: 0.7996 - val_loss: 3.2985 - val_accuracy: 0.4444 - val_auc: 0.7068
+Epoch 16/300
+1/1 [==============================] - ETA: 0s - loss: 3.2466 - accuracy: 0.5938 - auc: 0.8203INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 1s/step - loss: 3.2466 - accuracy: 0.5938 - auc: 0.8203 - val_loss: 3.2716 - val_accuracy: 0.4444 - val_auc: 0.7022
+Epoch 17/300
+1/1 [==============================] - ETA: 0s - loss: 3.2149 - accuracy: 0.5625 - auc: 0.8218INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 2s 2s/step - loss: 3.2149 - accuracy: 0.5625 - auc: 0.8218 - val_loss: 3.2450 - val_accuracy: 0.4444 - val_auc: 0.7114
+Epoch 18/300
+1/1 [==============================] - ETA: 0s - loss: 3.1931 - accuracy: 0.5625 - auc: 0.8329INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 1s/step - loss: 3.1931 - accuracy: 0.5625 - auc: 0.8329 - val_loss: 3.2188 - val_accuracy: 0.4444 - val_auc: 0.6914
+Epoch 19/300
+1/1 [==============================] - ETA: 0s - loss: 3.1756 - accuracy: 0.5312 - auc: 0.8124INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 1s/step - loss: 3.1756 - accuracy: 0.5312 - auc: 0.8124 - val_loss: 3.1928 - val_accuracy: 0.5556 - val_auc: 0.6998
+Epoch 20/300
+1/1 [==============================] - ETA: 0s - loss: 3.1271 - accuracy: 0.5312 - auc: 0.8362INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 1s/step - loss: 3.1271 - accuracy: 0.5312 - auc: 0.8362 - val_loss: 3.1676 - val_accuracy: 0.5556 - val_auc: 0.7037
+Epoch 21/300
+1/1 [==============================] - ETA: 0s - loss: 3.1125 - accuracy: 0.4062 - auc: 0.8285INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 799ms/step - loss: 3.1125 - accuracy: 0.4062 - auc: 0.8285 - val_loss: 3.1427 - val_accuracy: 0.5556 - val_auc: 0.7029
+Epoch 22/300
+1/1 [==============================] - ETA: 0s - loss: 3.0784 - accuracy: 0.5938 - auc: 0.8329INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 792ms/step - loss: 3.0784 - accuracy: 0.5938 - auc: 0.8329 - val_loss: 3.1182 - val_accuracy: 0.5556 - val_auc: 0.6983
+Epoch 23/300
+1/1 [==============================] - ETA: 0s - loss: 3.0733 - accuracy: 0.4375 - auc: 0.8298INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 772ms/step - loss: 3.0733 - accuracy: 0.4375 - auc: 0.8298 - val_loss: 3.0940 - val_accuracy: 0.5556 - val_auc: 0.7176
+Epoch 24/300
+1/1 [==============================] - ETA: 0s - loss: 3.0332 - accuracy: 0.5312 - auc: 0.8234INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 795ms/step - loss: 3.0332 - accuracy: 0.5312 - auc: 0.8234 - val_loss: 3.0702 - val_accuracy: 0.5556 - val_auc: 0.7215
+Epoch 25/300
+1/1 [==============================] - ETA: 0s - loss: 2.9884 - accuracy: 0.6250 - auc: 0.8583INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 797ms/step - loss: 2.9884 - accuracy: 0.6250 - auc: 0.8583 - val_loss: 3.0469 - val_accuracy: 0.5556 - val_auc: 0.7099
+Epoch 26/300
+1/1 [==============================] - ETA: 0s - loss: 2.9676 - accuracy: 0.6250 - auc: 0.8419INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 777ms/step - loss: 2.9676 - accuracy: 0.6250 - auc: 0.8419 - val_loss: 3.0237 - val_accuracy: 0.5556 - val_auc: 0.7191
+Epoch 27/300
+1/1 [==============================] - ETA: 0s - loss: 2.9439 - accuracy: 0.5625 - auc: 0.8547INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 774ms/step - loss: 2.9439 - accuracy: 0.5625 - auc: 0.8547 - val_loss: 3.0010 - val_accuracy: 0.5556 - val_auc: 0.7222
+Epoch 28/300
+1/1 [==============================] - ETA: 0s - loss: 2.9126 - accuracy: 0.6250 - auc: 0.8494INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 758ms/step - loss: 2.9126 - accuracy: 0.6250 - auc: 0.8494 - val_loss: 2.9785 - val_accuracy: 0.5556 - val_auc: 0.7076
+Epoch 29/300
+1/1 [==============================] - ETA: 0s - loss: 2.8934 - accuracy: 0.5625 - auc: 0.8658INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 1s/step - loss: 2.8934 - accuracy: 0.5625 - auc: 0.8658 - val_loss: 2.9562 - val_accuracy: 0.5556 - val_auc: 0.7160
+Epoch 30/300
+1/1 [==============================] - ETA: 0s - loss: 2.8669 - accuracy: 0.5938 - auc: 0.8279INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 757ms/step - loss: 2.8669 - accuracy: 0.5938 - auc: 0.8279 - val_loss: 2.9343 - val_accuracy: 0.5556 - val_auc: 0.7160
+Epoch 31/300
+1/1 [==============================] - ETA: 0s - loss: 2.8406 - accuracy: 0.5625 - auc: 0.8596INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 841ms/step - loss: 2.8406 - accuracy: 0.5625 - auc: 0.8596 - val_loss: 2.9125 - val_accuracy: 0.5556 - val_auc: 0.7238
+Epoch 32/300
+1/1 [==============================] - ETA: 0s - loss: 2.8395 - accuracy: 0.5625 - auc: 0.8428INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 756ms/step - loss: 2.8395 - accuracy: 0.5625 - auc: 0.8428 - val_loss: 2.8911 - val_accuracy: 0.5556 - val_auc: 0.7299
+Epoch 33/300
+1/1 [==============================] - ETA: 0s - loss: 2.8012 - accuracy: 0.5625 - auc: 0.8419INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 773ms/step - loss: 2.8012 - accuracy: 0.5625 - auc: 0.8419 - val_loss: 2.8698 - val_accuracy: 0.5556 - val_auc: 0.7315
+Epoch 34/300
+1/1 [==============================] - ETA: 0s - loss: 2.7630 - accuracy: 0.5938 - auc: 0.8554INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 781ms/step - loss: 2.7630 - accuracy: 0.5938 - auc: 0.8554 - val_loss: 2.8490 - val_accuracy: 0.5556 - val_auc: 0.7245
+Epoch 35/300
+1/1 [==============================] - ETA: 0s - loss: 2.7292 - accuracy: 0.5938 - auc: 0.8773INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 786ms/step - loss: 2.7292 - accuracy: 0.5938 - auc: 0.8773 - val_loss: 2.8285 - val_accuracy: 0.4444 - val_auc: 0.7261
+Epoch 36/300
+1/1 [==============================] - ETA: 0s - loss: 2.7018 - accuracy: 0.6250 - auc: 0.8574INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 763ms/step - loss: 2.7018 - accuracy: 0.6250 - auc: 0.8574 - val_loss: 2.8080 - val_accuracy: 0.4444 - val_auc: 0.7361
+Epoch 37/300
+1/1 [==============================] - ETA: 0s - loss: 2.7035 - accuracy: 0.6875 - auc: 0.8485INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 1s/step - loss: 2.7035 - accuracy: 0.6875 - auc: 0.8485 - val_loss: 2.7876 - val_accuracy: 0.4444 - val_auc: 0.7469
+Epoch 38/300
+1/1 [==============================] - ETA: 0s - loss: 2.6636 - accuracy: 0.5938 - auc: 0.8696INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 785ms/step - loss: 2.6636 - accuracy: 0.5938 - auc: 0.8696 - val_loss: 2.7672 - val_accuracy: 0.4444 - val_auc: 0.7562
+Epoch 39/300
+1/1 [==============================] - ETA: 0s - loss: 2.6463 - accuracy: 0.6250 - auc: 0.8544INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 775ms/step - loss: 2.6463 - accuracy: 0.6250 - auc: 0.8544 - val_loss: 2.7468 - val_accuracy: 0.4444 - val_auc: 0.7647
+Epoch 40/300
+1/1 [==============================] - ETA: 0s - loss: 2.6310 - accuracy: 0.6250 - auc: 0.8733INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 775ms/step - loss: 2.6310 - accuracy: 0.6250 - auc: 0.8733 - val_loss: 2.7269 - val_accuracy: 0.4444 - val_auc: 0.7508
+Epoch 41/300
+1/1 [==============================] - ETA: 0s - loss: 2.5889 - accuracy: 0.6250 - auc: 0.8693INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 756ms/step - loss: 2.5889 - accuracy: 0.6250 - auc: 0.8693 - val_loss: 2.7073 - val_accuracy: 0.4444 - val_auc: 0.7600
+Epoch 42/300
+1/1 [==============================] - ETA: 0s - loss: 2.5469 - accuracy: 0.7188 - auc: 0.8807INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 781ms/step - loss: 2.5469 - accuracy: 0.7188 - auc: 0.8807 - val_loss: 2.6877 - val_accuracy: 0.4444 - val_auc: 0.7569
+Epoch 43/300
+1/1 [==============================] - ETA: 0s - loss: 2.5394 - accuracy: 0.5938 - auc: 0.8803INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 841ms/step - loss: 2.5394 - accuracy: 0.5938 - auc: 0.8803 - val_loss: 2.6684 - val_accuracy: 0.4444 - val_auc: 0.7600
+Epoch 44/300
+1/1 [==============================] - ETA: 0s - loss: 2.5100 - accuracy: 0.6875 - auc: 0.8994INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 789ms/step - loss: 2.5100 - accuracy: 0.6875 - auc: 0.8994 - val_loss: 2.6489 - val_accuracy: 0.5556 - val_auc: 0.7701
+Epoch 45/300
+1/1 [==============================] - ETA: 0s - loss: 2.5254 - accuracy: 0.5938 - auc: 0.8771INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 782ms/step - loss: 2.5254 - accuracy: 0.5938 - auc: 0.8771 - val_loss: 2.6297 - val_accuracy: 0.5556 - val_auc: 0.7816
+Epoch 46/300
+1/1 [==============================] - ETA: 0s - loss: 2.4558 - accuracy: 0.5938 - auc: 0.8761INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 1s/step - loss: 2.4558 - accuracy: 0.5938 - auc: 0.8761 - val_loss: 2.6108 - val_accuracy: 0.5556 - val_auc: 0.7840
+Epoch 47/300
+1/1 [==============================] - ETA: 0s - loss: 2.4250 - accuracy: 0.5625 - auc: 0.8893INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 760ms/step - loss: 2.4250 - accuracy: 0.5625 - auc: 0.8893 - val_loss: 2.5920 - val_accuracy: 0.5556 - val_auc: 0.7870
+Epoch 48/300
+1/1 [==============================] - ETA: 0s - loss: 2.3986 - accuracy: 0.6562 - auc: 0.8841INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 763ms/step - loss: 2.3986 - accuracy: 0.6562 - auc: 0.8841 - val_loss: 2.5735 - val_accuracy: 0.5556 - val_auc: 0.7801
+Epoch 49/300
+1/1 [==============================] - ETA: 0s - loss: 2.3971 - accuracy: 0.6562 - auc: 0.8913INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 760ms/step - loss: 2.3971 - accuracy: 0.6562 - auc: 0.8913 - val_loss: 2.5550 - val_accuracy: 0.6667 - val_auc: 0.7886
+Epoch 50/300
+1/1 [==============================] - ETA: 0s - loss: 2.3293 - accuracy: 0.7188 - auc: 0.9018INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 768ms/step - loss: 2.3293 - accuracy: 0.7188 - auc: 0.9018 - val_loss: 2.5365 - val_accuracy: 0.6667 - val_auc: 0.7847
+Epoch 51/300
+1/1 [==============================] - ETA: 0s - loss: 2.4005 - accuracy: 0.6250 - auc: 0.8899INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 749ms/step - loss: 2.4005 - accuracy: 0.6250 - auc: 0.8899 - val_loss: 2.5180 - val_accuracy: 0.6667 - val_auc: 0.7855
+Epoch 52/300
+1/1 [==============================] - ETA: 0s - loss: 2.2831 - accuracy: 0.7188 - auc: 0.9065INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 772ms/step - loss: 2.2831 - accuracy: 0.7188 - auc: 0.9065 - val_loss: 2.4994 - val_accuracy: 0.6667 - val_auc: 0.7886
+Epoch 53/300
+1/1 [==============================] - ETA: 0s - loss: 2.3251 - accuracy: 0.7188 - auc: 0.8966INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 868ms/step - loss: 2.3251 - accuracy: 0.7188 - auc: 0.8966 - val_loss: 2.4808 - val_accuracy: 0.6667 - val_auc: 0.8002
+Epoch 54/300
+1/1 [==============================] - ETA: 0s - loss: 2.2742 - accuracy: 0.6562 - auc: 0.9027INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 828ms/step - loss: 2.2742 - accuracy: 0.6562 - auc: 0.9027 - val_loss: 2.4621 - val_accuracy: 0.6667 - val_auc: 0.8040
+Epoch 55/300
+1/1 [==============================] - ETA: 0s - loss: 2.2670 - accuracy: 0.7188 - auc: 0.9005INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 1s/step - loss: 2.2670 - accuracy: 0.7188 - auc: 0.9005 - val_loss: 2.4436 - val_accuracy: 0.6667 - val_auc: 0.8071
+Epoch 56/300
+1/1 [==============================] - ETA: 0s - loss: 2.2488 - accuracy: 0.6250 - auc: 0.9109INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 777ms/step - loss: 2.2488 - accuracy: 0.6250 - auc: 0.9109 - val_loss: 2.4256 - val_accuracy: 0.6667 - val_auc: 0.8133
+Epoch 57/300
+1/1 [==============================] - ETA: 0s - loss: 2.2117 - accuracy: 0.7188 - auc: 0.9161INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 809ms/step - loss: 2.2117 - accuracy: 0.7188 - auc: 0.9161 - val_loss: 2.4074 - val_accuracy: 0.6667 - val_auc: 0.8102
+Epoch 58/300
+1/1 [==============================] - ETA: 0s - loss: 2.1671 - accuracy: 0.7500 - auc: 0.9150INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 822ms/step - loss: 2.1671 - accuracy: 0.7500 - auc: 0.9150 - val_loss: 2.3892 - val_accuracy: 0.6667 - val_auc: 0.8110
+Epoch 59/300
+1/1 [==============================] - ETA: 0s - loss: 2.1816 - accuracy: 0.6250 - auc: 0.9196INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 789ms/step - loss: 2.1816 - accuracy: 0.6250 - auc: 0.9196 - val_loss: 2.3713 - val_accuracy: 0.5556 - val_auc: 0.8148
+Epoch 60/300
+1/1 [==============================] - ETA: 0s - loss: 2.0947 - accuracy: 0.7188 - auc: 0.9366INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 785ms/step - loss: 2.0947 - accuracy: 0.7188 - auc: 0.9366 - val_loss: 2.3537 - val_accuracy: 0.5556 - val_auc: 0.8171
+Epoch 61/300
+1/1 [==============================] - ETA: 0s - loss: 2.1200 - accuracy: 0.5938 - auc: 0.9180INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 808ms/step - loss: 2.1200 - accuracy: 0.5938 - auc: 0.9180 - val_loss: 2.3361 - val_accuracy: 0.5556 - val_auc: 0.8210
+Epoch 62/300
+1/1 [==============================] - ETA: 0s - loss: 2.0522 - accuracy: 0.8750 - auc: 0.9288INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 761ms/step - loss: 2.0522 - accuracy: 0.8750 - auc: 0.9288 - val_loss: 2.3194 - val_accuracy: 0.5556 - val_auc: 0.8248
+Epoch 63/300
+1/1 [==============================] - ETA: 0s - loss: 2.1113 - accuracy: 0.6562 - auc: 0.9205INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 761ms/step - loss: 2.1113 - accuracy: 0.6562 - auc: 0.9205 - val_loss: 2.3029 - val_accuracy: 0.5556 - val_auc: 0.8279
+Epoch 64/300
+1/1 [==============================] - ETA: 0s - loss: 2.0355 - accuracy: 0.7188 - auc: 0.9207INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 1s/step - loss: 2.0355 - accuracy: 0.7188 - auc: 0.9207 - val_loss: 2.2867 - val_accuracy: 0.5556 - val_auc: 0.8326
+Epoch 65/300
+1/1 [==============================] - ETA: 0s - loss: 1.9985 - accuracy: 0.7812 - auc: 0.9288INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 732ms/step - loss: 1.9985 - accuracy: 0.7812 - auc: 0.9288 - val_loss: 2.2710 - val_accuracy: 0.5556 - val_auc: 0.8356
+Epoch 66/300
+1/1 [==============================] - ETA: 0s - loss: 2.0720 - accuracy: 0.6250 - auc: 0.9307INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 777ms/step - loss: 2.0720 - accuracy: 0.6250 - auc: 0.9307 - val_loss: 2.2558 - val_accuracy: 0.5556 - val_auc: 0.8395
+Epoch 67/300
+1/1 [==============================] - ETA: 0s - loss: 1.9794 - accuracy: 0.7188 - auc: 0.9413INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 780ms/step - loss: 1.9794 - accuracy: 0.7188 - auc: 0.9413 - val_loss: 2.2403 - val_accuracy: 0.5556 - val_auc: 0.8426
+Epoch 68/300
+1/1 [==============================] - ETA: 0s - loss: 1.9375 - accuracy: 0.8750 - auc: 0.9372INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 794ms/step - loss: 1.9375 - accuracy: 0.8750 - auc: 0.9372 - val_loss: 2.2250 - val_accuracy: 0.5556 - val_auc: 0.8418
+Epoch 69/300
+1/1 [==============================] - ETA: 0s - loss: 1.9482 - accuracy: 0.6562 - auc: 0.9426INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 769ms/step - loss: 1.9482 - accuracy: 0.6562 - auc: 0.9426 - val_loss: 2.2090 - val_accuracy: 0.5556 - val_auc: 0.8449
+Epoch 70/300
+1/1 [==============================] - ETA: 0s - loss: 1.9187 - accuracy: 0.7188 - auc: 0.9355INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 759ms/step - loss: 1.9187 - accuracy: 0.7188 - auc: 0.9355 - val_loss: 2.1936 - val_accuracy: 0.5556 - val_auc: 0.8495
+Epoch 71/300
+1/1 [==============================] - ETA: 0s - loss: 1.9028 - accuracy: 0.7188 - auc: 0.9393INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 747ms/step - loss: 1.9028 - accuracy: 0.7188 - auc: 0.9393 - val_loss: 2.1778 - val_accuracy: 0.5556 - val_auc: 0.8534
+Epoch 72/300
+1/1 [==============================] - ETA: 0s - loss: 1.7937 - accuracy: 0.8125 - auc: 0.9492INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+1/1 [==============================] - 1s 764ms/step - loss: 1.7937 - accuracy: 0.8125 - auc: 0.9492 - val_loss: 2.1621 - val_accuracy: 0.5556 - val_auc: 0.8565
+Epoch 73/300
+1/1 [==============================] - ETA: 0s - loss: 1.9281 - accuracy: 0.7500 - auc: 0.9387INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 1s/step - loss: 1.9281 - accuracy: 0.7500 - auc: 0.9387 - val_loss: 2.1469 - val_accuracy: 0.5556 - val_auc: 0.8596
+Epoch 74/300
+1/1 [==============================] - ETA: 0s - loss: 1.8978 - accuracy: 0.6875 - auc: 0.9443INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 770ms/step - loss: 1.8978 - accuracy: 0.6875 - auc: 0.9443 - val_loss: 2.1319 - val_accuracy: 0.5556 - val_auc: 0.8657
+Epoch 75/300
+1/1 [==============================] - ETA: 0s - loss: 1.8245 - accuracy: 0.7500 - auc: 0.9525INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+/home/t.afanasyeva/mambaforge/envs/MATseq/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+INFO:tensorflow:Assets written to: /home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best/assets
+[34m[1mwandb[39m[22m: Adding directory to artifact (/home/t.afanasyeva/MATseq/notebooks/wandb/run-20230829_193211-nx0m5mfw/files/model-best)... Done. 0.0s
+1/1 [==============================] - 1s 803ms/step - loss: 1.8245 - accuracy: 0.7500 - auc: 0.9525 - val_loss: 2.1174 - val_accuracy: 0.5556 - val_auc: 0.8673

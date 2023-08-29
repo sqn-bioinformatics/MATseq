@@ -1,0 +1,14 @@
+wandb_version: 1
+
+batch_size:
+  value: 15
+dropout_rates:
+  value: 0.5432964132442123
+epochs:
+  value: 50
+learning_rate:
+  value: 0.08345147942898726
+optimizer:
+  value: sgd
+weights_limit:
+  value: 0.0512203604652568

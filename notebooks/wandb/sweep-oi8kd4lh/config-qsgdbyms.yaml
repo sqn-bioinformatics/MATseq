@@ -1,0 +1,18 @@
+wandb_version: 1
+
+batch_size:
+  value: 6
+dropout_rates:
+  value: 0.8
+epochs:
+  value: 200
+l1:
+  value: 16
+l2:
+  value: 56
+learning_rate:
+  value: 0.07143506143809904
+optimizer:
+  value: rmsprop
+weights_limit:
+  value: 0.014021896219165195

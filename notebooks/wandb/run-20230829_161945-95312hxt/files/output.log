@@ -1,0 +1,79 @@
+2023-08-29 16:19:52.486855: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1639] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 13775 MB memory:  -> device: 0, name: Tesla T4, pci bus id: 0000:3b:00.0, compute capability: 7.5
+[34m[1mwandb[39m[22m: [33mWARNING[39m The save_model argument by default saves the model in the HDF5 format that cannot save custom objects like subclassed models and custom layers. This behavior will be deprecated in a future release in favor of the SavedModel format. Meanwhile, the HDF5 model is saved as W&B files and the SavedModel as W&B Artifacts.
+Model: "small_NN"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #
+=================================================================
+ input_1 (InputLayer)        [(None, 500)]             0
+ unit_normalization (UnitNo  (None, 500)               0
+ rmalization)
+ dropout (Dropout)           (None, 500)               0
+ dense (Dense)               (None, 256)               128256
+ batch_normalization (Batch  (None, 256)               1024
+ Normalization)
+ dropout_1 (Dropout)         (None, 256)               0
+ dense_1 (Dense)             (None, 128)               32896
+ dropout_2 (Dropout)         (None, 128)               0
+ dense_2 (Dense)             (None, 9)                 1161
+=================================================================
+Total params: 163337 (638.04 KB)
+Trainable params: 162825 (636.04 KB)
+Non-trainable params: 512 (2.00 KB)
+_________________________________________________________________
+Epoch 1/300
+Model: "small_NN"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #
+=================================================================
+ input_2 (InputLayer)        [(None, 500)]             0
+ unit_normalization_1 (Unit  (None, 500)               0
+ Normalization)
+ dropout_3 (Dropout)         (None, 500)               0
+ dense_3 (Dense)             (None, 256)               128256
+ batch_normalization_1 (Bat  (None, 256)               1024
+ chNormalization)
+ dropout_4 (Dropout)         (None, 256)               0
+ dense_4 (Dense)             (None, 128)               32896
+ dropout_5 (Dropout)         (None, 128)               0
+ dense_5 (Dense)             (None, 9)                 1161
+=================================================================
+Total params: 163337 (638.04 KB)
+Trainable params: 162825 (636.04 KB)
+Non-trainable params: 512 (2.00 KB)
+_________________________________________________________________
+Epoch 1/300
+2023-08-29 16:20:54.358814: I tensorflow/compiler/xla/service/service.cc:168] XLA service 0x5619331c2ee0 initialized for platform CUDA (this does not guarantee that XLA will be used). Devices:
+2023-08-29 16:20:54.358855: I tensorflow/compiler/xla/service/service.cc:176]   StreamExecutor device (0): Tesla T4, Compute Capability 7.5
+2023-08-29 16:20:54.365118: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:255] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+2023-08-29 16:20:54.382838: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:437] Could not create cudnn handle: CUDNN_STATUS_NOT_INITIALIZED
+2023-08-29 16:20:54.382911: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:441] Memory usage: 865861632 bytes free, 15843721216 bytes total.
+2023-08-29 16:20:54.382951: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:451] Possibly insufficient driver version: 495.29.5
+2023-08-29 16:20:54.383699: W tensorflow/core/framework/op_kernel.cc:1828] OP_REQUIRES failed at xla_ops.cc:503 : FAILED_PRECONDITION: DNN library initialization failed. Look at the errors above for more details.
+2023-08-29 16:20:54.392661: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:437] Could not create cudnn handle: CUDNN_STATUS_NOT_INITIALIZED
+2023-08-29 16:20:54.392709: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:441] Memory usage: 865861632 bytes free, 15843721216 bytes total.
+2023-08-29 16:20:54.392752: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:451] Possibly insufficient driver version: 495.29.5
+2023-08-29 16:20:54.393354: W tensorflow/core/framework/op_kernel.cc:1828] OP_REQUIRES failed at xla_ops.cc:503 : FAILED_PRECONDITION: DNN library initialization failed. Look at the errors above for more details.
+2023-08-29 16:20:54.402340: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:437] Could not create cudnn handle: CUDNN_STATUS_NOT_INITIALIZED
+2023-08-29 16:20:54.402402: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:441] Memory usage: 865861632 bytes free, 15843721216 bytes total.
+2023-08-29 16:20:54.402426: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:451] Possibly insufficient driver version: 495.29.5
+2023-08-29 16:20:54.403034: W tensorflow/core/framework/op_kernel.cc:1828] OP_REQUIRES failed at xla_ops.cc:503 : FAILED_PRECONDITION: DNN library initialization failed. Look at the errors above for more details.
+2023-08-29 16:20:54.411306: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:437] Could not create cudnn handle: CUDNN_STATUS_NOT_INITIALIZED
+2023-08-29 16:20:54.411366: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:441] Memory usage: 865861632 bytes free, 15843721216 bytes total.
+2023-08-29 16:20:54.411388: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:451] Possibly insufficient driver version: 495.29.5
+2023-08-29 16:20:54.411980: W tensorflow/core/framework/op_kernel.cc:1828] OP_REQUIRES failed at xla_ops.cc:503 : FAILED_PRECONDITION: DNN library initialization failed. Look at the errors above for more details.
+2023-08-29 16:20:54.420289: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:437] Could not create cudnn handle: CUDNN_STATUS_NOT_INITIALIZED
+2023-08-29 16:20:54.420349: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:441] Memory usage: 865861632 bytes free, 15843721216 bytes total.
+2023-08-29 16:20:54.420369: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:451] Possibly insufficient driver version: 495.29.5
+2023-08-29 16:20:54.420966: W tensorflow/core/framework/op_kernel.cc:1828] OP_REQUIRES failed at xla_ops.cc:503 : FAILED_PRECONDITION: DNN library initialization failed. Look at the errors above for more details.
+2023-08-29 16:20:54.429460: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:437] Could not create cudnn handle: CUDNN_STATUS_NOT_INITIALIZED
+2023-08-29 16:20:54.429505: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:441] Memory usage: 865861632 bytes free, 15843721216 bytes total.
+2023-08-29 16:20:54.429526: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:451] Possibly insufficient driver version: 495.29.5
+2023-08-29 16:20:54.430123: W tensorflow/core/framework/op_kernel.cc:1828] OP_REQUIRES failed at xla_ops.cc:503 : FAILED_PRECONDITION: DNN library initialization failed. Look at the errors above for more details.
+2023-08-29 16:20:54.438752: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:437] Could not create cudnn handle: CUDNN_STATUS_NOT_INITIALIZED
+2023-08-29 16:20:54.438813: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:441] Memory usage: 865861632 bytes free, 15843721216 bytes total.
+2023-08-29 16:20:54.438833: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:451] Possibly insufficient driver version: 495.29.5
+2023-08-29 16:20:54.439427: W tensorflow/core/framework/op_kernel.cc:1828] OP_REQUIRES failed at xla_ops.cc:503 : FAILED_PRECONDITION: DNN library initialization failed. Look at the errors above for more details.
+2023-08-29 16:20:54.447732: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:437] Could not create cudnn handle: CUDNN_STATUS_NOT_INITIALIZED
+2023-08-29 16:20:54.447777: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:441] Memory usage: 865861632 bytes free, 15843721216 bytes total.
+2023-08-29 16:20:54.447797: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:451] Possibly insufficient driver version: 495.29.5
+2023-08-29 16:20:54.448394: W tensorflow/core/framework/op_kernel.cc:1828] OP_REQUIRES failed at xla_ops.cc:503 : FAILED_PRECONDITION: DNN library initialization failed. Look at the errors above for more details.
