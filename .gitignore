@@ -18,3 +18,19 @@ config.txt
 
 #ignore vscode settings
 /.vscode
+
+
+#ignore all wandb files
+wandb/
+artifacts/
+
+
+#ignore all training data in notebooks, experiment, and temp folders
+/noteboks/*.csv
+temp/
+experiment/
+
+
+#ignore snakemake logs
+/.snakemake
+

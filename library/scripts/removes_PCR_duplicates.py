@@ -37,6 +37,7 @@ def change_header(fastq, run):
         fastq[i] = fastq[i].replace("\n", "_" + run + "\n")
     return fastq
 
+
 def load_reads_if_multiple_runs(func):
     @wraps(func)
     def wrapper(sample, list_of_runs, is_merged):
@@ -48,7 +49,7 @@ def load_reads_if_multiple_runs(func):
             R1_reads, R2_reads, R3_reads = [], [], []
             for run in list_of_runs:
                 filenamelist = os.listdir(path + "temp/raw_fastq")
-                pattern = fr"{run}_{sample}_[A-Z-]{{17}}_\D\d{{3}}_R\d[.]fastq"
+                pattern = rf"{run}_{sample}_[A-Z-]{{17}}_\D\d{{3}}_R\d[.]fastq"
                 filename = next(
                     (
                         file_name[:-9]
@@ -160,8 +161,7 @@ for sample in samplelist:
     log_entry(
         f"{len(list_of_runs)}" + " runs found for sample " + sample, True, log_filename
     )
-    
-    
+
     # Add deduplicated reads to current working fastq
     ddR1 = []
     ddR2 = []
