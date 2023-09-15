@@ -1,2 +1,0 @@
-
-UsageError: %%wandb is a cell magic, but the cell body is empty. Did you mean the line magic %wandb (single %)?

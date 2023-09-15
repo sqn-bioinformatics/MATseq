@@ -1,1 +1,0 @@
-{"AUC": 1.0, "_timestamp": 1693345917.0552843, "_runtime": 19.088386297225952, "_step": 5, "Validation AUC": 0.9683642387390137, "Loss": 0.6664981842041016, "Validation Loss": 1.2403178215026855, "Accuracy": 1.0, "Validation Accuracy": 0.6666666865348816, "_wandb": {"runtime": 18}}
