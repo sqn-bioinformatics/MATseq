@@ -34,3 +34,6 @@ experiment/
 #ignore snakemake logs
 /.snakemake
 
+#ignore pickled model, the file is too large
+BaggingClassifier.joblib
+
