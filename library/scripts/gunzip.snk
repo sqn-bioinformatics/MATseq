@@ -6,7 +6,7 @@ for filename in (os.listdir("experiment/raw_data/fastq")):
   if filename.endswith('.gz'):
     filename_list.append(filename.replace(".gz",""))
 
-#this tells snakemake what all the final files are so I dont have to deal with the wildcard error
+#  This tells snakemake what all the final files are so I don't have to deal with the wildcard error
 
 rule all:
   input:

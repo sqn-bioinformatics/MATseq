@@ -12,9 +12,9 @@ logs
 #ignore config
 config.txt
 
-#ignore all .txt
+#ignore all .txt and .csv
 **/*.txt
-
+**/*.csv 
 
 #ignore vscode settings
 /.vscode
@@ -26,7 +26,6 @@ artifacts/
 
 
 #ignore all training data in notebooks, experiment, and temp folders
-/noteboks/*.csv
 temp/
 experiment/
 

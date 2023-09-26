@@ -1,27 +1,16 @@
 import datetime
 import http.cookiejar
 import json
+import os
 import requests
 import sys
-import os
 
-# From library.scripts.log_entry import log_entry
+# Import functions directly instead of renaming
 from log_entry import log_entry
-
-# From library.scripts.load_exp_info import load_exp_info
 from load_exp_info import load_exp_info
-
-# From library.scripts.load_MATseq_config import load_MATseq_config
 from load_config import load_config
+from gsport_tools import gs_login, download_filenames, download_fastq
 
-# From library.scripts.gsport_tools import gs_login
-from gsport_tools import gs_login
-
-# From library.scripts.gsport_tools import download_filenames
-from gsport_tools import download_filenames
-
-# From library.scripts.gsport_tools import download_fastq
-from gsport_tools import download_fastq
 
 log_filename = log_filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
 
@@ -39,7 +28,7 @@ if exp_info["GS_project_number"] == "":
     sys.exit().sys.exit()
 
 
-# Check if session is open or cookies are present
+# check if session is open or cookies are present
 try:
     cookies = http.cookiejar.MozillaCookieJar("library//gs_cookies.txt")
     cookies.load()
@@ -58,7 +47,7 @@ try:
             log_filename,
         )
 
-# If no cookies logs in
+# if no cookies logs in
 except FileNotFoundError:
     log_entry("[session] No cookies found. Logging in...", True, log_filename)
     cookies, logged_in = gs_login(
@@ -73,20 +62,27 @@ except FileNotFoundError:
 datafiles = download_filenames(exp_info["GS_project_number"], cookies, log_filename)
 log_entry("File list downloaded from Genomescan servers", True, log_filename)
 
-# Checks if a folder for downloaded files is present
-if "raw_data" not in os.listdir("experiment/"):
+# checks if a folder for downloaded files is present:
+if not "raw_data" in os.listdir("experiment/"):
     os.mkdir("experiment/raw_data")
-if "fastq" not in os.listdir("experiment/raw_data"):
+if not "fastq" in os.listdir("experiment/raw_data"):
     os.mkdir("experiment/raw_data/fastq")
 
-# Checks if there are any files already downloaded
+# checks if a folder for downloaded files is present:
+if not "raw_data" in os.listdir("experiment/"):
+    os.mkdir("experiment/raw_data")
+if not "fastq" in os.listdir("experiment/raw_data"):
+    os.mkdir("experiment/raw_data/fastq")
+
+# checks if there are any files already downloaded
 previous_downloaded_files = os.listdir("experiment/raw_data/fastq")
 
-# Removes old files from new file list
+
+# remove old files from new filelist
 count = 0
 temp = []
 for filename in datafiles:
-    if filename["name"] not in previous_downloaded_files:
+    if not filename["name"] in previous_downloaded_files:
         temp.append(filename)
     bashcount = count + 1
 datafiles = temp
@@ -96,6 +92,7 @@ log_entry(
     True,
     log_filename,
 )
+
 
 count = 1
 for file in datafiles:
