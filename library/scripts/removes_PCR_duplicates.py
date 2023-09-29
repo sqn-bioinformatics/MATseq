@@ -1,12 +1,31 @@
 import os
 import time
 import datetime
-from functools import wraps
-import re
 import csv
+import logging
+from itertools import chain
+
 
 # Sets path to ~/MATseq
 path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+log_filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
+log_file_path = os.path.join("logs", log_filename)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    filename=log_file_path,
+    filemode="a",
+)
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter(
+    "%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+)
+console.setFormatter(formatter)
+logger = logging.getLogger("")
+logger.addHandler(console)
 
 
 class FileNotFoundForRun(FileNotFoundError):
@@ -15,19 +34,6 @@ class FileNotFoundForRun(FileNotFoundError):
 
 class UMIMismatchError(ValueError):
     pass
-
-
-# Creates logs
-def log_entry(text, show, log_filename):
-    if "logs" not in os.listdir("./"):
-        os.mkdir("logs")
-
-    text = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S: ") + text
-
-    with open("logs/" + log_filename, "a") as file_object:
-        file_object.write(text + "\n")
-    if show:
-        print(text)
 
 
 # Load reads
@@ -49,188 +55,181 @@ def uniquereads_finder(lst):
     return [x for x in lst if not (x in seen or seen_add(x))]
 
 
-# Decorator function for loading reads if there are multiple runs
-def load_reads_if_multiple_runs(func):
-    @wraps(func)
-    def wrapper(sample, unique_runs_per_sample, has_many_runs):
-        if has_many_runs:
-            # If there's only one run, uses the existing ddR1, ddR2
-            R1_reads, R2_reads = ddR1, ddR2
+def remove_duplicates_runs_loader(unique_runs_per_sample, has_many_runs):
+    R1_reads, R2_reads = [], []
+    deduped_R1_list, deduped_R2_list = [], []
+    initial_read_number_total = 0
+
+    for file_name in unique_runs_per_sample:
+        if file_name is None:
+            raise FileNotFoundForRun(f"File not found for {file_name}")
+
         else:
-            # Locates runs for sample
-            R1_reads, R2_reads = [], []
-            for run in unique_runs_per_sample:
-                pattern = rf"{run}_{sample}_[A-Z-]{{17}}_\D\d{{3}}_R\d[.]fastq"
-                file_name = next(
-                    (
-                        name[:-9]
-                        for name in file_names
-                        if run in name
-                        and sample in name
-                        and bool(re.match(pattern, name))
-                    ),
-                    None,
-                )
+            R1_path = os.path.join(path, "temp/raw_fastq", file_name + "_R1.fastq")
+            R2_path = os.path.join(path, "temp/raw_fastq", file_name + "_R2.fastq")
 
-                if file_name is None:
-                    raise FileNotFoundForRun(
-                        f"File not found for run '{run}' and sample '{sample}'."
-                    )
-                R1_path = os.path.join(path, "temp/raw_fastq", file_name + "_R1.fastq")
-                R2_path = os.path.join(path, "temp/raw_fastq", file_name + "_R2.fastq")
+            R1_reads.extend(load_reads(R1_path))
+            logger.info(f"{file_name}_R1.fastq loaded")
+            R2_reads.extend(load_reads(R2_path))
+            logger.info(f"{file_name}_R2.fastq loaded")
 
-                # Load reads
-                R1_reads.extend(load_reads(R1_path))
-                log_entry(f"{file_name}_R1.fastq loaded", True, log_filename)
-                R2_reads.extend(load_reads(R2_path))
-                log_entry(f"{file_name}_R2.fastq loaded", True, log_filename)
+            logger.info("removing duplicates " + file_name)
 
-            return func(R1_reads, R2_reads, sample)
+            deduped_R1, deduped_R2, initial_read_number = remove_duplicates(
+                R1_reads, R2_reads
+            )
+            deduped_R1_list.append(deduped_R1)
+            deduped_R2_list.append(deduped_R2)
+            initial_read_number_total += initial_read_number
 
-    return wrapper
+    if has_many_runs == False:
+        return (
+            deduped_R1_list,
+            deduped_R2_list,
+            initial_read_number_total,
+            len(deduped_R1_list) // 4,
+        )
+
+    else:
+        logger.info("removing duplicates from combined runs")
+        deduped_R1_list, deduped_R2_list = list(
+            chain.from_iterable(deduped_R1_list)
+        ), list(chain.from_iterable(deduped_R2_list))
+
+        deduped_R1_all_runs, deduped_R2_all_runs, _ = remove_duplicates(
+            deduped_R1_list, deduped_R2_list
+        )
+
+        return (
+            deduped_R1_all_runs,
+            deduped_R2_all_runs,
+            initial_read_number_total,
+            len(deduped_R1_all_runs) // 4,
+        )
 
 
-@load_reads_if_multiple_runs
-def remove_duplicates(R1_reads, R2_reads, sample):
+def remove_duplicates(R1_reads, R2_reads):
     start_time = time.time()
-    log_entry("removing duplicates " + sample, True, log_filename)
 
-    ninitial = len(R1_reads) // 4
+    initial_read_number = len(R1_reads) // 4
 
-    #
-    generator = (
+    umi_R1_R2_concatenated = [
         R1_reads[i * 4].split()[0].split(":")[-1]
+        + R1_reads[i * 4 + 1][25:50]
+        + R2_reads[i * 4 + 1][25:50]
         if R1_reads[i * 4].split()[0].split(":")[-1]
         == R2_reads[i * 4].split()[0].split(":")[-1]
-        else False
-        for i in range(ninitial)
-    )
+        else UMIMismatchError(f"UMI mismatch at index {i * 4}")
+        for i in range(initial_read_number)
+    ]
 
-    # Creates reads and UMI pairs, throws an error if there
-    mergedreads = []
-    for i, match in enumerate(generator):
-        if not match:
-            raise UMIMismatchError(f"UMI mismatch at index {i}.")
-        else:
-            mergedreads.append(
-                match + R1_reads[i * 4 + 1][25:50] + R2_reads[i * 4 + 1][25:50]
-            )
+    logger.info("pairs created")
 
-    log_entry("pairs created", True, log_filename)
+    unique_reads = uniquereads_finder(umi_R1_R2_concatenated)
 
-    # Removes duplicates
-    uniquereads = uniquereads_finder(mergedreads)
-    nfinal = len(uniquereads)
+    final_read_number = len(unique_reads)
+
     coordinate_list = []
-    for i, mergedread in enumerate(mergedreads):
-        if i < nfinal and mergedread == uniquereads[i]:
-            coordinate_list.extend([i * 4, i * 4 + 1, i * 4 + 2, i * 4 + 3])
+    count = 0
 
-    log_entry("reads deduped", True, log_filename)
-    log_entry(str(ninitial) + " total reads", True, log_filename)
-    log_entry(str(nfinal) + " unique reads", True, log_filename)
+    # Traverses through the indexes of original reads to look up reads equal to the unique one until the end of the unique reads list
+    for i in range(initial_read_number):
+        if count < final_read_number:
+            if umi_R1_R2_concatenated[i] == unique_reads[count]:
+                coordinate_list.append(i * 4)
+                coordinate_list.append(i * 4 + 1)
+                coordinate_list.append(i * 4 + 2)
+                coordinate_list.append(i * 4 + 3)
+                count += 1
+
+    logger.info("reads deduped")
+    logger.info(str(initial_read_number) + " total reads")
+    logger.info(str(final_read_number) + " unique reads")
 
     # Determines the position of each unique read in the initial fastq files
     dedupedR1 = [R1_reads[i] for i in coordinate_list]
-    dedupedR2 = [R2_reads[i] for i in coordinate_list]
+    dedupedR2 = [R1_reads[i] for i in coordinate_list]
 
-    log_entry(
-        f"run deduped in {time.time() - start_time:.2f} seconds", True, log_filename
-    )
+    logger.info(f"run deduped in {time.time() - start_time:.2f} seconds")
 
-    return dedupedR1, dedupedR2, ninitial, nfinal
+    return dedupedR1, dedupedR2, initial_read_number
 
 
 def main():
-    global log_filename
-    log_filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
+    global file_names
 
     # Checks/creates saving folder
     if "unique_fastq" not in os.listdir(os.path.join(path, "temp")):
-        os.mkdir(os.path.join(path, "/temp/unique_fastq"))
+        os.mkdir(os.path.join(path, "temp/unique_fastq"))
 
-    global file_names
-    file_names = os.listdir(path + "/temp/raw_fastq")
+    # Checks if some files were already deduped
+    file_names = os.listdir(os.path.join(path, "temp/raw_fastq"))
 
     # Parses out the sample and run ids
-    samples, runs = [], []
-
-    for filename in file_names:
-        run_ref, sample_name = filename.split("_")[:2]
-        samples.append(sample_name)
-        runs.append(run_ref)
-
-    runs_samples_dict = dict(zip(runs, samples))
+    runs_samples = [filename.split("_") for filename in file_names]
 
     # Generates list to store each sample statistics dictionary
-    sample_stats_list = []
+    sample_stats_list, done_samples_list = [], []
 
     # Retrives the number of unique runs per sample
-    for sample_id in runs_samples_dict.values():
-        log_entry("starting to dedup sample " + sample_id, True, log_filename)
-        unique_runs_per_sample = {
-            i for i in runs_samples_dict if runs_samples_dict[i] == sample_id
-        }
-        log_entry(
-            f"found {len(unique_runs_per_sample)} runs for sample " + sample_id,
-            True,
-            log_filename,
-        )
+    for run_sample_tuple in runs_samples:
+        sample_id = run_sample_tuple[1]
+        if sample_id not in done_samples_list:
+            logger.info("starting to dedup sample " + sample_id)
 
-        global ddR1
-        global ddR2
-        ddR1 = []
-        ddR2 = []
-
-        if len(unique_runs_per_sample) > 1 and ddR1:
-            (
-                dedupedR1_temp,
-                dedupedR2_temp,
-                ninitial,
-                nfinal,
-            ) = remove_duplicates(sample_id, unique_runs_per_sample, has_many_runs=True)
-        else:
-            (
-                dedupedR1_temp,
-                dedupedR2_temp,
-                ninitial,
-                nfinal,
-            ) = remove_duplicates(
-                sample_id, unique_runs_per_sample, has_many_runs=False
+            unique_runs_per_sample = {
+                "_".join(run_sample_tuple[:-1])
+                for run_sample_tuple in runs_samples
+                if run_sample_tuple[1] == sample_id
+            }
+            unique_runs_per_sample_length = len(unique_runs_per_sample)
+            logger.info(
+                f"found {unique_runs_per_sample_length} runs for sample " + sample_id
             )
 
-        ddR1.extend(dedupedR1_temp)
-        ddR2.extend(dedupedR2_temp)
+            (
+                dedupedR1,
+                dedupedR2,
+                ninitial,
+                nfinal,
+            ) = remove_duplicates_runs_loader(
+                unique_runs_per_sample,
+                lambda has_many_runs: False
+                if unique_runs_per_sample_length == 1
+                else True,
+            )
 
-        log_entry("saving deduped fastq files", True, log_filename)
+            save_reads(
+                os.path.join(path, "temp/unique_fastq", sample_id + "_R1.fastq"),
+                dedupedR1,
+            )
+            save_reads(
+                os.path.join(path, "temp/unique_fastq", sample_id + "_R2.fastq"),
+                dedupedR2,
+            )
 
-        save_reads(
-            os.path.join(path, "temp/unique_fastq", sample_id + "_R1.fastq"), ddR1
-        )
-        save_reads(
-            os.path.join(path, "temp/unique_fastq", sample_id + "_R2.fastq"), ddR2
-        )
+            logger.info(sample_id + " deduped and saved!")
 
-        log_entry("deduped fastq files saved", True, log_filename)
-        log_entry(sample_id + " deduped!", True, log_filename)
+            # Create a dictionary for the current sample's statistics
+            sample_stats = {
+                "sample": sample_id,
+                "initial": ninitial,
+                "unique": nfinal,
+            }
 
-        # Create a dictionary for the current sample's statistics
-        sample_stats = {
-            "sample": sample_id,
-            "initial": ninitial,
-            "unique": nfinal,
-        }
-
-        # Append the sample's statistics dictionary to the list
-        sample_stats_list.append(sample_stats)
+            # Append the sample's statistics dictionary to the list
+            sample_stats_list.append(sample_stats)
+            done_samples_list.append(sample_id)
 
     # Generates the statistics directory and file path
-    if "stats" not in os.listdir(os.path.join(path, "experiment/results")):
+    if "stats" not in os.listdir(os.path.join(path, "experiment/results/")):
         os.mkdir(os.path.join(path, "experiment/results/stats/"))
-    csv_file_path = f"experiment/results/stats/deduping_stats.csv"
+
+    csv_file_path = os.path.join(path, "experiment/results/stats/deduping_stats.csv")
+    sample_stats = dict(zip(done_samples_list, sample_stats_list))
 
     # Writes the list of sample statistics dictionaries to the CSV file
-    with open(csv_file_path, "a", newline="") as f:
+    with open(csv_file_path, "w", newline="") as f:
         fieldnames = ["sample", "initial", "unique"]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
 
@@ -238,10 +237,16 @@ def main():
         if os.stat(os.path.join(path, "experiment/results/stats")).st_size == 0:
             writer.writeheader()
 
-        for sample_stats in sample_stats_list:
-            writer.writerow(sample_stats)
+        for sample_name, stats in sample_stats.items():
+            writer.writerow(
+                {
+                    "sample": sample_name,
+                    "initial": stats["initial"],
+                    "unique": stats["unique"],
+                }
+            )
 
-    print(f"Statistics saved to {os.path.join(path, 'experiment/results/stats')}")
+    logger.info(f"Statistics saved to experiment/results/stats/")
 
 
 if __name__ == "__main__":
