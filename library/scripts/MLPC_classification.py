@@ -1,5 +1,5 @@
 import pandas as pd
-from load_exp_info import load_exp_info
+from parses_experiment_info import get_experiment_info
 import pickle
 from scipy.stats import zscore
 
@@ -11,8 +11,7 @@ def raw_to_zscore(DataFrame):
     return outputDF
 
 
-log_filename = snakemake.log[0]
-exp_info, sample_dict = load_exp_info(log_filename)
+exp_info, sample_dict = get_experiment_info()
 
 # Loads MLPC model
 MLPC_model = pickle.load(open("library/MLPC_model/MATseq_MLPC.model", "rb"))

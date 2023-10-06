@@ -1,12 +1,14 @@
 import pandas as pd
-from load_exp_info import load_exp_info
+from parses_experiment_info import get_experiment_info
+from mylogger import get_logger
 
-log_filename = snakemake.log[0]
+# Gets logger instance
+logger = get_logger(__name__)
 
-exp_info, sample_dict = load_exp_info(log_filename)
-
+_, sample_dict = get_experiment_info()
 filenamelist = snakemake.input
 
+logger.info("loaded bed files")
 # loads all diferent gene counts files and creates a DF
 reads_DF = pd.DataFrame()
 

@@ -1,72 +1,74 @@
 import pandas as pd
-from load_exp_info import load_exp_info
-
-"""Loads dataframe with deduping stats
-
-The path is given by the snakemake pipeline.
-"""
-log_filename = snakemake.log[0]
-deduping_stats = pd.read_csv(snakemake.input.dedupstats, index_col="sample")
+from mylogger import get_logger
 
 
-# Creates list with sample references
-bowtie_log_path = snakemake.input.seqlogs  # path to individual bowtie logs
-
-# Extracts sample name from the log path
-sample_list = []
-
-for sample_path in bowtie_log_path:
-    sample_list.append(sample_path.replace("logs/bowtie2/", "").replace(".log", ""))
+def extract_sample_name(log_path):
+    return log_path.replace("logs/bowtie2/", "").replace(".log", "")
 
 
-# Parses deduped stats
-stats = []
-
-for sample in sample_list:
-    temp = deduping_stats.loc[sample].set_index("run")
-    unique_reads = temp.loc["merged"]["unique"]
-    temp.drop("merged", axis=0, inplace=True)
-    initial_reads = temp["initial"].sum()
-    stats.append(
-        dict(zip(["intial_reads", "unique_reads"], [initial_reads, unique_reads]))
+def calculate_mapped_reads(log_lines, unique_reads, logger):
+    unique_reads_line = next(
+        (line for line in log_lines if line.startswith(str(unique_reads))), None
     )
 
-stats = pd.DataFrame(stats)
-stats.index = sample_list
+    if unique_reads_line is None:
+        logger.error(f"unique reads line not found")
+        raise ValueError("Unique reads line not found in the log.")
+
+    mapped_reads = int(
+        log_lines[log_lines.index(unique_reads_line) + 3].split("(")[0].replace(" ", "")
+    ) + int(
+        log_lines[log_lines.index(unique_reads_line) + 4].split("(")[0].replace(" ", "")
+    )
+    return mapped_reads
 
 
-# Loads mapping information and extracts mapped reads
-mapped_reads = []
-
-# Removes lines until the mapping report starts on log[0]
-for i in range(len(sample_list)):
-    sample = sample_list[i]
-    log = open(bowtie_log_path[i]).readlines()
-
+def process_sample(sample, deduped_stats, logger):
     try:
-        while not log[0].startswith(str(stats.loc[sample]["unique_reads"])):
-            log.remove(log[0])
-    except Exception:
-        print(sample + " log is not what it should be!")
+        sample_stats = deduped_stats.loc[sample]
+        unique_reads = sample_stats["unique"]
+        initial_reads = sample_stats["initial"]
 
-    mapped_reads.append(
-        int(log[3].replace(" ", "").split("(")[0])
-        + int(log[4].replace(" ", "").split("(")[0])
-    )
+        log_path = f"logs/bowtie2/{sample}.log"
+        with open(log_path, "r") as log_file:
+            log_lines = log_file.readlines()
 
-stats["mapped"] = mapped_reads
-stats.index.name = "GS_sample_code"
+        mapped_reads = calculate_mapped_reads(log_lines, unique_reads, logger=logger)
 
-# Loads sample name information
-exp_info, sample_dict = load_exp_info(log_filename)
+        sample_statistics = {
+            "sample": sample,
+            "initial_reads": initial_reads,
+            "unique_reads": unique_reads,
+            "mapped_reads": mapped_reads,
+        }
+
+        return sample_statistics
+
+    except KeyError:
+        logger.error(f"file not found for {sample}")
+        return None
 
 
-# Changes index names
-oldnames = stats.index.to_list()
-newnames = []
+def main():
+    logger = get_logger(__name__)
+    bowtie_log_paths = snakemake.input.seqlogs
+    sample_list = [extract_sample_name(path) for path in bowtie_log_paths]
 
-for name in oldnames:
-    newnames.append(sample_dict[name])
+    deduped_stats = pd.read_csv(snakemake.input.dedupstats, index_col="sample")
 
-stats["sample name"] = newnames
-stats.to_excel(snakemake.output[0])
+    stats = []
+    for sample in sample_list:
+        sample_statistics = process_sample(sample, deduped_stats, logger)
+        if sample_statistics is None:
+            logger.error(f"failed to generate statistics for {sample}")
+        else:
+            stats.append(sample_statistics)
+
+    stats_df = pd.DataFrame(stats)
+    stats_df.set_index("sample", inplace=True)
+
+    stats_df.to_excel(snakemake.output[0])
+
+
+if __name__ == "__main__":
+    main()

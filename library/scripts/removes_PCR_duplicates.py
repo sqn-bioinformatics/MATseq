@@ -1,31 +1,15 @@
 import os
 import time
-import datetime
 import csv
-import logging
+from mylogger import get_logger
 from itertools import chain
 
 
 # Sets path to ~/MATseq
 path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-log_filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
-log_file_path = os.path.join("logs", log_filename)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    filename=log_file_path,
-    filemode="a",
-)
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-formatter = logging.Formatter(
-    "%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-)
-console.setFormatter(formatter)
-logger = logging.getLogger("")
-logger.addHandler(console)
+# Gets logger instance
+logger = get_logger(__name__)
 
 
 class FileNotFoundForRun(FileNotFoundError):
@@ -62,6 +46,7 @@ def remove_duplicates_runs_loader(unique_runs_per_sample, has_many_runs):
 
     for file_name in unique_runs_per_sample:
         if file_name is None:
+            logger.error(f"file not found for {file_name}")
             raise FileNotFoundForRun(f"File not found for {file_name}")
 
         else:
@@ -78,6 +63,33 @@ def remove_duplicates_runs_loader(unique_runs_per_sample, has_many_runs):
             deduped_R1, deduped_R2, initial_read_number = remove_duplicates(
                 R1_reads, R2_reads
             )
+
+            # Changes from here on to save each run separately to perform QC on
+            logger.info(
+                "number of reads before deduping for "
+                + file_name
+                + " is "
+                + str(initial_read_number)
+            )
+            logger.info(
+                "number of reads after deduping for "
+                + file_name
+                + " is "
+                + str(len(deduped_R1) // 4)
+            )
+            save_reads(
+                os.path.join(
+                    path, "temp/unique_fastq_separate_runs", file_name + "_R1.fastq"
+                ),
+                deduped_R1,
+            )
+            save_reads(
+                os.path.join(
+                    path, "temp/unique_fastq_separate_runs", file_name + "_R2.fastq"
+                ),
+                deduped_R2,
+            )
+
             deduped_R1_list.append(deduped_R1)
             deduped_R2_list.append(deduped_R2)
             initial_read_number_total += initial_read_number
@@ -148,7 +160,7 @@ def remove_duplicates(R1_reads, R2_reads):
 
     # Determines the position of each unique read in the initial fastq files
     dedupedR1 = [R1_reads[i] for i in coordinate_list]
-    dedupedR2 = [R1_reads[i] for i in coordinate_list]
+    dedupedR2 = [R2_reads[i] for i in coordinate_list]
 
     logger.info(f"run deduped in {time.time() - start_time:.2f} seconds")
 
@@ -156,13 +168,14 @@ def remove_duplicates(R1_reads, R2_reads):
 
 
 def main():
-    global file_names
-
     # Checks/creates saving folder
     if "unique_fastq" not in os.listdir(os.path.join(path, "temp")):
         os.mkdir(os.path.join(path, "temp/unique_fastq"))
 
-    # Checks if some files were already deduped
+    # Makes extra folder for separate runs
+    if "unique_fastq_separate_runs" not in os.listdir(os.path.join(path, "temp")):
+        os.mkdir(os.path.join(path, "temp/unique_fastq_separate_runs"))
+
     file_names = os.listdir(os.path.join(path, "temp/raw_fastq"))
 
     # Parses out the sample and run ids
@@ -172,7 +185,7 @@ def main():
     sample_stats_list, done_samples_list = [], []
 
     # Retrives the number of unique runs per sample
-    for run_sample_tuple in runs_samples:
+    for run_sample_tuple in runs_samples[:1]:
         sample_id = run_sample_tuple[1]
         if sample_id not in done_samples_list:
             logger.info("starting to dedup sample " + sample_id)
@@ -232,10 +245,7 @@ def main():
     with open(csv_file_path, "w", newline="") as f:
         fieldnames = ["sample", "initial", "unique"]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-
-        # Writes the CSV header if the file is empty
-        if os.stat(os.path.join(path, "experiment/results/stats")).st_size == 0:
-            writer.writeheader()
+        writer.writeheader()
 
         for sample_name, stats in sample_stats.items():
             writer.writerow(
@@ -250,4 +260,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import cProfile
+
+    cProfile.run("main()")

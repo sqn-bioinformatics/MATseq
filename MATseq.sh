@@ -8,11 +8,13 @@
 # 	echo 'Genomescan update completed';;
 # esac
 # echo ''
-# # 
-snakemake -s library/scripts/gunzip.snk -p --cores 4
+# # # # # 
+# snakemake -s library/scripts/gunzip.snk -p --rerun-incomplete --cores 4 
 
 python library/scripts/removes_PCR_duplicates.py
 
-snakemake -s library/scripts/fastqc.snk -p --cores 4
+# snakemake -s library/scripts/fastqc.snk -p --cores 4
 
-snakemake -s library/scripts/mapping.snk -p --cores 4 --resources load=2
+snakemake -s library/scripts/fastqc_separate_runs.snk -p --cores 4
+
+# snakemake -s library/scripts/mapping.snk -p --cores 4 --resources load=2

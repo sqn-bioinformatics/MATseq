@@ -7,15 +7,13 @@ import sys
 
 # Import functions directly instead of renaming
 from log_entry import log_entry
-from load_exp_info import load_exp_info
+from parses_experiment_info import get_experiment_info
 from load_config import load_config
 from gsport_tools import gs_login, download_filenames, download_fastq
 
 
-log_filename = log_filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
-
-exp_info, sample_dict = load_exp_info(log_filename)
-MATseq_settings = load_config(log_filename)
+exp_info, sample_dict = get_experiment_info()
+MATseq_settings = load_config()
 
 if exp_info["usr_email"] == "":
     log_entry("No GS user account found on exp properties.", True, log_filename)
