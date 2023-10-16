@@ -185,54 +185,56 @@ def main():
     sample_stats_list, done_samples_list = [], []
 
     # Retrives the number of unique runs per sample
-    for run_sample_tuple in runs_samples[:1]:
-        sample_id = run_sample_tuple[1]
+    for run_sample in runs_samples:
+        sample_id = run_sample[1]
         if sample_id not in done_samples_list:
-            logger.info("starting to dedup sample " + sample_id)
+            if sample_id == "105659-001-019":
+                logger.info("starting to dedup sample " + sample_id)
 
-            unique_runs_per_sample = {
-                "_".join(run_sample_tuple[:-1])
-                for run_sample_tuple in runs_samples
-                if run_sample_tuple[1] == sample_id
-            }
-            unique_runs_per_sample_length = len(unique_runs_per_sample)
-            logger.info(
-                f"found {unique_runs_per_sample_length} runs for sample " + sample_id
-            )
+                unique_runs_per_sample = {
+                    "_".join(run_sample[:-1])
+                    for run_sample in runs_samples
+                    if run_sample[1] == sample_id
+                }
+                unique_runs_per_sample_length = len(unique_runs_per_sample)
+                logger.info(
+                    f"found {unique_runs_per_sample_length} runs for sample "
+                    + sample_id
+                )
 
-            (
-                dedupedR1,
-                dedupedR2,
-                ninitial,
-                nfinal,
-            ) = remove_duplicates_runs_loader(
-                unique_runs_per_sample,
-                lambda has_many_runs: False
-                if unique_runs_per_sample_length == 1
-                else True,
-            )
+                (
+                    dedupedR1,
+                    dedupedR2,
+                    ninitial,
+                    nfinal,
+                ) = remove_duplicates_runs_loader(
+                    unique_runs_per_sample,
+                    lambda has_many_runs: False
+                    if unique_runs_per_sample_length == 1
+                    else True,
+                )
 
-            save_reads(
-                os.path.join(path, "temp/unique_fastq", sample_id + "_R1.fastq"),
-                dedupedR1,
-            )
-            save_reads(
-                os.path.join(path, "temp/unique_fastq", sample_id + "_R2.fastq"),
-                dedupedR2,
-            )
+                save_reads(
+                    os.path.join(path, "temp/unique_fastq", sample_id + "_R1.fastq"),
+                    dedupedR1,
+                )
+                save_reads(
+                    os.path.join(path, "temp/unique_fastq", sample_id + "_R2.fastq"),
+                    dedupedR2,
+                )
 
-            logger.info(sample_id + " deduped and saved!")
+                logger.info(sample_id + " deduped and saved!")
 
-            # Create a dictionary for the current sample's statistics
-            sample_stats = {
-                "sample": sample_id,
-                "initial": ninitial,
-                "unique": nfinal,
-            }
+                # Create a dictionary for the current sample's statistics
+                sample_stats = {
+                    "sample": sample_id,
+                    "initial": ninitial,
+                    "unique": nfinal,
+                }
 
-            # Append the sample's statistics dictionary to the list
-            sample_stats_list.append(sample_stats)
-            done_samples_list.append(sample_id)
+                # Append the sample's statistics dictionary to the list
+                sample_stats_list.append(sample_stats)
+                done_samples_list.append(sample_id)
 
     # Generates the statistics directory and file path
     if "stats" not in os.listdir(os.path.join(path, "experiment/results/")):
