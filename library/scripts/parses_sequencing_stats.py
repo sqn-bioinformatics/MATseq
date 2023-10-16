@@ -6,20 +6,16 @@ def extract_sample_name(log_path):
     return log_path.replace("logs/bowtie2/", "").replace(".log", "")
 
 
-def calculate_mapped_reads(log_lines, unique_reads, logger):
-    unique_reads_line = next(
-        (line for line in log_lines if line.startswith(str(unique_reads))), None
-    )
+def calculate_mapped_reads(log_lines, logger):
+    numbers = [
+        int(line.split("(")[0].replace(" ", ""))
+        for line in log_lines
+        if "aligned concordantly exactly 1 time" in line
+        or "aligned concordantly >1 times" in line
+    ]
 
-    if unique_reads_line is None:
-        logger.error(f"unique reads line not found")
-        raise ValueError("Unique reads line not found in the log.")
+    mapped_reads = sum(numbers)
 
-    mapped_reads = int(
-        log_lines[log_lines.index(unique_reads_line) + 3].split("(")[0].replace(" ", "")
-    ) + int(
-        log_lines[log_lines.index(unique_reads_line) + 4].split("(")[0].replace(" ", "")
-    )
     return mapped_reads
 
 
@@ -32,8 +28,7 @@ def process_sample(sample, deduped_stats, logger):
         log_path = f"logs/bowtie2/{sample}.log"
         with open(log_path, "r") as log_file:
             log_lines = log_file.readlines()
-
-        mapped_reads = calculate_mapped_reads(log_lines, unique_reads, logger=logger)
+        mapped_reads = calculate_mapped_reads(log_lines, logger=logger)
 
         sample_statistics = {
             "sample": sample,
@@ -51,10 +46,10 @@ def process_sample(sample, deduped_stats, logger):
 
 def main():
     logger = get_logger(__name__)
-    bowtie_log_paths = snakemake.input.seqlogs
+    bowtie_log_paths = snakemake.input.seq_logs
     sample_list = [extract_sample_name(path) for path in bowtie_log_paths]
 
-    deduped_stats = pd.read_csv(snakemake.input.dedupstats, index_col="sample")
+    deduped_stats = pd.read_csv(snakemake.input.deduped_stats, index_col="sample")
 
     stats = []
     for sample in sample_list:

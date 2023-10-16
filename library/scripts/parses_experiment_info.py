@@ -20,7 +20,7 @@ def get_experiment_info():
         if experiment_information["project_number"] == "":
             raise ValueError("Can not find project number")
     except ValueError as e:
-        logger.error("Can not find project number, provided by a sequencing company\n ")
+        logger.error("can not find project number, provided by a sequencing company\n ")
         print(e)
         exit()
 
@@ -29,7 +29,7 @@ def get_experiment_info():
     ].to_dict()["values"]
 
     logger.info(
-        "Project "
+        "project "
         + str(experiment_information["project_number"])
         + " information loaded"
     )

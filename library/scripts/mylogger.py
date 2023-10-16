@@ -21,21 +21,22 @@ def get_logger(name):
         "%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    file_handler = logging.FileHandler(log_file_path)
-    file_handler.setLevel(logging.ERROR)
-    file_handler.setFormatter(file_formatter)
+    # Temporary turned off log file generation
+    # file_handler = logging.FileHandler(log_file_path)
+    # file_handler.setLevel(logging.ERROR)
+    # file_handler.setFormatter(file_formatter)
 
-    file_handler_info = logging.FileHandler(log_file_path)
-    file_handler_info.setLevel(logging.INFO)
-    file_handler_info.setFormatter(file_info_formatter)
+    # file_handler_info = logging.FileHandler(log_file_path)
+    # file_handler_info.setLevel(logging.INFO)
+    # file_handler_info.setFormatter(file_info_formatter)
 
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(console_formatter)
 
     logger = logging.getLogger(name)
-    logger.addHandler(file_handler)
-    logger.addHandler(file_handler_info)
+    # logger.addHandler(file_handler)
+    # logger.addHandler(file_handler_info)
     logger.addHandler(console_handler)
     logger.setLevel(logging.DEBUG)
 

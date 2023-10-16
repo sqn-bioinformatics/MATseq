@@ -9,12 +9,19 @@
 # esac
 # echo ''
 # # # # # 
-# snakemake -s library/scripts/gunzip.snk -p --rerun-incomplete --cores 4 
+ 
+snakemake -s library/scripts/1_download_files.snk  # to generate
 
-python library/scripts/removes_PCR_duplicates.py
+snakemake -s library/scripts/2_unzip_files.snk -p --rerun-incomplete --cores 16
 
-# snakemake -s library/scripts/fastqc.snk -p --cores 4
+snakemake -s library/scripts/3_remove_PCR_duplicates.snk # to generate
 
-snakemake -s library/scripts/fastqc_separate_runs.snk -p --cores 10
+snakemake -s library/scripts/4_trim_polyg_tails.snk -p --latency-wait 1000 --cores 16
 
-# snakemake -s library/scripts/mapping.snk -p --cores 4 --resources load=2
+snakemake -s library/scripts/5_quality_control.snk -p --cores 24
+
+snakemake -s library/scripts/6_map_gene_counts.snk -p --cores 24 --resources load=2
+
+snakemake -s library/scripts/7_classification.shk # to generate
+
+

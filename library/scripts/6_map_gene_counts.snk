@@ -20,7 +20,7 @@ if "read_counts_analysis" not in os.listdir(os.path.join(path, "experiment/resul
 	os.mkdir(os.path.join(path, "experiment/results", "read_counts_analysis"))
 
 SAMPLES=[]
-for filename in(os.listdir('temp/unique_fastq/')):
+for filename in(os.listdir('temp/trimmed_fastq/')):
 	if filename.endswith('_R1.fastq'):
 		SAMPLES.append(filename.replace('_R1.fastq',''))
 
@@ -43,8 +43,8 @@ rule all:
 
 rule Bowtie2_map:
 	input:
-		right="temp/unique_fastq/{sample}_R1.fastq",
-		left="temp/unique_fastq/{sample}_R2.fastq"
+		right="temp/trimmed_fastq/{sample}_R1.fastq",
+		left="temp/trimmed_fastq/{sample}_R2.fastq"
 
 	output:
 		"temp/sam/{sample}.sam"
@@ -57,17 +57,14 @@ rule Bowtie2_map:
 		
 rule Seq_stats: #note: this rule assumes that the demultiplexing was made prior to this pipeline
 	input:
-		dedupstats='experiment/results/stats/deduping_stats.csv',
-		seqlogs = expand('logs/bowtie2/{sample}.log',sample=SAMPLES),
+		deduped_stats='experiment/results/stats/deduping_stats.csv',
+		seq_logs = expand('logs/bowtie2/{sample}.log',sample=SAMPLES),
 	output:
 		"experiment/results/stats/"+SQN_project_number+'_seqstats.xlsx'
 	script:
 		"parses_sequencing_stats.py"
 
 rule sam_to_bed:
-	resources:
-		load=1
-
 	input:
 		"temp/sam/{sample}.sam"
 	output:
