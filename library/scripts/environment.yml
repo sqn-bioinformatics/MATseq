@@ -1,0 +1,30 @@
+############################################################################
+#                                                                         
+# run: conda env create --name MATseq --file MATseq_environment.yml    
+#
+# update: conda env update --name MATseq --file MATseq_environment.yml --prune
+#                                                                           
+############################################################################
+
+
+name: MATseq_temp
+
+channels:
+  - conda-forge
+  - bioconda
+  - r
+  - defaults
+  
+dependencies:
+  - python
+  - pip
+  - snakemake
+  - bowtie2
+  - tbb
+  - fastqc
+  - pip:
+    - openpyxl
+    - pandas
+    - PyYaml
+    - xlrd
+    - scikit-learn

@@ -1,6 +1,5 @@
 import os
 from parses_experiment_info import get_experiment_info
-from load_config import load_config
 import datetime
 
 
@@ -11,28 +10,22 @@ log_filename=datetime.datetime.now().strftime("%Y%m%d_%H%M%S")+'.log'
 
 exp_info, sample_dict = get_experiment_info()
 
-MATseq_config=load_config()
-bowtie_threads=MATseq_config['bowtie_threads']
-
 SQN_project_number=exp_info['SQN_project_number']
 
-if "read_counts_analysis" not in os.listdir(os.path.join(path, "experiment/results")):
-	os.mkdir(os.path.join(path, "experiment/results", "read_counts_analysis"))
-
-SAMPLES=[]
-for filename in(os.listdir('temp/trimmed_fastq/')):
-	if filename.endswith('_R1.fastq'):
-		SAMPLES.append(filename.replace('_R1.fastq',''))
+file_names=[]
+for file_name in(os.listdir('temp/trimmed_fastq/')):
+	if file_name.endswith('_R1.fastq'):
+		file_names.append(file_name.replace('_R1.fastq',''))
 
 
 # This tells snakemake what all the final files are to avoid wild card error
 
 rule all:
 	input:
-		expand("temp/sam/{sample}.sam", sample=SAMPLES),
-		expand('temp/bed/{sample}.bed', sample=SAMPLES),
-		expand('temp/read_counts/{sample}_genecount.csv',sample=SAMPLES),
-		expand('logs/bowtie2/{sample}.log',sample=SAMPLES),
+		expand("temp/sam/{sample}.sam", sample=file_names),
+		expand('temp/bed/{sample}.bed', sample=file_names),
+		expand('temp/read_counts/{sample}_genecount.csv',sample=file_names),
+		expand('logs/bowtie2/{sample}.log',sample=file_names),
 		'experiment/results/read_counts_analysis/'+SQN_project_number+'_raw_reads.xlsx', 
 		'experiment/results/read_counts_analysis/'+SQN_project_number+'_raw_reads.csv', 
 		'experiment/results/stats/'+SQN_project_number+'_seqstats.xlsx',
@@ -45,20 +38,17 @@ rule Bowtie2_map:
 	input:
 		right="temp/trimmed_fastq/{sample}_R1.fastq",
 		left="temp/trimmed_fastq/{sample}_R2.fastq"
-
 	output:
 		"temp/sam/{sample}.sam"
-
 	log:
 		"logs/bowtie2/{sample}.log"
-
 	shell:
-		"bowtie2 -x library/genomes/GRCh38_cds -1 {input.right} -2 {input.left} -p {bowtie_threads} --fr  --no-discordant --no-mixed -3 50 -5 10 -S {output} --no-unal 2>{log}"
-		
+		"bowtie2 -x library/genomes/GRCh38_cds -1 {input.right} -2 {input.left} -p 16 --fr  --no-discordant --no-mixed -3 50 -5 10 -S {output} --no-unal 2>{log}"
+
 rule Seq_stats: #note: this rule assumes that the demultiplexing was made prior to this pipeline
 	input:
 		deduped_stats='experiment/results/stats/deduping_stats.csv',
-		seq_logs = expand('logs/bowtie2/{sample}.log',sample=SAMPLES),
+		seq_logs = expand('logs/bowtie2/{sample}.log',sample=file_names),
 	output:
 		"experiment/results/stats/"+SQN_project_number+'_seqstats.xlsx'
 	script:
@@ -72,18 +62,18 @@ rule sam_to_bed:
 	script:
 		'sam_to_bed.py'
 
-rule count_genes_from_Bed:
+rule count_genes_from_bed:
 	input:
 		"temp/bed/{sample}.bed"
 	output:
 		"temp/read_counts/{sample}_genecount.csv"
 	script:
-		'count_genes_from_Bed.py'
+		'count_genes_from_bed.py'
 		
 		
 rule merge_all_gene_counts:
     input:
-      filenames=expand('temp/read_counts/{sample}_genecount.csv', sample=SAMPLES),       
+      filenames=expand('temp/read_counts/{sample}_genecount.csv', sample=file_names),       
     output:
         'experiment/results/read_counts_analysis/'+SQN_project_number+'_raw_reads.xlsx',
         'experiment/results/read_counts_analysis/'+SQN_project_number+'_raw_reads.csv',

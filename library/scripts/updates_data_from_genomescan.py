@@ -7,9 +7,11 @@ import re
 import time
 
 from getpass import getpass
-from sys import exit
 from mylogger import get_logger
 from parses_experiment_info import get_experiment_info
+
+
+# /home/t.afanasyeva/mambaforge/envs/genomescan_works/lib/python3.10/site-packages/gsport.py
 
 # Sets path to ~/MATseq
 path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,21 +20,24 @@ with open(os.path.join(path, "library/config_genomescan.json")) as json_data_fil
     config = json.load(json_data_file)
     HOST = config.get("HOST")
     GSPORT_VERSION = config.get("GSPORT_VERSION")
+    USER_EMAIL = config.get("USER_EMAIL")
+    USER_PASSWORD = config.get("USER_PASSWORD")
+    TOKEN = config.get("TOKEN")
+
 
 # Gets logger instance
 logger = get_logger(__name__)
 
 
 class UserLoggerIn:
-    def __init__(self, credentials, session, logger):
-        self.credentials = credentials
+    def __init__(self, session, logger):
         self.logger = logger
         self.session = session
 
     # loads cookies
-    def checks_for_cookies(self) -> str:
+    def check_for_cookies(self) -> str:
         try:
-            cookies = http.cookiejar.MozillaCookieJar("library//gs_cookies.txt")
+            cookies = http.cookiejar.MozillaCookieJar("library/gs_cookies.txt")
             cookies.load()
             response = requests.get(
                 "https://portal.genomescan.nl/logged_in_api/", cookies=cookies
@@ -53,15 +58,11 @@ class UserLoggerIn:
     def log_in(self):
         self.logger.info("opening session...")
 
-        username = self.credentials.get("user_email")
-        password = self.credentials.get("user_password")
-
         login_url = HOST + "/login/"
         otp_url = HOST + "/otp_ok/"
 
         # Performs the initial login
         response = self.session.get(login_url)
-        print(response.text)
 
         csrf_token = re.search(
             'name="csrfmiddlewaretoken" value="(.+)"', response.text
@@ -69,24 +70,26 @@ class UserLoggerIn:
 
         # Send login data
         login_data = {
-            "username": username,
-            "password": password,
+            "username": USER_EMAIL,
+            "password": USER_PASSWORD,
             "csrfmiddlewaretoken": csrf_token,
             "next": "/",
         }
         response = self.session.post(
             login_url, data=login_data, headers={"Referer": login_url}
         )
+        token = "9FMZB"
 
         # Checks for 2FA requirement
         if 'name="csrfmiddlewaretoken" value="' in response.text:
-            token = input("Enter 2FA token: ")
+            # token = input("Enter 2FA token: ")
             login_data = {
                 "token": token,
-                "username": username,
+                "username": USER_EMAIL,
                 "csrfmiddlewaretoken": csrf_token,
                 "next": "/",
             }
+
             response = self.session.post(
                 otp_url,
                 data=login_data,
@@ -98,18 +101,16 @@ class UserLoggerIn:
 
         # Check for a successful login
         if "Welcome" in response.text:
-            self.logger.info("login successful")
+            self.logger.info("username and password are correct")
         else:
             self.logger.error("login failed")
-
-        self.session.cookies.save(ignore_discard=True)
 
         return self.session.cookies
 
 
 class FileHandler:
-    def __init__(self, credentials, session, cookies, logger):
-        self.credentials = credentials
+    def __init__(self, project_number, session, cookies, logger):
+        self.project_number = project_number
         self.logger = logger
         self.session = session
         self.cookies = cookies
@@ -117,18 +118,19 @@ class FileHandler:
     # Downloads the list of file names
     def download_filenames(self) -> List:
         data_url = HOST + "data_api2/"
-        project_number = self.credentials.get("project_number")
 
         response = self.session.get(
-            data_url + str(project_number) + "/n",
+            data_url + str(self.project_number) + "/n",
             cookies=self.cookies,
             params={"cd": "."},
         )
-        try:
-            file_names = json.loads(response.text)  # check format of file_nmaes
-            print(file_names)
-        except json.decoder.JSONDecodeError as e:
-            logger.error(f"error reading response {response.text}: {e}")
+
+        print(response.text)
+
+        file_names = json.loads(response.text)  # check format of file_nmaes
+
+        # except json.decoder.JSONDecodeError as e:
+        #     logger.error(f"error reading response {response.text}: {e}")
 
         return file_names
 
@@ -165,7 +167,7 @@ class FileHandler:
                 seconds %= divisor
         return result
 
-    def download_files(self, name):
+    def download_files(self):
         file_names = self.download_filenames()
 
         count = 0
@@ -219,32 +221,18 @@ class FileHandler:
 
         logger.info(f"{name} downloaded")
 
-        # return chunk  ?
-
 
 def main():
     # Initializes an HTTP session
     session = requests.Session()
 
-    # Defines the required fields
-    required_fields = ["user_email", "user_password", "project_number"]
+    experiment_info, _ = get_experiment_info()
+    project_number = experiment_info.get("project_number")
 
-    # Fetches exp_settings.xlsx file
-    experiment_information, _ = get_experiment_info()
+    cuurent_user = UserLoggerIn(session, logger)
+    cookies = cuurent_user.check_for_cookies()
 
-    credentials = {}
-    for field in required_fields:
-        if not experiment_information.get(field):
-            logger.error(
-                f"no {field} was found in the provided experiment settings .xlsx file"
-            )
-            exit(1)
-        credentials[field] = experiment_information.get(field)
-
-    cuurent_user = UserLoggerIn(credentials, session, logger)
-    cookies = cuurent_user.checks_for_cookies()
-
-    file_handler = FileHandler(credentials, session, cookies, logger)
+    file_handler = FileHandler(project_number, session, cookies, logger)
     file_handler.download_files()
     logger.info("all files downloaded")
 
