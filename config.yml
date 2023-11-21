@@ -1,0 +1,6 @@
+
+PipelineDir: '/home/t.afanasyeva/MATseq'
+SampleDir: '/home/t.afanasyeva/MATseq/experiment/raw_data'
+WorkDir: '/home/t.afanasyeva/MATseq/temp'
+Threads: 30 
+
