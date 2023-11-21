@@ -155,15 +155,14 @@ def remove_duplicates(R1_reads, R2_reads):
 
 
 def main():
-    # Checks/creates saving folder
-    if "unique_fastq" not in os.listdir(os.path.join(path, "temp")):
-        os.mkdir(os.path.join(path, "temp/unique_fastq"))
-
-    # Makes extra folder for separate runs
-    if "unique_fastq_separate_runs" not in os.listdir(os.path.join(path, "temp")):
-        os.mkdir(os.path.join(path, "temp/unique_fastq_separate_runs"))
+    # # Checks/creates saving folder
+    # if "unique_fastq" not in os.listdir(os.path.join(path, "temp")):
+    #     os.mkdir(os.path.join(path, "temp/unique_fastq"))
 
     file_names = os.listdir(os.path.join(path, "temp/raw_fastq"))
+
+    # file_names = snakemake.input
+    # print(file_names)
 
     # Parses out the sample and run ids
     runs_samples = [filename.split("_") for filename in file_names]
@@ -171,8 +170,8 @@ def main():
     # Generates list to store each sample statistics dictionary
     sample_stats_list, done_samples_list = [], []
 
-    # Retrives the number of unique runs per sample
-    for run_sample in runs_samples:
+    # # Retrives the number of unique runs per sample
+    for run_sample in runs_samples[:1]:
         sample_id = run_sample[1]
         logger.info("starting to dedup sample " + sample_id)
 
@@ -218,9 +217,9 @@ def main():
         sample_stats_list.append(sample_stats)
         done_samples_list.append(sample_id)
 
-    # Generates the statistics directory and file path
-    if "stats" not in os.listdir(os.path.join(path, "experiment/results/")):
-        os.mkdir(os.path.join(path, "experiment/results/stats/"))
+    # # Generates the statistics directory and file path
+    # if "stats" not in os.listdir(os.path.join(path, "experiment/results/")):
+    #     os.mkdir(os.path.join(path, "experiment/results/stats/"))
 
     csv_file_path = os.path.join(path, "experiment/results/stats/deduping_stats.csv")
     sample_stats = dict(zip(done_samples_list, sample_stats_list))
