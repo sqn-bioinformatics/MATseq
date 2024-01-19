@@ -12,4 +12,6 @@ snakemake --use-conda \
 	        --directory ${WORKDIR} \
           --cores ${THREADS} \
           --configfile ${CONFIG} \
-          --snakefile library/scripts/0_MATseq.smk
+          --snakefile library/scripts/0_MATseq.smk \
+          --delete-all-output
+ 
