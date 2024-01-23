@@ -7,7 +7,7 @@
 ############################################################################
 
 
-name: MATseq
+name: MATseq_temp
 
 channels:
   - conda-forge
