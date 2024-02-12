@@ -25,14 +25,21 @@ wandb/
 artifacts/
 
 
-#ignore all training data in notebooks, experiment, and temp folders
+#ignore data in notebooks, experiment, raw_data, genecounts, and temp folders
 temp/
 experiment/
+pipeline/raw_data/
+gene_counts/
 
 
 #ignore snakemake logs
 /.snakemake
 
-#ignore pickled model, the file is too large
+#ignore pickled model
 BaggingClassifier.joblib
+
+#ignore genomes
+/library/genomes/*
+
+
 
