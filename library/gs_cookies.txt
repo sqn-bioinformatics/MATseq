@@ -1,6 +1,0 @@
-# Netscape HTTP Cookie File
-# http://curl.haxx.se/rfc/cookie_spec.html
-# This is a generated file!  Do not edit.
-
-portal.genomescan.nl	FALSE	/	FALSE	1689681677	csrftoken	rgFIi10OYhSc6oVwZ4UWtjoQHxTqD43Q4al6iqKVoepJcxHleN1nx6jvHWJQfzsp
-portal.genomescan.nl	FALSE	/	FALSE	1659441677	sessionid	pye14eds69zhd5pu4171146vot6hwop7
