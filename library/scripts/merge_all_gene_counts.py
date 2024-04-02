@@ -6,15 +6,15 @@ from mylogger import get_logger
 logger = get_logger(__name__)
 
 _, sample_dict = get_experiment_info()
-filenamelist = snakemake.input
+file_names = snakemake.input
 
 logger.info("loaded bed files")
 # loads all diferent gene counts files and creates a DF
 reads_DF = pd.DataFrame()
 
-for filename in filenamelist:
-    in_DF = pd.read_csv(filename).set_index("gene")
-    sample_name = filename.split("/")[2]
+for file_name in file_names:
+    in_DF = pd.read_csv(file_name).set_index("gene")
+    sample_name = file_name.split("/")[2]
     sample_name = sample_dict[sample_name.replace("_genecount.csv", "")]
     reads_DF[sample_name] = in_DF["raw_reads"]
 
