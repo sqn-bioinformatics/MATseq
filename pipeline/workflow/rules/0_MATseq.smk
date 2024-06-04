@@ -40,9 +40,6 @@ def compile_benchmarks(benchmark: str, stats: str):
 
 # Getting sample names and _R1 and _R2 strings
 SAMPLES, _, _, PAIRED = map(set, glob_wildcards(os.path.join(config['SampleDir'], "{samples}_{tag}_{other}_{paired}.fastq.gz")))
-
-SAMPLES = random.sample(SAMPLES, 3)
-
 SAMPLE_RUN_DICTIONARY = {}
 for sample in SAMPLES:
     sample_id = sample.split("_")[1]
