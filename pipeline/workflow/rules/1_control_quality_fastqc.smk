@@ -30,7 +30,7 @@ rule fastqc:
     output:
         html = "fastqc/{sample}_{paired}_fastqc.html",
         zip = "fastqc/{sample}_{paired}_fastqc.zip"
-    benchmark: "benchmarks/fastqc_{sample}_{paired}_.txt"
+    benchmark: "benchmarks/fastqc_{sample}_{paired}.txt"
     threads: 18
     resources: mem_mb= 2000
     shell:
