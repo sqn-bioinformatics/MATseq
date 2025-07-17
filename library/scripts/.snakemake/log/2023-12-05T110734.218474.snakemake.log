@@ -1,3 +1,0 @@
-KeyError in file /home/t.afanasyeva/MATseq/library/scripts/snakefile, line 7:
-'SampleDir'
-  File "/home/t.afanasyeva/MATseq/library/scripts/snakefile", line 7, in <module>
