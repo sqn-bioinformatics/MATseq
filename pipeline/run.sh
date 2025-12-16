@@ -15,6 +15,7 @@ snakemake --use-conda \
           --snakefile workflow/rules/0_MATseq.smk \
           --latency-wait 60 \
           --rerun-incomplete \
+          --dag | dot -Tsvg > dag.svg  \
           
  
 
