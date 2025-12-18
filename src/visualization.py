@@ -9,7 +9,7 @@ import textwrap
 from pathlib import Path
 
 from .utils import save_csv, get_output_path, CUSTOM_PALETTE_6
-from .preprocessing import normalize_rpm
+from .preprocessing import normalize_rpm, load_tlr_data
 
 # Lazy imports for goatools (only loaded when needed)
 GODag = None
@@ -32,81 +32,77 @@ def _load_goatools():
         GOEnrichmentStudyNS = _GOEnrichmentStudyNS
 
 
-def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Load TLR2 (Pam3) and TLR4 (LPS) data from supplementary tables.
+def _plot_tlr_panel(
+    ax_main,
+    ax_bar,
+    df: pd.DataFrame,
+    conc_col: str,
+    fla_pa_val: float = None,
+    xlabel: str = "Concentration",
+    title: str = "TLR",
+    label: str = "Ligand",
+    color: str = "#1f77b4",
+    xlim: tuple = (0.01, 100),
+):
+    """Plot a single TLR dose-response panel with optional Fla-PA bar.
 
     Args:
-        data_dir: Path to the supplementary_data directory.
-                  Defaults to results/supplementary_data relative to project root.
-
-    Returns:
-        Tuple of (tlr2_df, tlr4_df, fla_pa_data) where fla_pa_data contains
-        Fla-PA measurements for each TLR.
+        ax_main: Main axis for the dose-response curve.
+        ax_bar: Axis for the Fla-PA bar.
+        df: DataFrame with concentration and Average columns.
+        conc_col: Name of the concentration column.
+        fla_pa_val: Fla-PA average value (None to skip bar).
+        xlabel: Label for x-axis.
+        title: Plot title.
+        label: Legend label for the curve.
+        color: Color for the curve.
+        xlim: X-axis limits as (min, max).
     """
-    if data_dir is None:
-        data_dir = Path(__file__).parent.parent / "results" / "supplementary_data"
+    # Filter out zero concentrations for log scale
+    df_plot = df[df[conc_col] > 0].copy()
 
-    # Load TLR4/LPS data (Supplementary Table 5)
-    tlr4_raw = pd.read_csv(data_dir / "Supplementary_Table_5.csv")
+    x = df_plot[conc_col].values
+    y = df_plot["Average"].values
 
-    # Filter rows with LPS data (non-NaN in LPS columns)
-    tlr4_lps_mask = tlr4_raw["OD630nm_LPS_Replicate1"].notna()
-    tlr4_lps = tlr4_raw[tlr4_lps_mask]
-    tlr4_df = pd.DataFrame(
-        {
-            "Concentration_EU_mL": tlr4_lps["Concentration_(EU_mL)"],
-            "Average": tlr4_lps[
-                ["OD630nm_LPS_Replicate1", "OD630nm_LPS_Replicate2"]
-            ].mean(axis=1),
-        }
+    # Sort by x for proper line connection
+    sort_idx = np.argsort(x)
+    x_sorted = x[sort_idx]
+    y_sorted = y[sort_idx]
+
+    # Plot dose-response curve
+    ax_main.plot(
+        x_sorted, y_sorted, "o-", linewidth=2, markersize=8, color=color, label=label
     )
 
-    # Extract Fla-PA data for TLR4 (row with Fla-PA values)
-    tlr4_fla_mask = tlr4_raw["OD630nm_Fla-PA_Replicate1"].notna()
-    tlr4_fla = tlr4_raw[tlr4_fla_mask].iloc[0]
+    ax_main.set_xscale("log")
+    ax_main.set_xlabel(xlabel, fontsize=12)
+    ax_main.set_ylabel("OD (630 nm)", fontsize=12)
+    ax_main.set_title(title, fontsize=14)
+    ax_main.grid(True, alpha=0.3, linestyle="-", linewidth=0.5)
+    ax_main.legend(fontsize=10)
+    ax_main.set_xlim(xlim)
 
-    # Load TLR2/Pam3Csk4 data (Supplementary Table 6)
-    tlr2_raw = pd.read_csv(data_dir / "Supplementary_Table_6.csv")
+    # Fla-PA bar
+    if fla_pa_val is not None:
+        ax_bar.bar(
+            ["Fla-PA"],
+            [fla_pa_val],
+            color="lightblue",
+            alpha=0.4,
+            width=0.5,
+            edgecolor="black",
+            linewidth=1.2,
+        )
+        ax_bar.set_ylim(ax_main.get_ylim())
+        ax_bar.set_ylabel("")
+        ax_bar.tick_params(left=False, labelleft=False)
+        ax_bar.grid(True, alpha=0.3, linestyle="-", linewidth=0.5, axis="y")
 
-    # Filter rows with Pam3 data (non-NaN in Pam3 columns)
-    tlr2_pam_mask = tlr2_raw["OD630nm_Pam3_Replicate1"].notna()
-    tlr2_pam = tlr2_raw[tlr2_pam_mask]
-    tlr2_df = pd.DataFrame(
-        {
-            "Concentration_ng_mL": tlr2_pam["Concentration_(ng_mL)"],
-            "Average": tlr2_pam[
-                ["OD630nm_Pam3_Replicate1", "OD630nm_Pam3_Replicate2"]
-            ].mean(axis=1),
-        }
-    )
+        # Draw dotted line from y-axis across to the bar
+        ax_main.axhline(y=fla_pa_val, color="black", linestyle=":", linewidth=1.5)
 
-    # Extract Fla-PA data for TLR2 (row with Fla-PA values)
-    tlr2_fla_mask = tlr2_raw["OD630nm_Fla-PA_Replicate1"].notna()
-    tlr2_fla = tlr2_raw[tlr2_fla_mask].iloc[0]
-
-    # Build Fla-PA data dictionary
-    fla_pa_data = {
-        "tlr4": {
-            "concentration": tlr4_fla["Concentration_(EU_mL)"],
-            "average": np.mean(
-                [
-                    tlr4_fla["OD630nm_Fla-PA_Replicate1"],
-                    tlr4_fla["OD630nm_Fla-PA_Replicate2"],
-                ]
-            ),
-        },
-        "tlr2": {
-            "concentration": tlr2_fla["Concentration_(ng_mL)"],
-            "average": np.mean(
-                [
-                    tlr2_fla["OD630nm_Fla-PA_Replicate1"],
-                    tlr2_fla["OD630nm_Fla-PA_Replicate2"],
-                ]
-            ),
-        },
-    }
-
-    return tlr2_df, tlr4_df, fla_pa_data
+    else:
+        ax_bar.axis("off")
 
 
 def plot_tlr_hek_blue(
@@ -116,11 +112,11 @@ def plot_tlr_hek_blue(
     output_path: Path = None,
     output_filename: str = "TLR_HEK_Blue.png",
 ) -> Path:
-    """Create separate TLR2/TLR4 dose-response plots.
+    """Create separate TLR2/TLR4 dose-response plots with Fla-PA bar.
 
     Args:
-        tlr2_df: DataFrame with TLR2 data (Concentration_ng_mL, Average, StdDev).
-        tlr4_df: DataFrame with TLR4 data (Concentration_EU_mL, Average, StdDev).
+        tlr2_df: DataFrame with TLR2 data (Concentration_ng_mL, Average).
+        tlr4_df: DataFrame with TLR4 data (Concentration_EU_mL, Average).
         fla_pa_data: Dictionary with Fla-PA measurements for each TLR.
         output_path: Directory to save the plot. Defaults to results/figures/supplementary.
         output_filename: Name of the output file.
@@ -128,80 +124,40 @@ def plot_tlr_hek_blue(
     Returns:
         Path to the saved figure.
     """
-    # Remove the 0 concentration rows for log scale plotting
-    tlr2_plot = tlr2_df[tlr2_df["Concentration_ng_mL"] > 0].copy()
-    tlr4_plot = tlr4_df[tlr4_df["Concentration_EU_mL"] > 0].copy()
+    # Create the plot with 2 rows, each with line plot and bar subplot
+    fig, axes = plt.subplots(
+        2, 2, figsize=(10, 10), gridspec_kw={"width_ratios": [4, 1]}
+    )
+    ax1, ax1_bar = axes[0]
+    ax2, ax2_bar = axes[1]
 
-    # Create the plot with 2 subplots (ax1=top, ax2=bottom)
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 10))
+    # Get Fla-PA values if available
+    fla_pa_tlr4 = fla_pa_data["tlr4"]["average"] if fla_pa_data else None
+    fla_pa_tlr2 = fla_pa_data["tlr2"]["average"] if fla_pa_data else None
 
     # TLR4/LPS plot (top)
-    ax1.errorbar(
-        tlr4_plot["Concentration_EU_mL"],
-        tlr4_plot["Average"],
-        fmt="o-",
-        capsize=5,
-        capthick=2,
-        linewidth=2,
-        markersize=8,
-        color="#1f77b4",
+    _plot_tlr_panel(
+        ax_main=ax1,
+        ax_bar=ax1_bar,
+        df=tlr4_df,
+        conc_col="Concentration_EU_mL",
+        fla_pa_val=fla_pa_tlr4,
+        xlabel="Concentration (EU/ml)",
+        title="HEK-Blue™ Reporter Line TLR4 LPS",
         label="LPS",
     )
 
-    # Add Fla-PA point to TLR4 plot
-    if fla_pa_data is not None:
-        ax1.errorbar(
-            fla_pa_data["tlr4"]["concentration"],
-            fla_pa_data["tlr4"]["average"],
-            fmt="o",
-            capsize=5,
-            capthick=2,
-            markersize=10,
-            color="magenta",
-            label="Fla-PA",
-        )
-
-    ax1.set_xscale("log")
-    ax1.set_xlabel("Concentration (EU/ml)", fontsize=12)
-    ax1.set_ylabel("OD (630 nm)", fontsize=12)
-    ax1.set_title("HEK-Blue™ Reporter Line TLR4 LPS", fontsize=14)
-    ax1.grid(True, alpha=0.3, linestyle="-", linewidth=0.5)
-    ax1.legend(fontsize=10)
-    ax1.set_xlim(0.01, 100)
-
     # TLR2/Pam3 plot (bottom)
-    ax2.errorbar(
-        tlr2_plot["Concentration_ng_mL"],
-        tlr2_plot["Average"],
-        fmt="o-",
-        capsize=5,
-        capthick=2,
-        linewidth=2,
-        markersize=8,
-        color="#1f77b4",
+    _plot_tlr_panel(
+        ax_main=ax2,
+        ax_bar=ax2_bar,
+        df=tlr2_df,
+        conc_col="Concentration_ng_mL",
+        fla_pa_val=fla_pa_tlr2,
+        xlabel="Concentration (ng/mL)",
+        title="HEK-Blue™ Reporter Line TLR2 Pam3",
         label="Pam3",
     )
-
-    # Add Fla-PA point to TLR2 plot
-    if fla_pa_data is not None:
-        ax2.errorbar(
-            fla_pa_data["tlr2"]["concentration"],
-            fla_pa_data["tlr2"]["average"],
-            fmt="o",
-            capsize=5,
-            capthick=2,
-            markersize=10,
-            color="magenta",
-            label="Fla-PA",
-        )
-
-    ax2.set_xscale("log")
-    ax2.set_xlabel("Concentration (ng/mL)", fontsize=12)
-    ax2.set_ylabel("OD (630 nm)", fontsize=12)
-    ax2.set_title("HEK-Blue™ Reporter Line TLR2 Pam3", fontsize=14)
-    ax2.grid(True, alpha=0.3, linestyle="-", linewidth=0.5)
-    ax2.legend(fontsize=10)
-    ax2.set_xlim(0.01, 100)
 
     plt.tight_layout()
 
