@@ -7,14 +7,37 @@ import matplotlib as mpl
 import seaborn as sns
 import textwrap
 from pathlib import Path
+from typing import Union
+from matplotlib.patches import Patch
 
 from .utils import save_csv, get_output_path, CUSTOM_PALETTE_6
 from .preprocessing import normalize_rpm, load_tlr_data
+
+# Lazy imports for optional dependencies
+sc = None  # scanpy
+adjust_text = None
+AnnData = None
 
 # Lazy imports for goatools (only loaded when needed)
 GODag = None
 Gene2GoReader = None
 GOEnrichmentStudyNS = None
+
+
+def _load_scanpy():
+    """Lazily load scanpy for PCA plotting."""
+    global sc
+    if sc is None:
+        import scanpy as _sc
+        sc = _sc
+
+
+def _load_adjust_text():
+    """Lazily load adjustText for volcano plot labels."""
+    global adjust_text
+    if adjust_text is None:
+        from adjustText import adjust_text as _adjust_text
+        adjust_text = _adjust_text
 
 
 def _load_goatools():
@@ -301,15 +324,21 @@ class Plotter:
 
     def __init__(
         self,
+        dds,
+        res: pd.DataFrame,
         sigs: pd.DataFrame,
         analysis_name: str,
     ):
-        """Initialize Plotter with gene signatures and analysis name.
+        """Initialize Plotter with DESeq2 results and analysis name.
 
         Args:
-            sigs: DataFrame containing gene signatures.
+            dds: AnnData object from DESeq2 analysis.
+            res: DataFrame with all DESeq2 results.
+            sigs: DataFrame containing significant gene signatures.
             analysis_name: Name for this analysis (used in plot titles and filenames).
         """
+        self.dds = dds
+        self.res = res
         self.sigs = sigs
         self.analysis_name = analysis_name
 
@@ -514,26 +543,203 @@ class Plotter:
 
         return g
 
-    def plot_volcano(self):
-        """Create volcano plot (placeholder - implementation not shown in source).
+    def plot_volcano(self, log2foldchange: float = 2):
+        """Create volcano plot showing differentially expressed genes.
+
+        Args:
+            log2foldchange: Threshold for log2 fold change to classify genes.
 
         Returns:
             Matplotlib figure object.
         """
-        raise NotImplementedError("Volcano plot method needs to be implemented")
+        _load_adjust_text()
 
-    def plot_historgram(self):
-        """Create hierarchical clustering heatmap (placeholder - implementation not shown in source).
+        # Add a small number to zeros to avoid inf in padj_log
+        grapher = self.res.assign(
+            padj_log=self.res["padj"].apply(
+                lambda x: -np.log10(x) if x != 0 else -np.log10(x + 1e-300)
+            ),
+            color="no_expression_change",
+        )
+
+        grapher.loc[grapher["log2FoldChange"] > log2foldchange, "color"] = (
+            "overexpressed"
+        )
+        grapher.loc[grapher["log2FoldChange"] < -log2foldchange, "color"] = (
+            "underexpressed"
+        )
+
+        # Subset to only overexpressed and underexpressed
+        grapher_subset = grapher[
+            grapher["color"].isin(["overexpressed", "underexpressed"])
+        ]
+
+        print(f"Number of DE genes: {len(grapher_subset)}")
+
+        # Sort by padj_log (descending) and log2FoldChange (ascending)
+        sorted_grapher_padj_log = grapher_subset.sort_values(
+            by="padj_log", ascending=False
+        )
+        sorted_grapher_log2foldchange = grapher_subset.sort_values(
+            by="log2FoldChange", ascending=True
+        )
+
+        # Select genes for annotation (top by padj and extremes by fold change)
+        annotation_subset = pd.concat(
+            [
+                sorted_grapher_padj_log.head(20),
+                sorted_grapher_log2foldchange.head(10),
+                sorted_grapher_log2foldchange.tail(10),
+            ]
+        ).drop_duplicates()
+
+        g = plt.figure(figsize=(8, 10))
+        rc = {
+            "axes.spines.right": False,
+            "axes.spines.top": False,
+            "axes.titlepad": 20,
+            "font.size": 10,
+            "font.family": "sans-serif",
+            "legend.frameon": "False",
+            "legend.loc": "upper right",
+            "lines.linestyle": "--",
+            "lines.linewidth": 1,
+            "lines.color": "k",
+            "axes.facecolor": "white",
+        }
+        sns.set_theme(rc=rc)
+
+        ax = sns.scatterplot(
+            data=grapher,
+            x="log2FoldChange",
+            y="padj_log",
+            hue="color",
+            hue_order=["no_expression_change", "overexpressed", "underexpressed"],
+            palette=["grey", "orange", "purple"],
+            size="baseMean",
+            sizes=(20, 50),
+            alpha=0.7,
+        )
+
+        # Draw threshold lines
+        ax.axhline(1.3, zorder=1)
+        ax.axvline(2, zorder=1)
+        ax.axvline(-2, zorder=1)
+
+        # Add gene name labels
+        texts = []
+        for i, row in annotation_subset.iterrows():
+            texts.append(
+                plt.text(
+                    x=row.log2FoldChange,
+                    y=row.padj_log,
+                    s=row.name,
+                    weight="bold",
+                    size=8,
+                )
+            )
+
+        adjust_text(texts, arrowprops=dict(arrowstyle="-", color="k"))
+        plt.legend(bbox_to_anchor=(1.4, 1), prop={"size": 10, "weight": "bold"})
+        plt.xticks(size=10, weight="bold")
+        plt.yticks(size=10, weight="bold")
+        plt.xlabel("$log_{2}$ fold change")
+        plt.ylabel("-$log_{10}$ FDR")
+        plt.ylim(-2, grapher["padj_log"].max() + 5)
+
+        return g
+
+    def plot_historgram(self, num_top_sig: Union[int, str] = 50):
+        """Create hierarchical clustering heatmap of significant genes.
+
+        Args:
+            num_top_sig: Number of top significant genes to plot, or "all".
+
+        Returns:
+            Seaborn ClusterGrid object.
+        """
+        if num_top_sig != "all":
+            sigs = self.sigs.sort_values("padj")[:num_top_sig]
+        else:
+            sigs = self.sigs
+
+        dds_sigs = self.dds[:, sigs.index]
+        dds_sigs.layers["log1p"] = np.log1p(dds_sigs.layers["normed_counts"])
+
+        sns.set_theme(rc={"ytick.labelsize": 8})
+        grapher = pd.DataFrame(
+            dds_sigs.layers["log1p"].T,
+            index=dds_sigs.var_names,
+            columns=dds_sigs.obs.condition,
+        )
+
+        lut = dict(zip(set(dds_sigs.obs.condition), "rgb"))
+        col_colors = list(dds_sigs.obs.condition.map(lut))
+
+        plt.figure(figsize=(8, 10), layout="tight")
+        ax = sns.clustermap(
+            figsize=(8, 10),
+            data=grapher,
+            cmap="RdYlBu_r",
+            z_score=None,
+            dendrogram_ratio=(0.1, 0.1),
+            cbar_pos=(0.93, 0.2, 0.03, 0.45),
+            cbar_kws=dict(
+                location="left",
+                orientation="vertical",
+                pad=2,
+            ),
+            col_colors=col_colors,
+        )
+
+        handles = [Patch(facecolor=lut[name]) for name in lut]
+        plt.legend(
+            handles,
+            lut,
+            bbox_transform=plt.gcf().transFigure,
+            bbox_to_anchor=(1, 1),
+            loc="upper right",
+            fontsize=10,
+            fancybox=True,
+            frameon=True,
+            facecolor="white",
+            edgecolor="black",
+        )
+        ax.ax_heatmap.set_xticklabels([])
+        ax.ax_heatmap.set(xlabel=None)
+        plt.subplots_adjust(hspace=0.01)
+
+        return ax
+
+    def plot_pca(self, w_text: bool = False):
+        """Create PCA visualization of samples.
+
+        Args:
+            w_text: Whether to add sample name labels to points.
 
         Returns:
             Matplotlib figure object.
         """
-        raise NotImplementedError("Histogram plot method needs to be implemented")
+        _load_scanpy()
 
-    def plot_pca(self):
-        """Create PCA visualization (placeholder - implementation not shown in source).
+        dds = self.dds.copy()
+        sc.tl.pca(dds, n_comps=2)
+        pca = dds.obsm["X_pca"]
+        sample_names = list(sc.get.obs_df(dds).index)
 
-        Returns:
-            Matplotlib figure object.
-        """
-        raise NotImplementedError("PCA plot method needs to be implemented")
+        rc = {
+            "axes.facecolor": "white",
+            "axes.edgecolor": "black",
+        }
+        sns.set_theme(rc=rc)
+
+        plt.figure(figsize=(8, 10))
+        ax = sc.pl.pca(
+            dds, color="condition", size=300, show=False, title=" ", return_fig=True
+        )
+
+        if w_text:
+            for i in range(len(pca)):
+                plt.text(pca[i][0], pca[i][1], sample_names[i], ha="left", va="bottom")
+
+        return ax
