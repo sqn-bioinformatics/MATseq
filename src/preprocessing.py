@@ -5,8 +5,8 @@ import pandas as pd
 import numpy as np
 
 
-def process_featurecounts_files(
-    featurecounts_dir: str, output_path: str | None = None
+def merge_counts(
+    featurecounts_dir: str | None = None, output_path: str | None = None
 ) -> pd.DataFrame:
     """Process featurecounts files by trimming and merging them.
 
@@ -21,13 +21,14 @@ def process_featurecounts_files(
     Returns:
         DataFrame: Merged gene counts with Geneid as index and samples as columns
     """
-    featurecounts_path = Path(featurecounts_dir)
+
+    if featurecounts_dir is None:
+        featurecounts_path = Path(__file__).parent.parent / "results" / "featurecounts"
 
     # Find all .txt files (excluding .summary files)
     txt_files = [
         f for f in featurecounts_path.glob("*.txt") if not f.name.endswith(".summary")
     ]
-
     if not txt_files:
         raise ValueError(f"No .txt files found in {featurecounts_dir}")
 
@@ -39,19 +40,20 @@ def process_featurecounts_files(
         dfs.append(df.loc[:, [last_col]].rename(columns={last_col: f.stem}))
 
     counts_df = pd.concat(dfs, axis=1)
-    filtered_counts_df = filtered_counts(counts_df)
-    filtered_counts_df.index.rename("samples")
+    counts_df = counts_df.rename_axis(index="samples", columns=None)
+    filtered_counts_df = filter_counts(counts_df)
 
     # Set default output path
     if output_path is None:
-        output_path = featurecounts_path.parent / "results" / "counts"
+        output_path = Path(__file__).parent.parent / "results" / "counts"
     output_path.mkdir(parents=True, exist_ok=True)
+
     filtered_counts_df.to_csv(output_path / "MATseq_count_summary.csv")
 
     return filtered_counts_df
 
 
-def filtered_counts(
+def filter_counts(
     df: pd.DataFrame,
     min_reads: int = 1000000,
 ) -> pd.DataFrame:
@@ -66,7 +68,7 @@ def filtered_counts(
     """
 
     # Transpose and handle duplicates
-    df = df.rename_axis(index="samples", columns=None).T
+    df = df.T
     df = df[~df.index.duplicated(keep="last")]
     df = df[df.index.notnull()]
 
@@ -77,14 +79,18 @@ def filtered_counts(
     return df
 
 
-def prepare_training(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Extract training subset and labels from main dataset.
+def extract_subset(
+    df: pd.DataFrame, name: str = "training", output_path: str | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Extract subset and labels from main dataset based on subset name.
 
     Args:
         df: Main DataFrame with all samples.
+        name: Subset name - "training", "other_ligands", or "bacterial".
+        output_path: Optional path to save the output file.
 
     Returns:
-        tuple: (training_data, labels) where labels is a DataFrame with 'label' column.
+        tuple: (subset_data, labels) where labels is a DataFrame with 'label' column.
     """
 
     training_classes = [
@@ -96,19 +102,50 @@ def prepare_training(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         "_R848_",
     ]
 
-    training_subset = [
+    other_ligands_classes = ["_LTA_", "_MPLA_", "_Pam2_"]
+    bacterial_classes = ["_HKSA_", "_HKEB_"]
+
+    # Select classes based on name
+    if name == "training":
+        selected_classes = training_classes
+    elif name == "other_ligands":
+        selected_classes = training_classes + other_ligands_classes
+    elif name == "bacterial":
+        selected_classes = training_classes + bacterial_classes
+    else:
+        raise ValueError(
+            f"Invalid name '{name}'. Must be 'training', 'other_ligands', or 'bacterial'."
+        )
+
+    subset_indices = [
         index
         for index, sample_id in enumerate(df.index)
-        for c in training_classes
+        for c in selected_classes
         if c in sample_id
     ]
 
-    training_data = df.iloc[training_subset]
+    subset_data = df.iloc[subset_indices].copy()
 
-    labels = pd.DataFrame(index=training_data.index)
-    labels["label"] = [i.split("_")[2] for i in training_data.index]
+    labels = pd.DataFrame(index=subset_data.index)
+    labels["label"] = [i.split("_")[2] for i in subset_data.index]
 
-    return training_data, labels
+    # Replace label names
+    label_mapping = {
+        "HKSA": "HK S.aureus",
+        "HKEB": "HK E.coli",
+        "IMDM": "negative_control",
+    }
+    labels["label"] = labels["label"].replace(label_mapping)
+
+    # Set default output path
+    if output_path is None:
+        output_path = Path(__file__).parent.parent / "results" / "subsets"
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    subset_data["label"] = labels["label"]
+    subset_data.to_csv(output_path / f"{name}_data_with_labels.csv")
+
+    return subset_data, labels
 
 
 def normalize_rpm(df: pd.DataFrame) -> pd.DataFrame:

@@ -4,10 +4,18 @@ __version__ = "0.1.0"
 
 # Import commonly used functions and classes
 from .preprocessing import (
-    process_featurecounts_files,
+    merge_counts,
+    filter_counts,
+    extract_subset,
     normalize_rpm,
-    prepare_training,
+    load_tlr_data,
 )
+# Optional import for DESeq2 (requires pydeseq2)
+try:
+    from .deseq2 import DataProcessor
+except ImportError:
+    DataProcessor = None
+
 from .feature_engineering import LibraryLengthNormalizer, create_feature_pipeline
 from .evaluation import (
     multiclass_roc_auc_score,
@@ -22,20 +30,24 @@ try:
     from .visualization import (
         Plotter,
         plot_gene_expression_by_class,
-        load_tlr_data,
         plot_tlr_hek_blue,
+        plot_pca_for_pandas,
     )
 except ImportError:
     Plotter = None
     plot_gene_expression_by_class = None
-    load_tlr_data = None
     plot_tlr_hek_blue = None
+    plot_pca_for_pandas = None
 
 __all__ = [
     # Preprocessing
-    "prepare_training",
+    "merge_counts",
+    "filter_counts",
+    "extract_subset",
     "normalize_rpm",
-    "process_featurecounts_files",
+    "load_tlr_data",
+    # DESeq2
+    "DataProcessor",
     # Feature engineering
     "LibraryLengthNormalizer",
     "create_feature_pipeline",
@@ -52,6 +64,6 @@ __all__ = [
     # Visualization
     "Plotter",
     "plot_gene_expression_by_class",
-    "load_tlr_data",
     "plot_tlr_hek_blue",
+    "plot_pca_for_pandas",
 ]

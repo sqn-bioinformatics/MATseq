@@ -29,6 +29,7 @@ def _load_scanpy():
     global sc
     if sc is None:
         import scanpy as _sc
+
         sc = _sc
 
 
@@ -37,6 +38,7 @@ def _load_adjust_text():
     global adjust_text
     if adjust_text is None:
         from adjustText import adjust_text as _adjust_text
+
         adjust_text = _adjust_text
 
 
@@ -300,7 +302,108 @@ def plot_gene_expression_by_class(
     plt.savefig(save_path, dpi=300, bbox_inches="tight", facecolor="white")
     print(f"Figure saved to: {save_path.absolute()}")
     plt.show()
-    # plt.close(fig)
+    plt.close(fig)
+
+    return save_path.absolute()
+
+
+def plot_pca_for_pandas(
+    name: str,
+    df: pd.DataFrame,
+    labels: Union[pd.DataFrame, np.ndarray],
+    with_sample_names: bool = False,
+    output_filename: str = None,
+    palette: list = CUSTOM_PALETTE_6,
+    hue_order: list = None,
+) -> Path:
+    """Create PCA visualization for pandas DataFrame data.
+
+    Args:
+        df: DataFrame with gene counts (samples as rows, genes as columns).
+        labels: DataFrame with 'label' column or numpy array with labels for coloring.
+        with_sample_names: If True, creates larger plot with sample name labels.
+                          If False, creates smaller plot without labels.
+        output_filename: Name of output file. Defaults to 'pca_plot.png'.
+        palette: Color palette to use.
+        hue_order: Order of classes for legend and color assignment.
+
+    Returns:
+        Path to the saved figure.
+    """
+    from sklearn.decomposition import PCA
+
+    # Extract labels as array
+    label_values = (
+        labels["label"].to_numpy() if isinstance(labels, pd.DataFrame) else labels
+    )
+
+    # Get sample names - handle both DataFrame and numpy array
+    if hasattr(df, "index"):
+        sample_names = df.index.to_numpy()
+    elif isinstance(labels, pd.DataFrame):
+        sample_names = labels.index.to_numpy()
+    else:
+        sample_names = np.arange(len(df))
+
+    # Needs to be scaled first
+    X_reduced = PCA(n_components=2).fit_transform(df)
+
+    # Configure plot based on with_sample_names
+    figsize = (20, 15) if with_sample_names else (6, 6)
+    marker_size = 200 if with_sample_names else 80
+
+    fig = plt.figure(figsize=figsize)
+    ax = sns.scatterplot(
+        x=X_reduced[:, 0],
+        y=X_reduced[:, 1],
+        hue=label_values,
+        hue_order=hue_order,
+        s=marker_size,
+        alpha=0.6,
+        palette=palette,
+    )
+
+    ax.set_xlabel("1st Eigenvector", fontsize=14)
+    ax.set_ylabel("2nd Eigenvector", fontsize=14)
+    ax.tick_params(axis="both", labelsize=14)
+
+    if with_sample_names:
+        _load_adjust_text()
+        texts = [
+            ax.text(
+                X_reduced[:, 0][i],
+                X_reduced[:, 1][i],
+                sample_names[i],
+                ha="left",
+                va="bottom",
+                alpha=0.8,
+                fontsize=12,
+            )
+            for i in range(len(X_reduced))
+        ]
+        adjust_text(texts, arrowprops=dict(arrowstyle="->", color="black"))
+        ax.legend(bbox_to_anchor=(1, 1.0), ncol=1, fontsize=12)
+    else:
+        ax.get_legend().remove()
+
+    plt.tight_layout()
+
+    # Save figure
+    project_root = Path(__file__).parent.parent
+    output_path = project_root / "results" / "figures" / "pca"
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    if output_filename is None:
+        output_filename = (
+            f"{name}_pca_plot_labeled.png"
+            if with_sample_names
+            else f"{name}_pca_plot.png"
+        )
+
+    save_path = output_path / output_filename
+    plt.savefig(save_path, dpi=300, bbox_inches="tight", facecolor="white")
+    print(f"Figure saved to: {save_path.absolute()}")
+    plt.show()
 
     return save_path.absolute()
 
