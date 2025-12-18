@@ -5,7 +5,6 @@ __version__ = "0.1.0"
 # Import commonly used functions and classes
 from .preprocessing import (
     process_featurecounts_files,
-    clean_counts,
     normalize_rpm,
     prepare_training,
 )
@@ -34,7 +33,6 @@ except ImportError:
 
 __all__ = [
     # Preprocessing
-    "clean_counts",
     "prepare_training",
     "normalize_rpm",
     "process_featurecounts_files",
