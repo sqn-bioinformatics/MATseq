@@ -42,7 +42,7 @@ def multiclass_roc_auc_score(y_test, y_pred, average: str = "macro") -> float:
     return sum(roc_auc_dict.values()) / len(roc_auc_dict.values())
 
 
-def make_score(y_test, y_pred) -> zip:
+def make_score(y_test, y_pred) -> dict:
     """Calculate multiple classification metrics.
 
     Args:
@@ -50,7 +50,7 @@ def make_score(y_test, y_pred) -> zip:
         y_pred: Predicted labels.
 
     Returns:
-        zip: Iterator of (score_name, score_value) tuples.
+        dict: Dictionary of metric names to scores.
     """
     accuracy = accuracy_score(y_test, y_pred)
     precision = precision_score(y_test, y_pred, average="macro", zero_division=np.nan)
@@ -58,8 +58,13 @@ def make_score(y_test, y_pred) -> zip:
     f1 = f1_score(y_test, y_pred, average="macro", zero_division=np.nan)
     roc_auc = multiclass_roc_auc_score(y_test, y_pred)
 
-    score_names = ["accuracy", "precision", "recall", "f1", "roc_auc"]
-    return zip(score_names, (accuracy, precision, recall, f1, roc_auc))
+    return {
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "roc_auc": roc_auc,
+    }
 
 
 def get_confusion_matrix(test_pred, y_test, name: str) -> None:
