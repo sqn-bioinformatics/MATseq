@@ -1,13 +1,13 @@
 # Raw data placed here
-SampleDir: "/home/t.afanasyeva/research_storage/Processing/Lab - Van Dam/datasets/MATseq/105659"
+SampleDir: "~/research_storage/Processing/Lab - Van Dam/datasets/MATseq/105659"
 
 
 # Working directory
-WorkDir: "/home/t.afanasyeva/MAT_rnaseq/pipeline/results"
+WorkDir: "~/MAT_rnaseq/pipeline/results"
 
 
 # Reference genome
-GenomeDir: '/home/t.afanasyeva/reference_genome/GRCh38_GCA_000001405.15'
+GenomeDir: "~/reference_genome/GRCh38_GCA_000001405.15"
 
 
 # Number of cores to use

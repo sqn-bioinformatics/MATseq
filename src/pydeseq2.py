@@ -50,7 +50,7 @@ def _load_goatools():
         from goatools.goea.go_enrichment_ns import (
             GOEnrichmentStudyNS as _GOEnrichmentStudyNS,
         )
-        from genes_ncbi_homo_sapiens_proteincoding import GENEID2NT as _GeneID2nt_hs
+        from .genes_ncbi_homo_sapiens_proteincoding import GENEID2NT as _GeneID2nt_hs
 
         GODag = _GODag
         Gene2GoReader = _Gene2GoReader
@@ -269,12 +269,21 @@ class Plotter:
         if not path_to_supporting_files.exists():
             path_to_supporting_files = Path(__file__).parent.parent / "data" / "deseq2"
 
+        # Check if required files exist
+        gene2go_file = path_to_supporting_files / "gene2go"
+        obo_file = path_to_supporting_files / "go-basic.obo"
+
+        if not gene2go_file.exists() or not obo_file.exists():
+            print(f"Warning: GO data files not found at {path_to_supporting_files}")
+            print("GO enrichment analysis will be skipped.")
+            return
+
         try:
             genes = Gene2GoReader(
-                path_to_supporting_files / "gene2go", taxids=[9606], namespaces={"BP"}
+                gene2go_file, taxids=[9606], namespaces={"BP"}
             )
             ns2assoc = genes.get_ns2assc()
-            obodag = GODag(path_to_supporting_files / "go-basic.obo")
+            obodag = GODag(obo_file)
 
             cls.goeaobj = GOEnrichmentStudyNS(
                 GeneID2nt_hs.keys(),
@@ -290,7 +299,7 @@ class Plotter:
                 for key in GeneID2nt_hs
             }
             print("GO terms initialized successfully.")
-        except FileNotFoundError as e:
+        except Exception as e:
             print(f"Warning: Could not initialize GO terms - {e}")
             print("GO enrichment analysis will be skipped.")
 
@@ -648,3 +657,313 @@ class Plotter:
         cbar.ax.set_title("padj", loc="left", pad=4.0)
 
         return g
+
+
+class AnalysisPipeline:
+    """Execute DESeq2 analysis workflow with caching and figure generation."""
+
+    def __init__(
+        self,
+        raw_counts: pd.DataFrame,
+        sample_labels: pd.Series = None,
+        output_dir: Path = None,
+        padj_threshold: float = 0.05,
+        log2fc_threshold: int = 2,
+        n_cpus: int = 42,
+    ):
+        """Initialize analysis pipeline.
+
+        Args:
+            raw_counts: DataFrame with gene counts (samples as rows, genes as columns).
+            sample_labels: Series with sample labels. If None, extracts from index by splitting on "_".
+            output_dir: Directory for output files. Defaults to results/differential_gene_expression.
+            padj_threshold: Adjusted p-value threshold for significance.
+            log2fc_threshold: Log2 fold-change threshold.
+            n_cpus: Number of CPUs for parallel processing.
+        """
+        # Prepare raw counts with multiindex if needed
+        if sample_labels is not None:
+            self.raw_counts = raw_counts.copy()
+            self.raw_counts.index = pd.MultiIndex.from_arrays(
+                [self.raw_counts.index, sample_labels], names=["samples", "label"]
+            )
+        elif isinstance(raw_counts.index, pd.MultiIndex):
+            self.raw_counts = raw_counts
+        else:
+            # Extract labels from sample names
+            labels = [i.split("_")[2] for i in raw_counts.index]
+            self.raw_counts = raw_counts.copy()
+            self.raw_counts.index = pd.MultiIndex.from_arrays(
+                [self.raw_counts.index, labels], names=["samples", "label"]
+            )
+
+        self.padj_threshold = padj_threshold
+        self.log2fc_threshold = log2fc_threshold
+        self.n_cpus = n_cpus
+
+        if output_dir is None:
+            output_dir = Path.cwd() / "results" / "differential_gene_expression"
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        self.figures_dir = Path.cwd() / "results" / "figures" / "deseq2"
+        self.figures_dir.mkdir(parents=True, exist_ok=True)
+
+        self.results = {}
+        self.de_genes = set()
+
+    def run_analysis(
+        self, class_list: list[str], negative_control: str = "nc"
+    ) -> dict:
+        """Run DESeq2 analysis for all class pairs with negative control.
+
+        Args:
+            class_list: List of ligand classes to analyze.
+            negative_control: Name of negative control class.
+
+        Returns:
+            Dictionary with results for each ligand.
+        """
+        # Create pairs with negative control
+        pairs = DataProcessor.make_pairs_with_negative_control(
+            class_list, negative_control
+        )
+
+        results_list = []
+
+        for class_pair in pairs:
+            ligand_name = class_pair[0]
+            print(f"Running analysis for {ligand_name}...")
+
+            processor = DataProcessor(
+                raw_counts=self.raw_counts,
+                classes=class_pair,
+                n_cpus=self.n_cpus,
+            )
+
+            dds, res, sigs = processor.make_statistics(
+                padj_value=self.padj_threshold,
+                log2foldchange_value=self.log2fc_threshold,
+            )
+
+            # Store results
+            self.results[ligand_name] = {
+                "dds": dds,
+                "results": res,
+                "significant": sigs,
+            }
+
+            # Save results CSV
+            res_output = self.output_dir / f"{ligand_name}_results.csv"
+            res.to_csv(res_output)
+            print(f"Saved results to {res_output}")
+
+            # Track DE genes
+            self.de_genes.update(sigs.index)
+
+            # Add results for merging
+            res_copy = res.copy()
+            res_copy.columns = [f"{col}_{ligand_name}" for col in res_copy.columns]
+            results_list.append(res_copy)
+
+            # Generate figures
+            if not sigs.empty:
+                self._generate_figures(ligand_name, dds, res, sigs)
+
+        # Merge all results
+        if results_list:
+            merged = results_list[0]
+            for res_df in results_list[1:]:
+                merged = pd.merge(
+                    merged,
+                    res_df,
+                    left_index=True,
+                    right_index=True,
+                    how="outer",
+                )
+
+            merged_output = self.output_dir / "merged_results.csv"
+            merged.to_csv(merged_output)
+            print(f"Saved merged results to {merged_output}")
+
+        return self.results
+
+    def _generate_figures(
+        self, ligand_name: str, dds: AnnData, res: pd.DataFrame, sigs: pd.DataFrame
+    ):
+        """Generate visualization figures for analysis.
+
+        Args:
+            ligand_name: Name of ligand for filenames.
+            dds: DESeq2 AnnData object.
+            res: Full results DataFrame.
+            sigs: Significant genes DataFrame.
+        """
+        plotter = Plotter(dds, res, sigs, ligand_name)
+
+        # Generate individual plots
+        plotter.make_figure("volcano")
+        plotter.make_figure("histogram")
+        plotter.make_figure("pca")
+
+        # Try GO enrichment if available
+        try:
+            plotter.make_figure("go")
+        except Exception as e:
+            print(f"Warning: GO enrichment failed for {ligand_name}: {e}")
+
+    def save_de_genes(self, filename: str = "de_genes.txt"):
+        """Save list of all differentially expressed genes.
+
+        Args:
+            filename: Name of output file.
+        """
+        output_path = self.output_dir / filename
+        with open(output_path, "w") as f:
+            for gene in sorted(self.de_genes):
+                f.write(f"{gene}\n")
+        print(f"Saved {len(self.de_genes)} DE genes to {output_path}")
+
+    def create_supplementary_figure_1a(
+        self, comparison_pairs: list[Tuple[str, str]] = None
+    ):
+        """Create 1x2 supplementary figure with volcano and histogram.
+
+        Args:
+            comparison_pairs: List of (ligand, negative_control) pairs to plot.
+                            If None, uses all computed results.
+        """
+        if comparison_pairs is None:
+            comparison_pairs = [(k, "nc") for k in self.results.keys()]
+
+        for ligand_name, nc_name in comparison_pairs:
+            if ligand_name not in self.results:
+                print(f"Warning: No results for {ligand_name}")
+                continue
+
+            dds = self.results[ligand_name]["dds"]
+            res = self.results[ligand_name]["results"]
+            sigs = self.results[ligand_name]["significant"]
+
+            if sigs.empty:
+                print(f"Skipping {ligand_name}: No significant genes")
+                continue
+
+            plotter = Plotter(dds, res, sigs, ligand_name)
+
+            # Create 1x2 layout: volcano + histogram
+            fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+            # Volcano plot (left)
+            _plot_volcano_on_ax(axes[0], plotter, res)
+
+            # Histogram/heatmap (right)
+            # Use simplified version since we need subplot integration
+            num_top_sig = 50
+            if num_top_sig != "all":
+                sigs_plot = sigs.sort_values("padj")[:num_top_sig]
+            else:
+                sigs_plot = sigs
+
+            dds_sigs = dds[:, sigs_plot.index]
+            dds_sigs.layers["log1p"] = np.log1p(dds_sigs.layers["normed_counts"])
+
+            grapher = pd.DataFrame(
+                dds_sigs.layers["log1p"].T,
+                index=dds_sigs.var_names,
+                columns=dds_sigs.obs.condition,
+            )
+
+            sns.heatmap(grapher, cmap="RdYlBu_r", ax=axes[1], cbar_kws=dict(label="log1p counts"))
+            axes[1].set_title(f"{ligand_name} Top {len(sigs_plot)} DE Genes")
+            axes[1].set_xlabel("Sample Condition")
+            axes[1].set_ylabel("Gene")
+
+            plt.suptitle(f"{ligand_name} vs {nc_name}", fontsize=14, fontweight="bold")
+            plt.tight_layout()
+
+            output_path = self.figures_dir / f"Supplementary_Figure_1A_{ligand_name}.png"
+            plt.savefig(output_path, dpi=300, bbox_inches="tight")
+            print(f"Saved supplementary figure to {output_path}")
+            plt.close(fig)
+
+
+def _plot_volcano_on_ax(ax, plotter: Plotter, res: pd.DataFrame, log2foldchange: float = 2):
+    """Plot volcano plot on existing matplotlib axis.
+
+    Args:
+        ax: Matplotlib axis to plot on.
+        plotter: Plotter instance with data.
+        res: Results DataFrame.
+        log2foldchange: Log2 fold-change threshold.
+    """
+    _load_adjust_text()
+
+    grapher = res.assign(
+        padj_log=res["padj"].apply(
+            lambda x: -np.log10(x) if x != 0 else -np.log10(x + 1e-300)
+        ),
+        color="no_expression_change",
+    )
+
+    grapher.loc[grapher["log2FoldChange"] > log2foldchange, "color"] = "overexpressed"
+    grapher.loc[grapher["log2FoldChange"] < -log2foldchange, "color"] = "underexpressed"
+
+    grapher_subset = grapher[grapher["color"].isin(["overexpressed", "underexpressed"])]
+
+    sorted_padj = grapher_subset.sort_values("padj_log", ascending=False)
+    sorted_lfc = grapher_subset.sort_values("log2FoldChange", ascending=True)
+
+    annotation_subset = pd.concat(
+        [sorted_padj.head(20), sorted_lfc.head(10), sorted_lfc.tail(10)]
+    ).drop_duplicates()
+
+    ax.scatter(
+        grapher[grapher["color"] == "no_expression_change"]["log2FoldChange"],
+        grapher[grapher["color"] == "no_expression_change"]["padj_log"],
+        c="grey",
+        alpha=0.5,
+        s=20,
+        label="No change",
+    )
+    ax.scatter(
+        grapher[grapher["color"] == "overexpressed"]["log2FoldChange"],
+        grapher[grapher["color"] == "overexpressed"]["padj_log"],
+        c="orange",
+        alpha=0.7,
+        s=30,
+        label="Overexpressed",
+    )
+    ax.scatter(
+        grapher[grapher["color"] == "underexpressed"]["log2FoldChange"],
+        grapher[grapher["color"] == "underexpressed"]["padj_log"],
+        c="purple",
+        alpha=0.7,
+        s=30,
+        label="Underexpressed",
+    )
+
+    ax.axhline(1.3, color="k", linestyle="--", linewidth=0.5)
+    ax.axvline(2, color="k", linestyle="--", linewidth=0.5)
+    ax.axvline(-2, color="k", linestyle="--", linewidth=0.5)
+
+    texts = []
+    for i, row in annotation_subset.iterrows():
+        texts.append(
+            ax.text(
+                x=row.log2FoldChange,
+                y=row.padj_log,
+                s=row.name,
+                fontsize=7,
+                weight="bold",
+            )
+        )
+
+    if texts:
+        adjust_text(texts, arrowprops=dict(arrowstyle="-", color="k"), ax=ax)
+
+    ax.set_xlabel("log2 Fold Change", fontsize=11)
+    ax.set_ylabel("-log10 FDR", fontsize=11)
+    ax.set_ylim(-2, grapher["padj_log"].max() + 5)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
