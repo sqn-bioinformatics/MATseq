@@ -41,5 +41,10 @@ BaggingClassifier.joblib
 #ignore genomes
 /library/genomes/*
 
+#ignore results
+/results
+
+#ignore .md
+*.md
 
 

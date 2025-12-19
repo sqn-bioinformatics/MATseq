@@ -44,10 +44,15 @@ from .model_training import ModelFactory, ModelTrainer
 
 # Optional import for DESeq2 (requires pydeseq2)
 try:
-    from .pydeseq2 import DataProcessor as DESeq2DataProcessor, Plotter
+    from .pydeseq2 import (
+        DataProcessor as DESeq2DataProcessor,
+        Plotter,
+        AnalysisPipeline,
+    )
 except ImportError:
     DESeq2DataProcessor = None
     Plotter = None
+    AnalysisPipeline = None
 
 # Optional import for visualization (requires goatools)
 try:
@@ -61,7 +66,33 @@ except ImportError:
     plot_tlr_hek_blue = None
     plot_pca_for_pandas = None
 
+# Feature analysis
+from .feature_analysis import (
+    FeatureSelectionAnalyzer,
+    VennDiagramGenerator,
+    DownstreamGOAnalysis,
+)
+
+# Prediction and model comparison
+from .prediction import ModelPredictor, ModelComparator
+
 __all__ = [
+    # Configuration
+    "CUSTOM_PALETTE_6",
+    "CUSTOM_PALETTE_8",
+    "CUSTOM_PALETTE_9",
+    "CLASS_ORDER_TRAINING",
+    "CLASS_ORDER_OTHER_LIGANDS",
+    "CLASS_ORDER_BACTERIAL",
+    "SUBSET_PALETTES",
+    "SUBSET_CLASS_ORDERS",
+    "DESEQ2_CONFIG",
+    "FEATURE_SELECTION_CONFIG",
+    "MODEL_TRAINING_CONFIG",
+    "CLASS_LABELS",
+    "TRAINING_LIGANDS",
+    "ADDITIONAL_TLR_LIGANDS",
+    "NEGATIVE_CONTROL",
     # Preprocessing
     "merge_counts",
     "filter_counts",
@@ -83,12 +114,19 @@ __all__ = [
     "get_output_path",
     "save_fig",
     "save_csv",
-    "CUSTOM_PALETTE_6",
     # DESeq2 analysis
     "DESeq2DataProcessor",
     "Plotter",
+    "AnalysisPipeline",
     # Visualization
     "plot_gene_expression_by_class",
     "plot_tlr_hek_blue",
     "plot_pca_for_pandas",
+    # Feature analysis
+    "FeatureSelectionAnalyzer",
+    "VennDiagramGenerator",
+    "DownstreamGOAnalysis",
+    # Prediction and model comparison
+    "ModelPredictor",
+    "ModelComparator",
 ]

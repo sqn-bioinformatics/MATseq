@@ -15,16 +15,9 @@ snakemake --use-conda \
           --snakefile workflow/rules/0_MATseq.smk \
           --latency-wait 60 \
           --rerun-incomplete \
-          --dag | dot -Tsvg > dag.svg  \
-          
- 
+          --delete-all-output \
 
- 
-        
-          
-  
    
-
           # --rerun-incomplete
           # --list \
           # --summary \
@@ -33,7 +26,6 @@ snakemake --use-conda \
           # --keep-going \
           # --batch RULE=BATCH/BATCHES
           # -F \
-          # --lint  
           # --dag | dot -Tsvg > dag.svg  \
           
 
