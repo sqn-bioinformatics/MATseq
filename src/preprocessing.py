@@ -5,8 +5,8 @@ import pandas as pd
 import numpy as np
 
 
-def process_featurecounts_files(
-    featurecounts_dir: str, output_file: str | None = None
+def merge_counts(
+    featurecounts_dir: str | None = None, output_path: str | None = None
 ) -> pd.DataFrame:
     """Process featurecounts files by trimming and merging them.
 
@@ -16,90 +16,81 @@ def process_featurecounts_files(
 
     Args:
         featurecounts_dir: Path to directory containing featurecounts .txt files
-        output_file: Optional path to save the merged output file
+        output_path: Optional path to save the merged output file
 
     Returns:
         DataFrame: Merged gene counts with Geneid as index and samples as columns
     """
-    featurecounts_path = Path(featurecounts_dir)
+
+    if featurecounts_dir is None:
+        featurecounts_path = Path(__file__).parent.parent / "results" / "featurecounts"
 
     # Find all .txt files (excluding .summary files)
     txt_files = [
         f for f in featurecounts_path.glob("*.txt") if not f.name.endswith(".summary")
     ]
-
     if not txt_files:
         raise ValueError(f"No .txt files found in {featurecounts_dir}")
 
-    sorted_files = sorted(txt_files)
+    dfs = []
 
-    # Process first file to initialize merged_df
-    first_file = sorted_files[0]
-    df = pd.read_csv(first_file, sep="\t", comment="#", skiprows=1)
-    merged_df = df[["Geneid", df.columns[-1]]].copy()
-    merged_df.columns = ["Geneid", first_file.stem]
+    for f in txt_files:
+        df = pd.read_csv(f, sep="\t", comment="#", skiprows=1, index_col=0)
+        last_col = df.columns[-1]
+        dfs.append(df.loc[:, [last_col]].rename(columns={last_col: f.stem}))
 
-    # Merge remaining files
-    for file_path in sorted_files[1:]:
-        df = pd.read_csv(file_path, sep="\t", comment="#", skiprows=1)
-        trimmed_df = df[["Geneid", df.columns[-1]]].copy()
-        trimmed_df.columns = ["Geneid", file_path.stem]
-        merged_df = merged_df.merge(trimmed_df, on="Geneid", how="outer")
+    counts_df = pd.concat(dfs, axis=1)
+    counts_df = counts_df.rename_axis(index="samples", columns=None)
+    filtered_counts_df = filter_counts(counts_df)
 
-    merged_df.set_index("Geneid", inplace=True)
+    # Set default output path
+    if output_path is None:
+        output_path = Path(__file__).parent.parent / "results" / "counts"
+    output_path.mkdir(parents=True, exist_ok=True)
 
-    if output_file:
-        merged_df.to_csv(output_file, sep="\t")
-    else:
-        # Save to parent directory (results/) with default name
-        default_output = featurecounts_path.parent / "MATseq_count_summary.csv"
-        merged_df.to_csv(default_output)
+    filtered_counts_df.to_csv(output_path / "MATseq_count_summary.csv")
 
-    return merged_df
+    return filtered_counts_df
 
 
-def clean_counts(
-    data: pd.DataFrame,
+def filter_counts(
+    df: pd.DataFrame,
     min_reads: int = 1000000,
 ) -> pd.DataFrame:
-    """Load RNA-seq counts and perform initial cleaning.
+    """Load RNA-seq counts and perform initial filtering.
 
     Args:
-        data: Either a file path (str) to counts file (tab-separated) or a pandas DataFrame.
+        df: pandas DataFrame with raw counts.
         min_reads: Minimum total read count threshold for filtering samples.
 
     Returns:
-        DataFrame: Cleaned counts data with samples as rows and genes as columns.
+        DataFrame: Filtered counts data with samples as rows and genes as columns.
     """
 
-    # Make a copy to avoid modifying the original
-    data = data.copy()
-
     # Transpose and handle duplicates
-    data = data.T
-    data = data[~data.index.duplicated(keep="last")]
-    data = data[data.index.notnull()]
-    data.sort_index(inplace=True)
+    df = df.T
+    df = df[~df.index.duplicated(keep="last")]
+    df = df[df.index.notnull()]
 
     # Filter samples with insufficient read counts
-    mask = data.sum(axis=1) > min_reads
-    data = data[mask]
+    mask = df.sum(axis=1) > min_reads
+    df = df[mask]
 
-    data.index.name = "samples"
-    data.reset_index(inplace=True)
-    data.set_index("samples", inplace=True)
-
-    return data
+    return df
 
 
-def prepare_training(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Extract training subset and labels from main dataset.
+def extract_subset(
+    df: pd.DataFrame, name: str = "training", output_path: str | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Extract subset and labels from main dataset based on subset name.
 
     Args:
         df: Main DataFrame with all samples.
+        name: Subset name - "training", "other_ligands", or "bacterial".
+        output_path: Optional path to save the output file.
 
     Returns:
-        tuple: (training_data, labels) where labels is a DataFrame with 'label' column.
+        tuple: (subset_data, labels) where labels is a DataFrame with 'label' column.
     """
 
     training_classes = [
@@ -111,19 +102,50 @@ def prepare_training(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         "_R848_",
     ]
 
-    training_subset = [
+    other_ligands_classes = ["_LTA_", "_MPLA_", "_Pam2_"]
+    bacterial_classes = ["_HKSA_", "_HKEB_"]
+
+    # Select classes based on name
+    if name == "training":
+        selected_classes = training_classes
+    elif name == "other_ligands":
+        selected_classes = training_classes + other_ligands_classes
+    elif name == "bacterial":
+        selected_classes = training_classes + bacterial_classes
+    else:
+        raise ValueError(
+            f"Invalid name '{name}'. Must be 'training', 'other_ligands', or 'bacterial'."
+        )
+
+    subset_indices = [
         index
         for index, sample_id in enumerate(df.index)
-        for c in training_classes
+        for c in selected_classes
         if c in sample_id
     ]
 
-    training_data = df.iloc[training_subset]
+    subset_data = df.iloc[subset_indices].copy()
 
-    labels = pd.DataFrame(index=training_data.index)
-    labels["label"] = [i.split("_")[2] for i in training_data.index]
+    labels = pd.DataFrame(index=subset_data.index)
+    labels["label"] = [i.split("_")[2] for i in subset_data.index]
 
-    return training_data, labels
+    # Replace label names
+    label_mapping = {
+        "HKSA": "HK S.aureus",
+        "HKEB": "HK E.coli",
+        "IMDM": "negative_control",
+    }
+    labels["label"] = labels["label"].replace(label_mapping)
+
+    # Set default output path
+    if output_path is None:
+        output_path = Path(__file__).parent.parent / "results" / "subsets"
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    subset_data["label"] = labels["label"]
+    subset_data.to_csv(output_path / f"{name}_data_with_labels.csv")
+
+    return subset_data, labels
 
 
 def normalize_rpm(df: pd.DataFrame) -> pd.DataFrame:
@@ -144,19 +166,17 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
 
     Args:
         data_dir: Path to the supplementary_data directory.
-                  Defaults to results/supplementary_data relative to project root.
+                  Defaults to data/supplementary_data relative to project root.
 
     Returns:
         Tuple of (tlr2_df, tlr4_df, fla_pa_data) where fla_pa_data contains
         Fla-PA measurements for each TLR.
     """
     if data_dir is None:
-        data_dir = Path(__file__).parent.parent / "results" / "supplementary_data"
+        data_dir = Path(__file__).parent.parent / "data" / "supplementary_data"
 
     # Load TLR4/LPS data (Supplementary Table 5)
     tlr4_raw = pd.read_csv(data_dir / "Supplementary_Table_5.csv")
-
-    # Filter rows with LPS data (non-NaN in LPS columns)
     tlr4_lps_mask = tlr4_raw["OD630nm_LPS_Replicate1"].notna()
     tlr4_lps = tlr4_raw[tlr4_lps_mask]
     tlr4_df = pd.DataFrame(
@@ -174,8 +194,6 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
 
     # Load TLR2/Pam3Csk4 data (Supplementary Table 6)
     tlr2_raw = pd.read_csv(data_dir / "Supplementary_Table_6.csv")
-
-    # Filter rows with Pam3 data (non-NaN in Pam3 columns)
     tlr2_pam_mask = tlr2_raw["OD630nm_Pam3_Replicate1"].notna()
     tlr2_pam = tlr2_raw[tlr2_pam_mask]
     tlr2_df = pd.DataFrame(
@@ -191,7 +209,6 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
     tlr2_fla_mask = tlr2_raw["OD630nm_Fla-PA_Replicate1"].notna()
     tlr2_fla = tlr2_raw[tlr2_fla_mask].iloc[0]
 
-    # Build Fla-PA data dictionary
     fla_pa_data = {
         "tlr4": {
             "concentration": tlr4_fla["Concentration_(EU_mL)"],
