@@ -12,34 +12,19 @@ logs
 #ignore config
 config.txt
 
-#ignore all .txt and .csv
-**/*.txt
-**/*.csv 
 
 #ignore vscode settings
 /.vscode
 
-
 #ignore all wandb files
 wandb/
 artifacts/
-
-
-#ignore data in notebooks, experiment, raw_data, genecounts, and temp folders
-temp/
-experiment/
-pipeline/raw_data/
-gene_counts/
-
 
 #ignore snakemake logs
 /.snakemake
 
 #ignore pickled model
 BaggingClassifier.joblib
-
-#ignore genomes
-/library/genomes/*
 
 #ignore results
 /results

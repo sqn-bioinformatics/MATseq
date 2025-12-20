@@ -41,6 +41,64 @@ def _load_adjust_text():
         adjust_text = _adjust_text
 
 
+def _load_geneid2nt():
+    """Load GENEID2NT from gene_result_ncbi_human_proteincoding.txt file.
+
+    Returns:
+        Dictionary mapping GeneID to ntncbi namedtuples.
+    """
+    from collections import namedtuple
+
+    ntncbi = namedtuple('ntncbi', 'tax_id Org_name GeneID CurrentID Status Symbol Aliases description other_designations map_location chromosome genomic_nucleotide_accession_version start_position_on_the_genomic_accession end_position_on_the_genomic_accession orientation exon_count OMIM')
+
+    gene_file = Path(__file__).parent.parent / "data" / "deseq2" / "gene_result_ncbi_human_proteincoding.txt"
+
+    if not gene_file.exists():
+        print(f"Warning: Gene result file not found at {gene_file}")
+        return {}
+
+    geneid2nt = {}
+    try:
+        with open(gene_file, 'r', encoding='utf-8') as f:
+            # Skip header line
+            next(f)
+            for line in f:
+                line = line.rstrip('\n')
+                if not line:
+                    continue
+                fields = line.split('\t')
+                if len(fields) >= 17:
+                    try:
+                        gene_id = int(fields[2])
+                        genomic_acc = fields[11].replace('.', '_')
+                        entry = ntncbi(
+                            tax_id=fields[0],
+                            Org_name=fields[1],
+                            GeneID=gene_id,
+                            CurrentID=fields[3],
+                            Status=fields[4],
+                            Symbol=fields[5],
+                            Aliases=fields[6],
+                            description=fields[7],
+                            other_designations=fields[8],
+                            map_location=fields[9],
+                            chromosome=fields[10],
+                            genomic_nucleotide_accession_version=genomic_acc,
+                            start_position_on_the_genomic_accession=fields[12],
+                            end_position_on_the_genomic_accession=fields[13],
+                            orientation=fields[14],
+                            exon_count=fields[15],
+                            OMIM=fields[16],
+                        )
+                        geneid2nt[gene_id] = entry
+                    except (ValueError, IndexError):
+                        continue
+        return geneid2nt
+    except Exception as e:
+        print(f"Warning: Could not load gene file {gene_file}: {e}")
+        return {}
+
+
 def _load_goatools():
     """Lazily load goatools dependencies."""
     global GODag, Gene2GoReader, GOEnrichmentStudyNS, GeneID2nt_hs
@@ -50,12 +108,11 @@ def _load_goatools():
         from goatools.goea.go_enrichment_ns import (
             GOEnrichmentStudyNS as _GOEnrichmentStudyNS,
         )
-        from .genes_ncbi_homo_sapiens_proteincoding import GENEID2NT as _GeneID2nt_hs
 
         GODag = _GODag
         Gene2GoReader = _Gene2GoReader
         GOEnrichmentStudyNS = _GOEnrichmentStudyNS
-        GeneID2nt_hs = _GeneID2nt_hs
+        GeneID2nt_hs = _load_geneid2nt()
 
 
 class DataProcessor:
@@ -66,19 +123,16 @@ class DataProcessor:
         raw_counts: pd.DataFrame,
         classes: list[str],
         n_cpus: int,
-        batches: list[str] = None,
     ):
         """Initialize data processor.
 
         Args:
             raw_counts: DataFrame with gene counts (multiindexed by sample/label).
-            classes: List of class labels to compare (must be 2 for basic comparison).
+            classes: List of class labels to compare (must be 2 for comparison).
             n_cpus: Number of CPUs for parallel processing.
-            batches: Optional list of batch identifiers for batch effect analysis.
         """
         self.raw_counts = raw_counts
         self.classes = classes
-        self.batches = batches
         self.n_cpus = n_cpus
 
     @staticmethod
@@ -103,15 +157,11 @@ class DataProcessor:
             DataFrame with metadata for comparison.
 
         Raises:
-            ValueError: If invalid class or batch configuration.
+            ValueError: If invalid class configuration.
         """
-        if not self.batches and len(self.classes) != 2:
+        if len(self.classes) != 2:
             raise ValueError(
-                "prepare_metadata() takes a list with two classes (str) as a condition."
-            )
-        if self.batches and len(self.classes) != 2:
-            raise ValueError(
-                "prepare_metadata() takes a list with one class (str) when batches provided."
+                "prepare_metadata() takes a list with exactly two classes (str) as a condition."
             )
 
         samples_to_compare = list(
@@ -134,20 +184,6 @@ class DataProcessor:
 
         metadata = pd.DataFrame(samples_to_compare, columns=["index", "condition"])
         metadata.set_index("index", inplace=True)
-
-        if self.batches:
-            metadata["batches"] = metadata.index.map(
-                lambda sample: (
-                    sample.split("_")[1]
-                    if sample.split("_")[1] in self.batches
-                    else None
-                )
-            )
-            metadata = metadata.dropna(subset=["batches"])
-            if len(metadata["batches"].unique()) <= 1:
-                raise ValueError(
-                    f"Provided counts for {len(metadata['batches'].unique())} batch(es). Please provide counts for at least two batches."
-                )
 
         return metadata
 
@@ -192,16 +228,9 @@ class DataProcessor:
         """
         dds = self.make_dds()
 
-        if not self.batches:
-            conditions_to_contrast = self.classes
-            design_factor = "condition"
-        else:
-            conditions_to_contrast = self.batches
-            design_factor = "group"
-
         stat_res = DeseqStats(
             dds,
-            contrast=(design_factor, *conditions_to_contrast),
+            contrast=("condition", *self.classes),
             inference=DefaultInference(self.n_cpus),
             quiet=True,
         )
@@ -256,10 +285,32 @@ class Plotter:
             Plotter.is_initialized = True
 
     @classmethod
+    def _download_file(cls, url: str, target_path: Path) -> bool:
+        """Download a file from URL to target path.
+
+        Args:
+            url: URL to download from.
+            target_path: Path to save file.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        try:
+            import urllib.request
+            print(f"Downloading {url}...")
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(url, target_path)
+            print(f"Downloaded to {target_path}")
+            return True
+        except Exception as e:
+            print(f"Failed to download {url}: {e}")
+            return False
+
+    @classmethod
     def _initialise_go(cls):
         """Initialize GO terms database and gene mappings.
 
-        Requires go-basic.obo and gene2go files in working directory or data path.
+        Downloads go-basic.obo and gene2go.gz if missing.
         """
         print("Initializing GO terms...")
         _load_goatools()
@@ -269,21 +320,38 @@ class Plotter:
         if not path_to_supporting_files.exists():
             path_to_supporting_files = Path(__file__).parent.parent / "data" / "deseq2"
 
-        # Check if required files exist
-        gene2go_file = path_to_supporting_files / "gene2go"
+        # Check and download missing files
+        gene2go_gz_file = path_to_supporting_files / "gene2go.gz"
         obo_file = path_to_supporting_files / "go-basic.obo"
 
-        if not gene2go_file.exists() or not obo_file.exists():
+        if not gene2go_gz_file.exists():
+            cls._download_file(
+                "https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2go.gz",
+                gene2go_gz_file
+            )
+
+        if not obo_file.exists():
+            cls._download_file(
+                "https://current.geneontology.org/ontology/go-basic.obo",
+                obo_file
+            )
+
+        # Verify files exist
+        if not gene2go_gz_file.exists() or not obo_file.exists():
             print(f"Warning: GO data files not found at {path_to_supporting_files}")
+            print(f"Looking for: {gene2go_gz_file} and {obo_file}")
             print("GO enrichment analysis will be skipped.")
             return
 
         try:
+            from goatools.base import gunzip
+
+            gene2go_file = gunzip(str(gene2go_gz_file))
             genes = Gene2GoReader(
                 gene2go_file, taxids=[9606], namespaces={"BP"}
             )
             ns2assoc = genes.get_ns2assc()
-            obodag = GODag(obo_file)
+            obodag = GODag(str(obo_file))
 
             cls.goeaobj = GOEnrichmentStudyNS(
                 GeneID2nt_hs.keys(),
@@ -690,8 +758,14 @@ class AnalysisPipeline:
         elif isinstance(raw_counts.index, pd.MultiIndex):
             self.raw_counts = raw_counts
         else:
-            # Extract labels from sample names
+            # Extract labels from sample names and apply label mapping
             labels = [i.split("_")[2] for i in raw_counts.index]
+            label_mapping = {
+                "HKSA": "HK S.aureus",
+                "HKEB": "HK E.coli",
+                "IMDM": "negative_control",
+            }
+            labels = [label_mapping.get(label, label) for label in labels]
             self.raw_counts = raw_counts.copy()
             self.raw_counts.index = pd.MultiIndex.from_arrays(
                 [self.raw_counts.index, labels], names=["samples", "label"]

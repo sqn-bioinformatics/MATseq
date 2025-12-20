@@ -116,7 +116,7 @@ class MATseqPipeline:
 
         # Run analysis for training ligands
         print(f"\nAnalyzing training ligands: {TRAINING_LIGANDS}")
-        pipeline.run_analysis(TRAINING_LIGANDS, negative_control="IMDM")
+        pipeline.run_analysis(TRAINING_LIGANDS, negative_control="negative_control")
 
         # Save DE genes
         pipeline.save_de_genes()
