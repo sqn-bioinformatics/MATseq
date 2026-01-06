@@ -109,13 +109,11 @@ MODEL_TRAINING_CONFIG = {
 # Class labels mapping
 CLASS_LABELS = {
     "IMDM": "negative_control",
-    "nc": "negative_control",
 }
 
-# DESeq2 ligand lists for different analyses
+# DESeq2 ligand lists
 TRAINING_LIGANDS = ["Fla-PA", "LPS", "PGN", "R848", "Pam3", "PGN"]
 
-ADDITIONAL_TLR_LIGANDS = ["LTA", "MPLA", "Pam2", "HKEB", "HKSA"]
+ADDITIONAL_LIGANDS = ["LTA", "MPLA", "Pam2"]
 
-# Negative control identifier
-NEGATIVE_CONTROL = "nc"
+ADDITIONAL_BACTERIAL = ["HKEB", "HKSA"]

@@ -12,13 +12,8 @@ logs
 #ignore config
 config.txt
 
-
 #ignore vscode settings
 /.vscode
-
-#ignore all wandb files
-wandb/
-artifacts/
 
 #ignore snakemake logs
 /.snakemake
@@ -26,10 +21,42 @@ artifacts/
 #ignore pickled model
 BaggingClassifier.joblib
 
-#ignore results
-/results
+#ignore results directory contents 
+/results/**
 
-#ignore .md
+#ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+#ignore IDE files
+.idea/
+*.swp
+*.swo
+*~
+
+#ignore temporary files
+*.tmp
+*.bak
+pipeline_output.log
+example.docx
+
+#ignore environment files
+.env
+.venv
+env/
+venv/
+
+#ignore data files (except essential references)
+/data/deseq2/*.obo
+/data/deseq2/*.gz
+/data/deseq2/gene2go
+!.gitkeep
+
+#ignore markdown files
 *.md
+
 
 

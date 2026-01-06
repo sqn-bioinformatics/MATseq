@@ -3,6 +3,7 @@
 from pathlib import Path
 import pandas as pd
 import numpy as np
+from .config import TRAINING_LIGANDS, ADDITIONAL_LIGANDS, ADDITIONAL_BACTERIAL
 
 
 def merge_counts(
@@ -81,7 +82,7 @@ def filter_counts(
 
 def extract_subset(
     df: pd.DataFrame, name: str = "training", output_path: str | None = None
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> pd.DataFrame:
     """Extract subset and labels from main dataset based on subset name.
 
     Args:
@@ -90,20 +91,13 @@ def extract_subset(
         output_path: Optional path to save the output file.
 
     Returns:
-        tuple: (subset_data, labels) where labels is a DataFrame with 'label' column.
+        DataFrame with samples as rows, genes as columns, and 'label' column.
     """
 
-    training_classes = [
-        "_IMDM_",
-        "_LPS_",
-        "_Fla-PA_",
-        "_PGN_",
-        "_Pam3_",
-        "_R848_",
-    ]
-
-    other_ligands_classes = ["_LTA_", "_MPLA_", "_Pam2_"]
-    bacterial_classes = ["_HKSA_", "_HKEB_"]
+    # Format ligand names with underscores for matching
+    training_classes = [f"_{ligand}_" for ligand in TRAINING_LIGANDS + ["IMDM"]]
+    other_ligands_classes = [f"_{ligand}_" for ligand in ADDITIONAL_LIGANDS]
+    bacterial_classes = [f"_{ligand}_" for ligand in ADDITIONAL_BACTERIAL]
 
     # Select classes based on name
     if name == "training":
@@ -126,8 +120,8 @@ def extract_subset(
 
     subset_data = df.iloc[subset_indices].copy()
 
-    labels = pd.DataFrame(index=subset_data.index)
-    labels["label"] = [i.split("_")[2] for i in subset_data.index]
+    # Extract label from position 2 of index
+    subset_data["label"] = [i.split("_")[2] for i in subset_data.index]
 
     # Replace label names
     label_mapping = {
@@ -135,17 +129,16 @@ def extract_subset(
         "HKEB": "HK E.coli",
         "IMDM": "negative_control",
     }
-    labels["label"] = labels["label"].replace(label_mapping)
+    subset_data["label"] = subset_data["label"].replace(label_mapping)
 
     # Set default output path
     if output_path is None:
         output_path = Path(__file__).parent.parent / "results" / "subsets"
     output_path.mkdir(parents=True, exist_ok=True)
 
-    subset_data["label"] = labels["label"]
     subset_data.to_csv(output_path / f"{name}_data_with_labels.csv")
 
-    return subset_data, labels
+    return subset_data
 
 
 def normalize_rpm(df: pd.DataFrame) -> pd.DataFrame:
