@@ -13,11 +13,12 @@ from .preprocessing import (
 
 from .feature_engineering import LibraryLengthNormalizer, create_feature_pipeline
 
-from .evaluation import (
+from .model_training import (
     multiclass_roc_auc_score,
     make_score,
     get_confusion_matrix,
-    make_probability_matrix,
+    ModelFactory,
+    ModelTrainer,
 )
 
 from .config import (
@@ -31,15 +32,15 @@ from .config import (
     SUBSET_CLASS_ORDERS,
     DESEQ2_CONFIG,
     FEATURE_SELECTION_CONFIG,
+    MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
     CLASS_LABELS,
     TRAINING_LIGANDS,
+    TRAINING_LIGANDS_WO_FLAPA,
     ADDITIONAL_LIGANDS,
+    BACTERIAL_LIGANDS,
+    BACTERIAL_LIGANDS_ORIGINAL_NAMES,
 )
-
-from .utils import get_output_path, save_fig, save_csv
-
-from .model_training import ModelFactory, ModelTrainer
 
 # Optional import for DESeq2 (requires pydeseq2)
 try:
@@ -59,17 +60,18 @@ try:
         plot_gene_expression_by_class,
         plot_tlr_hek_blue,
         plot_pca_for_pandas,
+        make_probability_matrix,
     )
 except ImportError:
     plot_gene_expression_by_class = None
     plot_tlr_hek_blue = None
     plot_pca_for_pandas = None
+    make_probability_matrix = None
 
 # Feature analysis
 from .feature_analysis import (
     FeatureSelectionAnalyzer,
     VennDiagramGenerator,
-    DownstreamGOAnalysis,
 )
 
 # Prediction and model comparison
@@ -87,10 +89,14 @@ __all__ = [
     "SUBSET_CLASS_ORDERS",
     "DESEQ2_CONFIG",
     "FEATURE_SELECTION_CONFIG",
+    "MODEL_FACTORY_CONFIG",
     "MODEL_TRAINING_CONFIG",
     "CLASS_LABELS",
     "TRAINING_LIGANDS",
     "ADDITIONAL_LIGANDS",
+    "BACTERIAL_LIGANDS",
+    "BACTERIAL_LIGANDS_ORIGINAL_NAMES",
+    "TRAINING_LIGANDS_WO_FLAPA",
     # Preprocessing
     "merge_counts",
     "filter_counts",
@@ -108,10 +114,6 @@ __all__ = [
     "make_score",
     "get_confusion_matrix",
     "make_probability_matrix",
-    # Utils
-    "get_output_path",
-    "save_fig",
-    "save_csv",
     # DESeq2 analysis
     "DESeq2DataProcessor",
     "Plotter",
@@ -123,7 +125,6 @@ __all__ = [
     # Feature analysis
     "FeatureSelectionAnalyzer",
     "VennDiagramGenerator",
-    "DownstreamGOAnalysis",
     # Prediction and model comparison
     "ModelPredictor",
     "ModelComparator",

@@ -3,7 +3,14 @@
 from pathlib import Path
 import pandas as pd
 import numpy as np
-from .config import TRAINING_LIGANDS, ADDITIONAL_LIGANDS, ADDITIONAL_BACTERIAL
+from .config import (
+    TRAINING_LIGANDS,
+    ADDITIONAL_LIGANDS,
+    BACTERIAL_LIGANDS,
+    TRAINING_LIGANDS_WO_FLAPA,
+    BACTERIAL_LIGANDS_ORIGINAL_NAMES,
+    get_featurecounts_dir,
+)
 
 
 def merge_counts(
@@ -24,14 +31,18 @@ def merge_counts(
     """
 
     if featurecounts_dir is None:
-        featurecounts_path = Path(__file__).parent.parent / "results" / "featurecounts"
+        featurecounts_path = get_featurecounts_dir()
+    else:
+        featurecounts_path = Path(featurecounts_dir).expanduser()
 
-    # Find all .txt files (excluding .summary files)
+    assert featurecounts_path.exists(), f"Directory not found: {featurecounts_path}"
+    assert featurecounts_path.is_dir(), f"Not a directory: {featurecounts_path}"
+
     txt_files = [
         f for f in featurecounts_path.glob("*.txt") if not f.name.endswith(".summary")
     ]
     if not txt_files:
-        raise ValueError(f"No .txt files found in {featurecounts_dir}")
+        raise ValueError(f"No .txt files found in {featurecounts_path}")
 
     dfs = []
 
@@ -49,7 +60,9 @@ def merge_counts(
         output_path = Path(__file__).parent.parent / "results" / "counts"
     output_path.mkdir(parents=True, exist_ok=True)
 
-    filtered_counts_df.to_csv(output_path / "MATseq_count_summary.csv")
+    csv_path = output_path / "MATseq_count_summary.csv"
+    filtered_counts_df.to_csv(csv_path)
+    print(f"CSV saved: {csv_path}")
 
     return filtered_counts_df
 
@@ -67,15 +80,17 @@ def filter_counts(
     Returns:
         DataFrame: Filtered counts data with samples as rows and genes as columns.
     """
+    assert isinstance(df, pd.DataFrame), f"df must be DataFrame, got {type(df)}"
+    assert len(df) > 0, "df cannot be empty"
+    assert min_reads > 0, f"min_reads must be positive, got {min_reads}"
 
-    # Transpose and handle duplicates
     df = df.T
     df = df[~df.index.duplicated(keep="last")]
     df = df[df.index.notnull()]
 
-    # Filter samples with insufficient read counts
     mask = df.sum(axis=1) > min_reads
     df = df[mask]
+    assert len(df) > 0, f"No samples remain after filtering with min_reads={min_reads}"
 
     return df
 
@@ -87,28 +102,29 @@ def extract_subset(
 
     Args:
         df: Main DataFrame with all samples.
-        name: Subset name - "training", "other_ligands", or "bacterial".
+        name: Subset name - "training", "other_ligands", "bacterial", or "training_wo_flapa".
         output_path: Optional path to save the output file.
 
     Returns:
         DataFrame with samples as rows, genes as columns, and 'label' column.
     """
 
-    # Format ligand names with underscores for matching
-    training_classes = [f"_{ligand}_" for ligand in TRAINING_LIGANDS + ["IMDM"]]
-    other_ligands_classes = [f"_{ligand}_" for ligand in ADDITIONAL_LIGANDS]
-    bacterial_classes = [f"_{ligand}_" for ligand in ADDITIONAL_BACTERIAL]
-
     # Select classes based on name
     if name == "training":
-        selected_classes = training_classes
+        selected_classes = [f"_{ligand}_" for ligand in TRAINING_LIGANDS + ["IMDM"]]
     elif name == "other_ligands":
-        selected_classes = training_classes + other_ligands_classes
+        selected_classes = [f"_{ligand}_" for ligand in ADDITIONAL_LIGANDS + ["IMDM"]]
     elif name == "bacterial":
-        selected_classes = training_classes + bacterial_classes
+        selected_classes = [
+            f"_{ligand}_" for ligand in BACTERIAL_LIGANDS_ORIGINAL_NAMES + ["IMDM"]
+        ]
+    elif name == "training_wo_flapa":
+        selected_classes = [
+            f"_{ligand}_" for ligand in TRAINING_LIGANDS_WO_FLAPA + ["IMDM"]
+        ]
     else:
         raise ValueError(
-            f"Invalid name '{name}'. Must be 'training', 'other_ligands', or 'bacterial'."
+            f"Invalid name '{name}'. Must be 'training', 'other_ligands', 'bacterial', or 'training_wo_flapa'."
         )
 
     subset_indices = [
@@ -117,6 +133,7 @@ def extract_subset(
         for c in selected_classes
         if c in sample_id
     ]
+    assert len(subset_indices) > 0, f"No samples found for subset '{name}'"
 
     subset_data = df.iloc[subset_indices].copy()
 
@@ -136,7 +153,9 @@ def extract_subset(
         output_path = Path(__file__).parent.parent / "results" / "subsets"
     output_path.mkdir(parents=True, exist_ok=True)
 
-    subset_data.to_csv(output_path / f"{name}_data_with_labels.csv")
+    csv_path = output_path / f"{name}_data_with_labels.csv"
+    subset_data.to_csv(csv_path)
+    print(f"CSV saved: {csv_path}")
 
     return subset_data
 
@@ -150,7 +169,10 @@ def normalize_rpm(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame: Normalized counts in RPM.
     """
-    row_sums = df.sum(axis=1).replace(0, 1)  # Avoid division by zero
+    assert isinstance(df, pd.DataFrame), f"df must be DataFrame, got {type(df)}"
+    assert len(df) > 0, "df cannot be empty"
+
+    row_sums = df.sum(axis=1).replace(0, 1)
     return df.div(row_sums, axis=0) * 1000000
 
 
@@ -168,7 +190,11 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
     if data_dir is None:
         data_dir = Path(__file__).parent.parent / "data" / "supplementary_data"
 
-    # Load TLR4/LPS data (Supplementary Table 5)
+    data_dir = Path(data_dir)
+    assert data_dir.exists(), f"Data directory not found: {data_dir}"
+    assert (data_dir / "Supplementary_Table_5.csv").exists(), f"Missing Supplementary_Table_5.csv in {data_dir}"
+    assert (data_dir / "Supplementary_Table_6.csv").exists(), f"Missing Supplementary_Table_6.csv in {data_dir}"
+
     tlr4_raw = pd.read_csv(data_dir / "Supplementary_Table_5.csv")
     tlr4_lps_mask = tlr4_raw["OD630nm_LPS_Replicate1"].notna()
     tlr4_lps = tlr4_raw[tlr4_lps_mask]
@@ -202,7 +228,7 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
     tlr2_fla_mask = tlr2_raw["OD630nm_Fla-PA_Replicate1"].notna()
     tlr2_fla = tlr2_raw[tlr2_fla_mask].iloc[0]
 
-    fla_pa_data = {
+    flapa_data = {
         "tlr4": {
             "concentration": tlr4_fla["Concentration_(EU_mL)"],
             "average": np.mean(
@@ -223,4 +249,4 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
         },
     }
 
-    return tlr2_df, tlr4_df, fla_pa_data
+    return tlr2_df, tlr4_df, flapa_data
