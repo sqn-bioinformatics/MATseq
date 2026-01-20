@@ -49,14 +49,17 @@ example.docx
 env/
 venv/
 
-#ignore data files (except essential references)
+#ignore data files (except requiring manual download)
 /data/deseq2/*.obo
 /data/deseq2/*.gz
 /data/deseq2/gene2go
-!.gitkeep
+
 
 #ignore markdown files
 *.md
+
+#ignore claude cache
+.claude
 
 
 
