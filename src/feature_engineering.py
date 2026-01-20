@@ -1,7 +1,8 @@
 """Feature engineering and transformation pipeline for RNA-seq data."""
 
 import numpy as np
-from sklearn.base import BaseEstimator, TransformerMixin
+import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin, OneToOneFeatureMixin
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import SelectKBest, SelectFromModel, chi2
 from sklearn.preprocessing import StandardScaler
@@ -9,34 +10,50 @@ from sklearn.ensemble import ExtraTreesClassifier
 from feature_engine.selection import DropDuplicateFeatures
 
 
-class LibraryLengthNormalizer(BaseEstimator, TransformerMixin):
+class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMixin):
     """Normalize gene counts to library size (reads per million)."""
 
     def fit(self, X, y=None):
-        """Fit method (no-op for this transformer).
-
-        Args:
-            X: Feature matrix.
-            y: Target labels (optional).
-
-        Returns:
-            self
-        """
         return self
 
-    def transform(self, X, y=None):
-        """Normalize counts to library size.
+    def transform(self, X):
+        """Normalize counts to library size (RPM)."""
+        assert X is not None, "X cannot be None"
 
-        Args:
-            X: Feature matrix with gene counts.
-            y: Target labels (optional).
+        X_is_df = isinstance(X, pd.DataFrame)
 
-        Returns:
-            Normalized feature matrix.
-        """
-        # Normalize the gene counts to the library size
-        X = X.apply(lambda x: (x / (x.sum() if x.sum() != 0 else 1)) * 1000000, axis=1)
-        return X
+        if X_is_df:
+            values = X.to_numpy(dtype=float)
+            index = X.index
+            columns = X.columns
+        else:
+            values = np.asarray(X, dtype=float)
+            index = None
+            columns = None
+
+        assert values.ndim == 2, f"Expected 2D array, got shape {values.shape}"
+
+        totals = values.sum(axis=1, keepdims=True)
+        totals[totals == 0.0] = 1.0
+        normalized = (values / totals) * 1_000_000.0
+
+        if X_is_df:
+            return pd.DataFrame(
+                normalized,
+                index=index,
+                columns=columns,
+            )
+
+        return normalized
+
+    def get_feature_names_out(self, input_features=None):
+        """Return output feature names unchanged."""
+        if input_features is None:
+            raise ValueError(
+                "input_features must be provided for "
+                "LibraryLengthNormalizer.get_feature_names_out"
+            )
+        return np.asarray(input_features, dtype=object)
 
 
 def create_feature_pipeline(
@@ -60,6 +77,12 @@ def create_feature_pipeline(
     Returns:
         Pipeline: Sklearn pipeline for feature engineering.
     """
+    assert k_best > 0, f"k_best must be positive, got {k_best}"
+    assert n_estimators > 0, f"n_estimators must be positive, got {n_estimators}"
+    assert max_depth > 0, f"max_depth must be positive, got {max_depth}"
+    assert max_features > 0, f"max_features must be positive, got {max_features}"
+    assert feature_threshold > 0, f"feature_threshold must be positive, got {feature_threshold}"
+
     en = ExtraTreesClassifier(
         n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
     )
@@ -78,5 +101,4 @@ def create_feature_pipeline(
             ("standard_scale", StandardScaler()),
         ]
     )
-
     return pipe

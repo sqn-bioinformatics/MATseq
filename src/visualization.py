@@ -7,54 +7,71 @@ import matplotlib as mpl
 import seaborn as sns
 import textwrap
 from pathlib import Path
+from datetime import datetime
 from typing import Union
 from matplotlib.patches import Patch
 
-from .utils import save_csv, get_output_path, CUSTOM_PALETTE_6
 from .preprocessing import normalize_rpm, load_tlr_data
+from .cache import load_geneid2nt, load_go_dag, load_gene2go
+from .config import get_deseq2_dir, CUSTOM_PALETTE_6
 
-# Lazy imports for optional dependencies
-sc = None  # scanpy
+sc = None
 adjust_text = None
-AnnData = None
-
-# Lazy imports for goatools (only loaded when needed)
-GODag = None
-Gene2GoReader = None
 GOEnrichmentStudyNS = None
 
 
-def _load_scanpy():
+def get_output_path() -> Path:
+    """Get the output directory path based on current date."""
+    p = Path().cwd().parent
+    date = datetime.today().strftime("%Y%m%d")[2:]
+    output_path = p / f"results/{date}"
+    output_path.mkdir(parents=True, exist_ok=True)
+    return output_path
+
+
+def save_csv(table: pd.DataFrame, table_name: str, output_path: Path = None) -> None:
+    """Save DataFrame to CSV file."""
+    if output_path is None:
+        output_path = get_output_path()
+
+    path = output_path / f"{table_name}.csv"
+    table.to_csv(path)
+    print(f"CSV saved: {path}")
+
+
+def load_scanpy():
     """Lazily load scanpy for PCA plotting."""
     global sc
     if sc is None:
         import scanpy as _sc
 
         sc = _sc
+    return sc
 
 
-def _load_adjust_text():
+def load_adjust_text():
     """Lazily load adjustText for volcano plot labels."""
     global adjust_text
     if adjust_text is None:
         from adjustText import adjust_text as _adjust_text
 
         adjust_text = _adjust_text
+    return adjust_text
 
 
-def _load_goatools():
+def load_goatools():
     """Lazily load goatools dependencies."""
-    global GODag, Gene2GoReader, GOEnrichmentStudyNS
-    if GODag is None:
-        from goatools.obo_parser import GODag as _GODag
-        from goatools.anno.genetogo_reader import Gene2GoReader as _Gene2GoReader
+    global GOEnrichmentStudyNS
+    if GOEnrichmentStudyNS is None:
         from goatools.goea.go_enrichment_ns import (
             GOEnrichmentStudyNS as _GOEnrichmentStudyNS,
         )
 
-        GODag = _GODag
-        Gene2GoReader = _Gene2GoReader
         GOEnrichmentStudyNS = _GOEnrichmentStudyNS
+    return GOEnrichmentStudyNS
+
+
+AnnData = None
 
 
 def _plot_tlr_panel(
@@ -83,6 +100,9 @@ def _plot_tlr_panel(
         color: Color for the curve.
         xlim: X-axis limits as (min, max).
     """
+    assert conc_col in df.columns, f"Column '{conc_col}' not found in DataFrame"
+    assert "Average" in df.columns, "Column 'Average' not found in DataFrame"
+
     # Filter out zero concentrations for log scale
     df_plot = df[df[conc_col] > 0].copy()
 
@@ -194,9 +214,11 @@ def plot_tlr_hek_blue(
     output_path.mkdir(parents=True, exist_ok=True)
 
     save_path = output_path / output_filename
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    print(f"Plot saved as '{save_path}'")
-    plt.show()
+    try:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Plot saved as '{save_path}'")
+    finally:
+        plt.close()
 
     return save_path
 
@@ -230,8 +252,6 @@ def plot_gene_expression_by_class(
     gene_df.columns = [gene]
 
     ligand_classes = sorted(set("_" + gene_df.index.str.split("_").str[2] + "_"))
-
-    # Set up figure
     n_classes = len(ligand_classes)
     n_rows = (n_classes + n_cols - 1) // n_cols
 
@@ -299,17 +319,18 @@ def plot_gene_expression_by_class(
         output_filename = f"{gene.lower()}_expression.png"
 
     save_path = output_path / output_filename
-    plt.savefig(save_path, dpi=300, bbox_inches="tight", facecolor="white")
-    print(f"Figure saved to: {save_path.absolute()}")
-    plt.show()
-    plt.close(fig)
+    try:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight", facecolor="white")
+        print(f"Figure saved to: {save_path.absolute()}")
+    finally:
+        plt.close(fig)
 
     return save_path.absolute()
 
 
 def plot_pca_for_pandas(
     name: str,
-    df: pd.DataFrame,
+    X: pd.DataFrame,
     labels: Union[pd.DataFrame, np.ndarray],
     with_sample_names: bool = False,
     output_filename: str = None,
@@ -319,7 +340,7 @@ def plot_pca_for_pandas(
     """Create PCA visualization for pandas DataFrame data.
 
     Args:
-        df: DataFrame with gene counts (samples as rows, genes as columns).
+        X: DataFrame with gene counts (samples as rows, genes as columns).
         labels: DataFrame with 'label' column or numpy array with labels for coloring.
         with_sample_names: If True, creates larger plot with sample name labels.
                           If False, creates smaller plot without labels.
@@ -338,72 +359,75 @@ def plot_pca_for_pandas(
     )
 
     # Get sample names - handle both DataFrame and numpy array
-    if hasattr(df, "index"):
-        sample_names = df.index.to_numpy()
+    if hasattr(X, "index"):
+        sample_names = X.index.to_numpy()
     elif isinstance(labels, pd.DataFrame):
         sample_names = labels.index.to_numpy()
     else:
-        sample_names = np.arange(len(df))
+        sample_names = np.arange(len(X))
 
-    # Needs to be scaled first
-    X_reduced = PCA(n_components=2).fit_transform(df)
+    X_reduced = PCA(n_components=2).fit_transform(X)
 
-    # Configure plot based on with_sample_names
     figsize = (20, 15) if with_sample_names else (6, 6)
     marker_size = 200 if with_sample_names else 80
 
-    fig = plt.figure(figsize=figsize)
-    ax = sns.scatterplot(
-        x=X_reduced[:, 0],
-        y=X_reduced[:, 1],
-        hue=label_values,
-        hue_order=hue_order,
-        s=marker_size,
-        alpha=0.6,
-        palette=palette,
-    )
-
-    ax.set_xlabel("1st Eigenvector", fontsize=14)
-    ax.set_ylabel("2nd Eigenvector", fontsize=14)
-    ax.tick_params(axis="both", labelsize=14)
-
-    if with_sample_names:
-        _load_adjust_text()
-        texts = [
-            ax.text(
-                X_reduced[:, 0][i],
-                X_reduced[:, 1][i],
-                sample_names[i],
-                ha="left",
-                va="bottom",
-                alpha=0.8,
-                fontsize=12,
-            )
-            for i in range(len(X_reduced))
-        ]
-        adjust_text(texts, arrowprops=dict(arrowstyle="->", color="black"))
-        ax.legend(bbox_to_anchor=(1, 1.0), ncol=1, fontsize=12)
-    else:
-        ax.get_legend().remove()
-
-    plt.tight_layout()
-
-    # Save figure
-    project_root = Path(__file__).parent.parent
-    output_path = project_root / "results" / "figures" / "pca"
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    if output_filename is None:
-        output_filename = (
-            f"{name}_pca_plot_labeled.png"
-            if with_sample_names
-            else f"{name}_pca_plot.png"
+    with plt.rc_context(
+        {
+            "figure.facecolor": "white",
+            "axes.facecolor": "white",
+        }
+    ):
+        fig = plt.figure(figsize=figsize)
+        ax = sns.scatterplot(
+            x=X_reduced[:, 0],
+            y=X_reduced[:, 1],
+            hue=label_values,
+            hue_order=hue_order,
+            s=marker_size,
+            alpha=0.6,
+            palette=palette,
         )
 
-    save_path = output_path / output_filename
-    plt.savefig(save_path, dpi=300, bbox_inches="tight", facecolor="white")
-    print(f"Figure saved to: {save_path.absolute()}")
-    plt.show()
+        ax.set_xlabel("1st Eigenvector", fontsize=14)
+        ax.set_ylabel("2nd Eigenvector", fontsize=14)
+        ax.tick_params(axis="both", labelsize=14)
+
+        if with_sample_names:
+            adjust_text = load_adjust_text()
+            texts = [
+                ax.text(
+                    X_reduced[:, 0][i],
+                    X_reduced[:, 1][i],
+                    sample_names[i],
+                    ha="left",
+                    va="bottom",
+                    alpha=0.8,
+                    fontsize=12,
+                )
+                for i in range(len(X_reduced))
+            ]
+            adjust_text(texts, arrowprops=dict(arrowstyle="->", color="black"))
+            ax.legend(bbox_to_anchor=(1, 1.0), ncol=1, fontsize=12)
+        else:
+            ax.get_legend().remove()
+
+        plt.tight_layout()
+
+        project_root = Path(__file__).parent.parent
+        output_path = project_root / "results" / "figures" / "pca"
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        if output_filename is None:
+            output_filename = (
+                f"{name}_pca_labeled.png" if with_sample_names else f"{name}_pca.png"
+            )
+
+        save_path = output_path / output_filename
+        try:
+            plt.savefig(save_path, dpi=300, bbox_inches="tight")
+            print(f"Figure saved to: {save_path.absolute()}")
+        finally:
+            plt.close()
 
     return save_path.absolute()
 
@@ -431,6 +455,7 @@ class Plotter:
         res: pd.DataFrame,
         sigs: pd.DataFrame,
         analysis_name: str,
+        figures_dir: Path = None,
     ):
         """Initialize Plotter with DESeq2 results and analysis name.
 
@@ -439,14 +464,21 @@ class Plotter:
             res: DataFrame with all DESeq2 results.
             sigs: DataFrame containing significant gene signatures.
             analysis_name: Name for this analysis (used in plot titles and filenames).
+            figures_dir: Directory for saving figures.
         """
         self.dds = dds
         self.res = res
         self.sigs = sigs
         self.analysis_name = analysis_name
+        self.figures_dir = figures_dir or (
+            Path.cwd() / "results" / "figures" / "deseq2"
+        )
+        self.figures_dir.mkdir(parents=True, exist_ok=True)
+        self.go_terms_dir = Path.cwd() / "results" / "go_terms"
+        self.go_terms_dir.mkdir(parents=True, exist_ok=True)
 
         if not Plotter.is_initialized:
-            _load_goatools()  # Load goatools dependencies
+            load_goatools()
             Plotter._initialise_go()
             Plotter.is_initialized = True
 
@@ -464,9 +496,8 @@ class Plotter:
                 "plot() takes 'volcano', 'histogram', 'pca' or 'go' as a condition."
             )
 
-        output_path = get_output_path()
         fig_extension = "png"
-        fname = output_path / f"{self.analysis_name}_{plot_type}.{fig_extension}"
+        fname = self.figures_dir / f"{self.analysis_name}_{plot_type}.{fig_extension}"
         fontsize = 12
 
         if plot_type == "volcano":
@@ -500,14 +531,20 @@ class Plotter:
             )
 
             go_df = self.generate_go_table()
-            save_csv(go_df, f"{self.analysis_name}_go_terms")
+            save_csv(
+                go_df, f"{self.analysis_name}_go_terms", output_path=self.go_terms_dir
+            )
 
-        fig.figure.savefig(
-            fname,
-            format=fig_extension,
-            dpi=300,
-            bbox_inches="tight",
-        )
+        try:
+            fig.figure.savefig(
+                fname,
+                format=fig_extension,
+                dpi=300,
+                bbox_inches="tight",
+            )
+            print(f"Figure saved: {fname}")
+        finally:
+            plt.close()
 
     @classmethod
     def _initialise_go(cls, path_to_supporting_files: Path = None):
@@ -515,31 +552,28 @@ class Plotter:
 
         Args:
             path_to_supporting_files: Path to directory containing gene2go and go-basic.obo files.
-                                     Defaults to notebooks/DeSeq2/deseq2 if not provided.
+                                     Defaults to ~/MAT_rebase/data/deseq2 if not provided.
         """
         print("Initializing GO terms...")
 
         if path_to_supporting_files is None:
-            path_to_supporting_files = Path().cwd() / "notebooks/DeSeq2/deseq2"
+            path_to_supporting_files = get_deseq2_dir()
 
-        # Load gene to GO associations
-        genes = Gene2GoReader(
+        GOEnrichmentStudyNS = load_goatools()
+
+        # Load gene to GO associations (cached)
+        genes = load_gene2go(
             path_to_supporting_files / "gene2go", taxids=[9606], namespaces={"BP"}
         )
         ns2assoc = genes.get_ns2assc()
 
-        # Load GO ontologies
-        obodag = GODag(path_to_supporting_files / "go-basic.obo")
+        # Load GO ontologies (cached)
+        obodag = load_go_dag(path_to_supporting_files / "go-basic.obo")
 
-        # Import gene ID mapper (requires DeSeq2 module)
-        # This assumes the DeSeq2 module is in the path
-        try:
-            from genes_ncbi_homo_sapiens_proteincoding import GENEID2NT as GeneID2nt_hs
-        except ImportError:
-            import sys
-
-            sys.path.insert(1, str(path_to_supporting_files.parent))
-            from genes_ncbi_homo_sapiens_proteincoding import GENEID2NT as GeneID2nt_hs
+        # Load gene ID mapper (cached)
+        GeneID2nt_hs = load_geneid2nt(
+            path_to_supporting_files / "gene_result_ncbi_human_proteincoding.txt"
+        )
 
         cls.goeaobj = GOEnrichmentStudyNS(
             GeneID2nt_hs.keys(),  # List of human protein-coding genes
@@ -560,13 +594,14 @@ class Plotter:
         Returns:
             DataFrame with GO enrichment results including terms, p-values, and gene lists.
         """
+        sigs_list = [str(gene) for gene in self.sigs.index]
         sigs_ids = [
-            Plotter.geneid_symbol_mapper_human[gene]
-            for gene in self.sigs
+            int(Plotter.geneid_symbol_mapper_human[gene])
+            for gene in sigs_list
             if gene in Plotter.geneid_symbol_mapper_human
         ]
         print(
-            f"Mapped {len(sigs_ids)/len(self.sigs)*100:.2f}% of "
+            f"Mapped {len(sigs_ids)/len(sigs_list)*100:.2f}% of "
             "significantly differentially expressed gene symbols to gene IDs."
         )
 
@@ -618,10 +653,19 @@ class Plotter:
         Returns:
             Matplotlib figure object.
         """
+        if self.sigs is None or len(self.sigs) == 0:
+            raise ValueError("No significant genes available for GO enrichment")
+
         go_terms = self.generate_go_table()
+
+        if go_terms.empty:
+            raise ValueError("No GO enrichment terms to plot")
 
         go_terms = go_terms[:20]
         go_terms = go_terms.sort_values("ratio_in_study", ascending=False)
+
+        if len(go_terms) == 0:
+            raise ValueError("No GO terms remaining after filtering")
 
         norm = mpl.colors.Normalize(vmin=go_terms.fdr.min(), vmax=go_terms.fdr.max())
         color_mapper = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.bwr_r)
@@ -638,11 +682,13 @@ class Plotter:
         )
 
         ax.set_yticklabels([textwrap.fill(term, 40) for term in go_terms["term"]])
+        ax.set_xlabel("Gene Ratio")
         cbar = g.colorbar(
             color_mapper, ax=ax, orientation="vertical", pad=0.01, format="{x:.4f}"
         )
         cbar.ax.set_position([0.8, 0.5, 0.2, 0.3])
         cbar.ax.set_title("padj", loc="left", pad=4.0)
+        g.patch.set_facecolor("white")
 
         return g
 
@@ -655,7 +701,7 @@ class Plotter:
         Returns:
             Matplotlib figure object.
         """
-        _load_adjust_text()
+        adjust_text = load_adjust_text()
 
         # Add a small number to zeros to avoid inf in padj_log
         grapher = self.res.assign(
@@ -750,6 +796,7 @@ class Plotter:
         plt.ylabel("-$log_{10}$ FDR")
         plt.ylim(-2, grapher["padj_log"].max() + 5)
 
+        g.figure.patch.set_facecolor("white")
         return g
 
     def plot_historgram(self, num_top_sig: Union[int, str] = 50):
@@ -811,6 +858,7 @@ class Plotter:
         ax.ax_heatmap.set_xticklabels([])
         ax.ax_heatmap.set(xlabel=None)
         plt.subplots_adjust(hspace=0.01)
+        ax.figure.patch.set_facecolor("white")
 
         return ax
 
@@ -823,26 +871,66 @@ class Plotter:
         Returns:
             Matplotlib figure object.
         """
-        _load_scanpy()
+        sc = load_scanpy()
 
         dds = self.dds.copy()
         sc.tl.pca(dds, n_comps=2)
         pca = dds.obsm["X_pca"]
         sample_names = list(sc.get.obs_df(dds).index)
-
-        rc = {
-            "axes.facecolor": "white",
-            "axes.edgecolor": "black",
-        }
-        sns.set_theme(rc=rc)
-
-        plt.figure(figsize=(8, 10))
         ax = sc.pl.pca(
-            dds, color="condition", size=300, show=False, title=" ", return_fig=True
+            dds,
+            color="condition",
+            size=300,
+            show=False,
+            title=" ",
+            return_fig=True,
         )
+        ax.set_facecolor("white")
 
         if w_text:
             for i in range(len(pca)):
-                plt.text(pca[i][0], pca[i][1], sample_names[i], ha="left", va="bottom")
+                ax.text(
+                    pca[i][0],
+                    pca[i][1],
+                    sample_names[i],
+                    ha="left",
+                    va="bottom",
+                )
 
         return ax
+
+
+def make_probability_matrix(
+    model_name: str, test_pred: pd.DataFrame, output_path: Path = None
+) -> sns.matrix.ClusterGrid:
+    """Create and save heatmap of model prediction probabilities.
+
+    Args:
+        model_name: Name of the model for the plot title.
+        test_pred: DataFrame with prediction probabilities (samples x classes).
+        output_path: Directory to save the figure. Defaults to results/figures.
+
+    Returns:
+        Seaborn heatmap object.
+    """
+    if output_path is None:
+        project_root = Path(__file__).parent.parent
+        output_path = project_root / "results" / "figures"
+        output_path.mkdir(parents=True, exist_ok=True)
+
+    plt.figure(figsize=(12, 8))
+
+    g = sns.heatmap(test_pred, cmap="YlGnBu")
+    g.set_title(f"{model_name} predictions", fontsize=15)
+    g.set_xlabel("Reference", fontsize=15)
+    g.set_ylabel("Sample", fontsize=15, labelpad=10)
+    plt.tight_layout()
+
+    save_path = output_path / f"{model_name}_predictions.png"
+    try:
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Figure saved to: {save_path.absolute()}")
+    finally:
+        plt.close()
+
+    return g

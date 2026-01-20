@@ -5,9 +5,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from collections import Counter
-from matplotlib_venn import venn2, venn3
+from matplotlib_venn import venn2
 
 from .feature_engineering import create_feature_pipeline
 
@@ -38,6 +38,7 @@ class FeatureSelectionAnalyzer:
         y: np.ndarray,
         n_runs: int = 1000,
         random_states: List[int] = None,
+        pipeline_config: Dict = None,
     ) -> Dict[int, set]:
         """Run feature selection pipeline multiple times with different seeds.
 
@@ -46,12 +47,20 @@ class FeatureSelectionAnalyzer:
             y: Target labels.
             n_runs: Number of runs to perform.
             random_states: List of random states. If None, uses range(n_runs).
+            pipeline_config: Config dict for create_feature_pipeline (excluding random_state).
 
         Returns:
             Dictionary mapping run number to selected gene set.
         """
+        assert len(X) > 0, "X cannot be empty"
+        assert len(y) > 0, "y cannot be empty"
+        assert n_runs > 0, f"n_runs must be positive, got {n_runs}"
+
         if random_states is None:
             random_states = list(range(n_runs))
+
+        if pipeline_config is None:
+            pipeline_config = {}
 
         self.feature_sets = []
         gene_counts = Counter()
@@ -61,22 +70,13 @@ class FeatureSelectionAnalyzer:
             if (i + 1) % 100 == 0:
                 print(f"  Completed {i + 1}/{n_runs} runs...")
 
-            # Create pipeline with specific random state
-            pipe = create_feature_pipeline(random_state=random_state)
-
-            # Get selected features
+            pipe = create_feature_pipeline(
+                **pipeline_config, random_state=random_state
+            ).set_output(transform="pandas")
             X_selected = pipe.fit_transform(X, y)
-
-            # Store feature names
-            selected_genes = set(
-                X_selected.columns
-                if isinstance(X_selected, pd.DataFrame)
-                else X.columns[pipe[-1].get_support()]
-            )
-
+            selected_genes = pipe[:-1].get_feature_names_out()
             self.feature_sets.append(selected_genes)
 
-            # Count gene frequencies
             for gene in selected_genes:
                 gene_counts[gene] += 1
 
@@ -153,6 +153,46 @@ class FeatureSelectionAnalyzer:
         self.gene_frequency = gene_counts
         print(f"Loaded {len(self.feature_sets)} feature sets")
 
+    def create_fs_de_go_table(
+        self,
+        de_genes: set,
+        fs_genes: set,
+        go_df: pd.DataFrame = None,
+        output_filename: str = "Supplementary_Table_4_fsde_GO.csv",
+    ) -> pd.DataFrame:
+        """Create table of GO terms for genes in both DE and feature selection.
+
+        Args:
+            de_genes: Set of differentially expressed genes.
+            fs_genes: Set of feature-selected genes.
+            go_df: GO enrichment results DataFrame. If None, creates stub.
+            output_filename: Name for output file.
+
+        Returns:
+            DataFrame with GO terms for DE+FS genes.
+        """
+        fsde_genes = de_genes & fs_genes
+
+        if go_df is None:
+            data = {
+                "Gene": list(fsde_genes),
+                "In DE": [True] * len(fsde_genes),
+                "In FS": [True] * len(fsde_genes),
+            }
+            fsde_table = pd.DataFrame(data)
+        else:
+            fsde_table = go_df[
+                go_df["gene_symbols"].apply(
+                    lambda x: any(gene in fsde_genes for gene in x.split(", "))
+                )
+            ]
+
+        output_path = self.output_dir / output_filename
+        fsde_table.to_csv(output_path, index=False)
+        print(f"Saved FS+DE GO table to {output_path}")
+
+        return fsde_table
+
 
 class VennDiagramGenerator:
     """Generate Venn diagrams for gene set comparisons."""
@@ -191,107 +231,10 @@ class VennDiagramGenerator:
             set_labels=("Differentially Expressed Genes", "Feature Selection Genes"),
         )
         output_path = self.output_dir / output_filename
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-
-        print(f"Saved Venn diagram to {output_path}")
-        plt.close()
+        try:
+            plt.savefig(output_path, dpi=300, bbox_inches="tight")
+            print(f"Saved Venn diagram to {output_path}")
+        finally:
+            plt.close()
 
         return output_path
-
-
-class DownstreamGOAnalysis:
-    """Consolidate GO enrichment results across multiple DE analyses."""
-
-    def __init__(self, output_dir: Path = None):
-        """Initialize GO analysis.
-
-        Args:
-            output_dir: Directory for output files. Defaults to results/differential_gene_expression.
-        """
-        if output_dir is None:
-            output_dir = Path.cwd() / "results" / "differential_gene_expression"
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def merge_go_tables(
-        self,
-        go_files: List[Path],
-        output_filename: str = "Supplementary_Table_3_genes_GO.csv",
-    ) -> pd.DataFrame:
-        """Merge GO enrichment results from multiple ligand analyses.
-
-        Args:
-            go_files: List of paths to GO result CSV files.
-            output_filename: Name for merged output file.
-
-        Returns:
-            Merged DataFrame with all GO terms.
-        """
-        if not go_files:
-            raise ValueError("No GO files provided")
-
-        merged_df = None
-
-        for go_file in go_files:
-            ligand_name = go_file.stem.split("_")[0]
-            df = pd.read_csv(go_file, index_col=0)
-
-            # Add ligand identifier
-            df.insert(0, "Ligand", ligand_name)
-
-            if merged_df is None:
-                merged_df = df
-            else:
-                merged_df = pd.concat([merged_df, df], axis=0)
-
-        # Sort by FDR
-        merged_df = merged_df.sort_values("fdr", ascending=True)
-
-        output_path = self.output_dir / output_filename
-        merged_df.to_csv(output_path)
-        print(f"Saved merged GO table to {output_path}")
-
-        return merged_df
-
-    def create_fs_de_go_table(
-        self,
-        de_genes: set,
-        fs_genes: set,
-        go_df: pd.DataFrame = None,
-        output_filename: str = "Supplementary_Table_4_fsde_GO.csv",
-    ) -> pd.DataFrame:
-        """Create table of GO terms for genes in both DE and feature selection.
-
-        Args:
-            de_genes: Set of differentially expressed genes.
-            fs_genes: Set of feature-selected genes.
-            go_df: GO enrichment results DataFrame. If None, creates stub.
-            output_filename: Name for output file.
-
-        Returns:
-            DataFrame with GO terms for DE+FS genes.
-        """
-        # Get intersection of DE and FS genes
-        fsde_genes = de_genes & fs_genes
-
-        if go_df is None:
-            # Create simple table if no GO data available
-            data = {
-                "Gene": list(fsde_genes),
-                "In DE": [True] * len(fsde_genes),
-                "In FS": [True] * len(fsde_genes),
-            }
-            fsde_table = pd.DataFrame(data)
-        else:
-            # Filter GO results to FSDE genes
-            fsde_table = go_df[
-                go_df["gene_symbols"].apply(
-                    lambda x: any(gene in fsde_genes for gene in x.split(", "))
-                )
-            ]
-
-        output_path = self.output_dir / output_filename
-        fsde_table.to_csv(output_path, index=False)
-        print(f"Saved FS+DE GO table to {output_path}")
-
-        return fsde_table

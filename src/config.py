@@ -1,119 +1,114 @@
-"""Configuration constants for MAT-seq pipeline."""
+"""Configuration loader for MAT-seq pipeline."""
 
-# Color palettes for different subsets
-CUSTOM_PALETTE_6 = [
-    "#1f77b4",  # negative_control - Muted Blue
-    "#ff7f0e",  # LPS - Soft Orange
-    "#2ca02c",  # Pam3 - Green
-    "#d62728",  # R848 - Red
-    "#9467bd",  # PGN - Purple
-    "#17becf",  # Fla-PA - Teal/Cyan
-]
+import json
+from pathlib import Path
+from functools import lru_cache
+from typing import Any, Dict
 
-CUSTOM_PALETTE_8 = [
-    "#1f77b4",  # negative_control - Muted Blue
-    "#ff7f0e",  # LPS - Soft Orange
-    "#2ca02c",  # Pam3 - Green
-    "#d62728",  # R848 - Red
-    "#9467bd",  # PGN - Purple
-    "#17becf",  # Fla-PA - Teal/Cyan
-    "#e377c2",  # HK E.coli - Pink
-    "#bcbd22",  # HK S.aureus - Yellow-Green
-]
+_CONFIG_FILE = Path(__file__).parent / "config.json"
+_config_cache: Dict[str, Any] = None
 
-CUSTOM_PALETTE_9 = [
-    "#1f77b4",  # negative_control - Muted Blue
-    "#ff7f0e",  # LPS - Soft Orange
-    "#2ca02c",  # Pam3 - Green
-    "#d62728",  # R848 - Red
-    "#9467bd",  # PGN - Purple
-    "#17becf",  # Fla-PA - Teal/Cyan
-    "#8c564b",  # LTA - Brown
-    "#00fa9a",  # MPLA - Medium Spring Green
-    "#e377c2",  # Pam2 - Pink
-]
 
-# Class ordering for different data subsets
-CLASS_ORDER_TRAINING = [
-    "negative_control",
-    "LPS",
-    "Pam3",
-    "R848",
-    "PGN",
-    "Fla-PA",
-]
+@lru_cache
+def _load_config() -> dict[str, Any]:
+    config_path = Path(__file__).parent.parent / "config.json"
+    try:
+        with config_path.open() as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in config file: {e}")
 
-CLASS_ORDER_OTHER_LIGANDS = [
-    "negative_control",
-    "LPS",
-    "Pam3",
-    "R848",
-    "PGN",
-    "Fla-PA",
-    "LTA",
-    "MPLA",
-    "Pam2",
-]
 
-CLASS_ORDER_BACTERIAL = [
-    "negative_control",
-    "LPS",
-    "Pam3",
-    "R848",
-    "PGN",
-    "Fla-PA",
-    "HK E.coli",
-    "HK S.aureus",
-]
+def get_config(key: str) -> Any:
+    """Get a configuration value using dot notation.
 
-# Mapping of subset names to color palettes
+    Example:
+        get_config("paths.data_dir")
+    """
+    config = _load_config()
+    for part in key.split("."):
+        try:
+            config = config[part]
+        except (TypeError, KeyError):
+            raise KeyError(f"Config key '{key}' not found")
+    return config
+
+
+def expand_path(path_str: str) -> Path:
+    """Expand home directory and convert to Path.
+
+    Args:
+        path_str: Path string (may contain ~).
+
+    Returns:
+        Expanded Path object.
+    """
+    return Path(path_str).expanduser()
+
+
+def get_data_dir() -> Path:
+    """Get data directory path."""
+    return expand_path(get_config("paths.data_dir"))
+
+
+def get_deseq2_dir() -> Path:
+    """Get DESeq2 data directory path."""
+    return expand_path(get_config("paths.deseq2_dir"))
+
+
+def get_results_dir() -> Path:
+    """Get results directory path."""
+    return expand_path(get_config("paths.results_dir"))
+
+
+def get_cache_dir() -> Path:
+    """Get cache directory path."""
+    return expand_path(get_config("paths.cache_dir"))
+
+
+def get_figures_dir() -> Path:
+    """Get figures directory path."""
+    return expand_path(get_config("paths.figures_dir"))
+
+
+def get_featurecounts_dir() -> Path:
+    """Get featurecounts directory path."""
+    return expand_path(get_config("paths.featurecounts_dir"))
+
+
+# Load and export configuration as module-level constants for backward compatibility
+_config = _load_config()
+
+CUSTOM_PALETTE_6 = _config["colors"]["palette_6"]
+CUSTOM_PALETTE_8 = _config["colors"]["palette_8"]
+CUSTOM_PALETTE_9 = _config["colors"]["palette_9"]
+
+CLASS_ORDER_TRAINING = _config["class_orders"]["training"]
+CLASS_ORDER_OTHER_LIGANDS = _config["class_orders"]["other_ligands"]
+CLASS_ORDER_BACTERIAL = _config["class_orders"]["bacterial"]
+
 SUBSET_PALETTES = {
     "training": CUSTOM_PALETTE_6,
     "other_ligands": CUSTOM_PALETTE_9,
     "bacterial": CUSTOM_PALETTE_8,
 }
 
-# Mapping of subset names to class orders
 SUBSET_CLASS_ORDERS = {
     "training": CLASS_ORDER_TRAINING,
     "other_ligands": CLASS_ORDER_OTHER_LIGANDS,
     "bacterial": CLASS_ORDER_BACTERIAL,
 }
 
-# DESeq2 Analysis parameters
-DESEQ2_CONFIG = {
-    "padj_threshold": 0.05,
-    "log2fc_threshold": 2,
-    "baseMean_threshold": 10,
-    "n_cpus": 42,
-}
+DESEQ2_CONFIG = _config["deseq2"]
+FEATURE_SELECTION_CONFIG = _config["feature_selection"]
+MODEL_FACTORY_CONFIG = _config["model_factory"]
+MODEL_TRAINING_CONFIG = _config["model_training"]
+CLASS_LABELS = _config["class_labels"]
 
-# Feature selection parameters
-FEATURE_SELECTION_CONFIG = {
-    "k_best": 1000,
-    "n_estimators": 250,
-    "max_depth": 5,
-    "max_features": 250,
-    "feature_threshold": 0.001,
-    "random_state": 42,
-}
-
-# Model training parameters
-MODEL_TRAINING_CONFIG = {
-    "random_state": 42,
-    "apply_smote": True,
-    "smote_sampling_strategy": "not majority",
-    "smote_k_neighbors": 1,
-}
-
-# Class labels mapping
-CLASS_LABELS = {
-    "IMDM": "negative_control",
-}
-
-# DESeq2 ligand lists
-TRAINING_LIGANDS = ["Fla-PA", "LPS", "PGN", "R848", "Pam3", "PGN"]
-
-ADDITIONAL_LIGANDS = ["LTA", "MPLA", "Pam2"]
-
-ADDITIONAL_BACTERIAL = ["HKEB", "HKSA"]
+TRAINING_LIGANDS = _config["ligands"]["training"]
+ADDITIONAL_LIGANDS = _config["ligands"]["additional"]
+BACTERIAL_LIGANDS_ORIGINAL_NAMES = _config["ligands"]["bacterial"]
+BACTERIAL_LIGANDS = _config["ligands"]["bacterial_renamed"]
+TRAINING_LIGANDS_WO_FLAPA = _config["ligands"]["training_wo_flapa"]

@@ -1,10 +1,11 @@
-"""Lightweight disk-based caching system for pipeline steps."""
+"""Lightweight disk-based caching system for pipeline steps and GO files."""
 
 import pickle
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Dict
+from collections import namedtuple
 
 
 class PipelineCache:
@@ -31,14 +32,21 @@ class PipelineCache:
             Dictionary mapping cache keys to file metadata.
         """
         if self.manifest_path.exists():
-            with open(self.manifest_path, "r") as f:
-                return json.load(f)
+            try:
+                with open(self.manifest_path, "r") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Warning: Could not load manifest, starting fresh: {e}")
+                return {}
         return {}
 
     def _save_manifest(self):
         """Save manifest of cached files."""
-        with open(self.manifest_path, "w") as f:
-            json.dump(self.manifest, f, indent=2)
+        try:
+            with open(self.manifest_path, "w") as f:
+                json.dump(self.manifest, f, indent=2)
+        except IOError as e:
+            print(f"Warning: Could not save manifest: {e}")
 
     def _get_cache_key(self, name: str, params: dict = None) -> str:
         """Generate cache key from name and parameters.
@@ -192,3 +200,135 @@ class PipelineCache:
             List of cached item metadata.
         """
         return list(self.manifest.values())
+
+
+# Global memory cache for GO files
+_go_dag_cache: Optional[Any] = None
+_gene2go_cache: Optional[Any] = None
+_geneid2nt_cache: Optional[Dict[int, Any]] = None
+
+
+def load_geneid2nt(gene_file: Path) -> Dict[int, Any]:
+    """Load GENEID2NT from gene_result_ncbi_human_proteincoding.txt file (cached).
+
+    Args:
+        gene_file: Path to gene file.
+
+    Returns:
+        Dictionary mapping GeneID to ntncbi namedtuples.
+    """
+    global _geneid2nt_cache
+    if _geneid2nt_cache is not None:
+        return _geneid2nt_cache
+
+    ntncbi = namedtuple(
+        "ntncbi",
+        "tax_id Org_name GeneID CurrentID Status Symbol Aliases description other_designations map_location chromosome genomic_nucleotide_accession_version start_position_on_the_genomic_accession end_position_on_the_genomic_accession orientation exon_count OMIM",
+    )
+
+    geneid2nt = {}
+    try:
+        with open(gene_file, "r", encoding="utf-8") as f:
+            next(f)
+            for line in f:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                fields = line.split("\t")
+                if len(fields) >= 17:
+                    try:
+                        gene_id = int(fields[2])
+                        genomic_acc = fields[11].replace(".", "_")
+                        entry = ntncbi(
+                            tax_id=fields[0],
+                            Org_name=fields[1],
+                            GeneID=gene_id,
+                            CurrentID=fields[3],
+                            Status=fields[4],
+                            Symbol=fields[5],
+                            Aliases=fields[6],
+                            description=fields[7],
+                            other_designations=fields[8],
+                            map_location=fields[9],
+                            chromosome=fields[10],
+                            genomic_nucleotide_accession_version=genomic_acc,
+                            start_position_on_the_genomic_accession=fields[12],
+                            end_position_on_the_genomic_accession=fields[13],
+                            orientation=fields[14],
+                            exon_count=fields[15],
+                            OMIM=fields[16],
+                        )
+                        geneid2nt[gene_id] = entry
+                    except (ValueError, IndexError):
+                        continue
+        _geneid2nt_cache = geneid2nt
+        return geneid2nt
+    except Exception as e:
+        print(f"Warning: Could not load gene file {gene_file}: {e}")
+        _geneid2nt_cache = {}
+        return {}
+
+
+def load_go_dag(obo_file: Path) -> Any:
+    """Load GO DAG from obo file (cached).
+
+    Args:
+        obo_file: Path to go-basic.obo file.
+
+    Returns:
+        GODag instance.
+    """
+    global _go_dag_cache
+    if _go_dag_cache is not None:
+        return _go_dag_cache
+
+    try:
+        from goatools.obo_parser import GODag as _GODag
+        _go_dag_cache = _GODag(str(obo_file))
+        return _go_dag_cache
+    except Exception as e:
+        print(f"Warning: Could not load GO DAG from {obo_file}: {e}")
+        return None
+
+
+def load_gene2go(gene2go_file: Path, taxids: list = None, namespaces: set = None) -> Any:
+    """Load gene to GO associations (cached).
+
+    Args:
+        gene2go_file: Path to gene2go file.
+        taxids: List of taxonomy IDs to load (default: [9606] for human).
+        namespaces: Set of GO namespaces (default: {'BP'}).
+
+    Returns:
+        Gene2GoReader instance.
+    """
+    global _gene2go_cache
+    if _gene2go_cache is not None:
+        return _gene2go_cache
+
+    if taxids is None:
+        taxids = [9606]
+    else:
+        taxids = [int(t) for t in taxids]
+    if namespaces is None:
+        namespaces = {"BP"}
+    else:
+        namespaces = set(namespaces)
+
+    try:
+        from goatools.anno.genetogo_reader import Gene2GoReader as _Gene2GoReader
+        _gene2go_cache = _Gene2GoReader(
+            str(gene2go_file), taxids=taxids, namespaces=namespaces
+        )
+        return _gene2go_cache
+    except Exception as e:
+        print(f"Warning: Could not load gene2go from {gene2go_file}: {e}")
+        return None
+
+
+def clear_go_cache() -> None:
+    """Clear all cached GO data."""
+    global _go_dag_cache, _gene2go_cache, _geneid2nt_cache
+    _go_dag_cache = None
+    _gene2go_cache = None
+    _geneid2nt_cache = None
