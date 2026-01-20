@@ -2,13 +2,24 @@
 # name: MATseq pipeline
 # description: Monocyte activation test transcriptomes analysis pipeline
 # author: Tess Afanasyeva
-# date: 2024-01-01
+# date: 2026-01-20
 
 import os
 import random
 import csv
 import datetime
 from glob import glob
+
+sys.path.append(str(Path(__file__).parent.parent / "src"))
+from config import get_work_dir, get_sample_dir, get_genome_dir
+
+WORKDIR = get_work_dir()
+SAMPLEDIR = get_sample_dir()
+GENOMEDIR = get_genome_dir()
+
+print("WORKDIR:", WORKDIR)
+print("SAMPLEDIR:", SAMPLEDIR)
+print("GENOMEDIR:", GENOMEDIR)
 
 def compile_benchmarks(benchmark: str, stats: str):
     """Aggregate all the benchmark files into one and put it in stats"""
@@ -37,9 +48,8 @@ def compile_benchmarks(benchmark: str, stats: str):
                 reader = csv.reader(g, delimiter="\t")
                 next(reader)  # Headers line
                 writer.writerow([fp[:-4]] + next(reader))
-
 # Getting sample names and _R1 and _R2 strings
-SAMPLES, _, _, PAIRED = map(set, glob_wildcards(os.path.join(config['SampleDir'], "{samples}_{tag}_{other}_{paired}.fastq.gz")))
+SAMPLES, _, _, PAIRED = map(set, glob_wildcards(os.path.join(SAMPLEDIR, "{samples}_{tag}_{other}_{paired}.fastq.gz")))
 SAMPLE_RUN_DICTIONARY = {}
 for sample in SAMPLES:
     sample_id = sample.split("_")[1]
@@ -54,7 +64,7 @@ Target rules
 """
 
 onsuccess:
-    compile_benchmarks(benchmark=os.path.join(config['WorkDir'], "benchmarks"), stats=os.path.join(config['WorkDir'], "stats"))
+    compile_benchmarks(benchmark=os.path.join(WORKDIR, "benchmarks"), stats=os.path.join(WORKDIR, "stats"))
     print("Workflow finished successfully.")
 
 ruleorder:

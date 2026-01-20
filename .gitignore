@@ -53,6 +53,7 @@ venv/
 /data/deseq2/*.obo
 /data/deseq2/*.gz
 /data/deseq2/gene2go
+/data/raw/
 
 
 #ignore markdown files

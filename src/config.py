@@ -48,6 +48,21 @@ def expand_path(path_str: str) -> Path:
     return Path(path_str).expanduser()
 
 
+def get_work_dir() -> Path:
+    """Get Snakemake working directory."""
+    return expand_path(get_config("snakemake.work_dir"))
+
+
+def get_sample_dir() -> Path:
+    """Get directory containing input samples."""
+    return expand_path(get_config("snakemake.sample_dir"))
+
+
+def get_genome_dir() -> Path:
+    """Get genome reference directory."""
+    return expand_path(get_config("snakemake.genome_dir"))
+
+
 def get_data_dir() -> Path:
     """Get data directory path."""
     return expand_path(get_config("paths.data_dir"))

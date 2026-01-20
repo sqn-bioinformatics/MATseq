@@ -1,0 +1,147 @@
+{
+  "paths": {
+    "data_dir": "~/MAT_rebase/data",
+    "deseq2_dir": "~/MAT_rebase/data/deseq2",
+    "results_dir": "~/MAT_rebase/results",
+    "cache_dir": "~/MAT_rebase/results/cache",
+    "figures_dir": "~/MAT_rebase/results/figures",
+    "featurecounts_dir": "~/MAT_rebase/results/featurecounts"
+  },
+  "deseq2": {
+    "padj_threshold": 0.05,
+    "log2fc_threshold": 2,
+    "baseMean_threshold": 10,
+    "n_cpus": 42
+  },
+  "feature_selection": {
+    "k_best": 1000,
+    "n_estimators": 250,
+    "max_depth": 5,
+    "max_features": 250,
+    "feature_threshold": 0.001,
+    "random_state": 42
+  },
+  "model_training": {
+    "random_state": 42,
+    "apply_smote": true,
+    "smote_sampling_strategy": "not majority",
+    "smote_k_neighbors": 1
+  },
+  "model_factory": {
+    "random_state": 42,
+    "calibrate": true
+  },
+  "colors": {
+    "palette_6": [
+      "#1f77b4",
+      "#ff7f0e",
+      "#2ca02c",
+      "#d62728",
+      "#9467bd",
+      "#17becf"
+    ],
+    "palette_8": [
+      "#1f77b4",
+      "#ff7f0e",
+      "#2ca02c",
+      "#d62728",
+      "#9467bd",
+      "#17becf",
+      "#e377c2",
+      "#bcbd22"
+    ],
+    "palette_9": [
+      "#1f77b4",
+      "#ff7f0e",
+      "#2ca02c",
+      "#d62728",
+      "#9467bd",
+      "#17becf",
+      "#8c564b",
+      "#00fa9a",
+      "#e377c2"
+    ]
+  },
+  "class_orders": {
+    "training": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
+      "PGN",
+      "Fla-PA"
+    ],
+    "other_ligands": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
+      "PGN",
+      "Fla-PA",
+      "LTA",
+      "MPLA",
+      "Pam2"
+    ],
+    "bacterial": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
+      "PGN",
+      "Fla-PA",
+      "HK E.coli",
+      "HK S.aureus"
+    ],
+    "training_wo_flapa": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
+      "PGN"
+    ]
+  },
+  "subset_palettes": {
+    "training": "palette_6",
+    "other_ligands": "palette_9",
+    "bacterial": "palette_8"
+  },
+  "ligands": {
+    "training": [
+      "Fla-PA",
+      "LPS",
+      "PGN",
+      "R848",
+      "Pam3",
+      "negative_control"
+    ],
+    "additional": [
+      "LTA",
+      "MPLA",
+      "Pam2"
+    ],
+    "bacterial": [
+      "HKSA",
+      "HKEB"
+    ],
+    "bacterial_renamed": [
+      "HK E.coli",
+      "HK S.aureus"
+    ],
+    "training_wo_flapa": [
+      "LPS",
+      "PGN",
+      "R848",
+      "Pam3",
+      "negative_control"
+    ]
+  },
+  "snakemake": {
+    "sample_dir": "~/MAT_rebase/data/raw",
+    "work_dir": "~/MAT_rebase/pipeline/results",
+    "genome_dir": "~/reference_genome/GRCh38_GCA_000001405.40",
+    "threads": 42
+  },
+  "class_labels": {
+    "IMDM": "negative_control"
+  }
+}
