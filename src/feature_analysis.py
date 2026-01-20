@@ -68,8 +68,11 @@ class FeatureSelectionAnalyzer:
             X_selected = pipe.fit_transform(X, y)
 
             # Store feature names
-            selected_genes = set(X_selected.columns if isinstance(X_selected, pd.DataFrame)
-                                else X.columns[pipe[-1].get_support()])
+            selected_genes = set(
+                X_selected.columns
+                if isinstance(X_selected, pd.DataFrame)
+                else X.columns[pipe[-1].get_support()]
+            )
 
             self.feature_sets.append(selected_genes)
 
@@ -101,11 +104,13 @@ class FeatureSelectionAnalyzer:
         data = []
         for gene, count in self.gene_frequency.most_common():
             is_de = gene in de_genes if de_genes else False
-            data.append({
-                "Gene": gene,
-                "Count": count,
-                "Differentially Expressed": is_de,
-            })
+            data.append(
+                {
+                    "Gene": gene,
+                    "Count": count,
+                    "Differentially Expressed": is_de,
+                }
+            )
 
         df = pd.DataFrame(data)
 
@@ -163,19 +168,17 @@ class VennDiagramGenerator:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def plot_de_vs_feature_selection(
+    def plot_venn(
         self,
         de_genes: set,
-        feature_selected_genes: set,
-        title: str = "DE genes vs Feature Selected genes",
-        output_filename: str = "venn_de_vs_fs.png",
+        fs_genes: set,
+        output_filename: str,
     ) -> Path:
         """Create 2-way Venn diagram comparing DE and feature-selected genes.
 
         Args:
             de_genes: Set of differentially expressed genes.
-            feature_selected_genes: Set of feature-selected genes.
-            title: Title for the diagram.
+            fs_genes: Set of feature-selected genes.
             output_filename: Name for output file.
 
         Returns:
@@ -184,52 +187,13 @@ class VennDiagramGenerator:
         plt.figure(figsize=(8, 8))
 
         venn2(
-            [de_genes, feature_selected_genes],
-            set_labels=("DE genes", "Feature Selected"),
+            [de_genes, fs_genes],
+            set_labels=("Differentially Expressed Genes", "Feature Selection Genes"),
         )
-
-        plt.title(title, fontsize=14, fontweight="bold")
-        plt.tight_layout()
-
         output_path = self.output_dir / output_filename
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
         print(f"Saved Venn diagram to {output_path}")
-        plt.close()
-
-        return output_path
-
-    def plot_three_way_comparison(
-        self,
-        set1: set,
-        set2: set,
-        set3: set,
-        labels: Tuple[str, str, str] = ("Set 1", "Set 2", "Set 3"),
-        title: str = "Three-way Venn diagram",
-        output_filename: str = "venn_3way.png",
-    ) -> Path:
-        """Create 3-way Venn diagram.
-
-        Args:
-            set1: First gene set.
-            set2: Second gene set.
-            set3: Third gene set.
-            labels: Labels for the three sets.
-            title: Title for the diagram.
-            output_filename: Name for output file.
-
-        Returns:
-            Path to saved figure.
-        """
-        plt.figure(figsize=(10, 10))
-
-        venn3([set1, set2, set3], set_labels=labels)
-
-        plt.title(title, fontsize=14, fontweight="bold")
-        plt.tight_layout()
-
-        output_path = self.output_dir / output_filename
-        plt.savefig(output_path, dpi=300, bbox_inches="tight")
-        print(f"Saved 3-way Venn diagram to {output_path}")
         plt.close()
 
         return output_path
@@ -320,9 +284,11 @@ class DownstreamGOAnalysis:
             fsde_table = pd.DataFrame(data)
         else:
             # Filter GO results to FSDE genes
-            fsde_table = go_df[go_df["gene_symbols"].apply(
-                lambda x: any(gene in fsde_genes for gene in x.split(", "))
-            )]
+            fsde_table = go_df[
+                go_df["gene_symbols"].apply(
+                    lambda x: any(gene in fsde_genes for gene in x.split(", "))
+                )
+            ]
 
         output_path = self.output_dir / output_filename
         fsde_table.to_csv(output_path, index=False)

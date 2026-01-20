@@ -95,7 +95,7 @@ class ModelTrainer:
 
     def __init__(
         self,
-        X: pd.DataFrame,
+        X: np.ndarray,
         y: np.ndarray,
         models: Dict = None,
         apply_smote: bool = True,
@@ -111,7 +111,7 @@ class ModelTrainer:
             random_state: Random state for reproducibility.
         """
         self.X = X
-        self.y = y if isinstance(y, np.ndarray) else np.array(y)
+        self.y = y
         self.models = models or ModelFactory.create_models(random_state=random_state)
         self.apply_smote = apply_smote
         self.random_state = random_state

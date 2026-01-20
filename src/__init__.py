@@ -34,8 +34,7 @@ from .config import (
     MODEL_TRAINING_CONFIG,
     CLASS_LABELS,
     TRAINING_LIGANDS,
-    ADDITIONAL_TLR_LIGANDS,
-    NEGATIVE_CONTROL,
+    ADDITIONAL_LIGANDS,
 )
 
 from .utils import get_output_path, save_fig, save_csv
@@ -91,8 +90,7 @@ __all__ = [
     "MODEL_TRAINING_CONFIG",
     "CLASS_LABELS",
     "TRAINING_LIGANDS",
-    "ADDITIONAL_TLR_LIGANDS",
-    "NEGATIVE_CONTROL",
+    "ADDITIONAL_LIGANDS",
     # Preprocessing
     "merge_counts",
     "filter_counts",

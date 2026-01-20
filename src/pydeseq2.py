@@ -14,7 +14,7 @@ from pydeseq2.dds import DeseqDataSet
 from pydeseq2.ds import DeseqStats
 from pydeseq2.default_inference import DefaultInference
 
-from .utils import save_csv, get_output_path, CUSTOM_PALETTE_6
+from .utils import save_csv, CUSTOM_PALETTE_6
 
 # Lazy imports for optional dependencies
 sc = None
@@ -30,6 +30,7 @@ def _load_scanpy():
     global sc
     if sc is None:
         import scanpy as _sc
+
         sc = _sc
 
 
@@ -38,6 +39,7 @@ def _load_adjust_text():
     global adjust_text
     if adjust_text is None:
         from adjustText import adjust_text as _adjust_text
+
         adjust_text = _adjust_text
 
 
@@ -49,9 +51,17 @@ def _load_geneid2nt():
     """
     from collections import namedtuple
 
-    ntncbi = namedtuple('ntncbi', 'tax_id Org_name GeneID CurrentID Status Symbol Aliases description other_designations map_location chromosome genomic_nucleotide_accession_version start_position_on_the_genomic_accession end_position_on_the_genomic_accession orientation exon_count OMIM')
+    ntncbi = namedtuple(
+        "ntncbi",
+        "tax_id Org_name GeneID CurrentID Status Symbol Aliases description other_designations map_location chromosome genomic_nucleotide_accession_version start_position_on_the_genomic_accession end_position_on_the_genomic_accession orientation exon_count OMIM",
+    )
 
-    gene_file = Path(__file__).parent.parent / "data" / "deseq2" / "gene_result_ncbi_human_proteincoding.txt"
+    gene_file = (
+        Path(__file__).parent.parent
+        / "data"
+        / "deseq2"
+        / "gene_result_ncbi_human_proteincoding.txt"
+    )
 
     if not gene_file.exists():
         print(f"Warning: Gene result file not found at {gene_file}")
@@ -59,18 +69,18 @@ def _load_geneid2nt():
 
     geneid2nt = {}
     try:
-        with open(gene_file, 'r', encoding='utf-8') as f:
+        with open(gene_file, "r", encoding="utf-8") as f:
             # Skip header line
             next(f)
             for line in f:
-                line = line.rstrip('\n')
+                line = line.rstrip("\n")
                 if not line:
                     continue
-                fields = line.split('\t')
+                fields = line.split("\t")
                 if len(fields) >= 17:
                     try:
                         gene_id = int(fields[2])
-                        genomic_acc = fields[11].replace('.', '_')
+                        genomic_acc = fields[11].replace(".", "_")
                         entry = ntncbi(
                             tax_id=fields[0],
                             Org_name=fields[1],
@@ -121,69 +131,66 @@ class DataProcessor:
     def __init__(
         self,
         raw_counts: pd.DataFrame,
+        sample_labels: pd.Series,
         classes: list[str],
         n_cpus: int,
     ):
         """Initialize data processor.
 
         Args:
-            raw_counts: DataFrame with gene counts (multiindexed by sample/label).
+            raw_counts: DataFrame with gene counts (samples as rows, genes as columns).
+            sample_labels: Series with sample class labels.
             classes: List of class labels to compare (must be 2 for comparison).
             n_cpus: Number of CPUs for parallel processing.
         """
+        if len(raw_counts) != len(sample_labels):
+            raise ValueError(
+                f"raw_counts ({len(raw_counts)}) and sample_labels ({len(sample_labels)}) must have same length"
+            )
         self.raw_counts = raw_counts
+        self.sample_labels = sample_labels
         self.classes = classes
         self.n_cpus = n_cpus
-
-    @staticmethod
-    def make_pairs_with_negative_control(
-        class_list: list[str], negative_control: str = "IMDM"
-    ) -> list[list[str]]:
-        """Create pairs of classes with negative control for comparison.
-
-        Args:
-            class_list: List of class names to pair with negative control.
-            negative_control: Name of the negative control class.
-
-        Returns:
-            List of [class, negative_control] pairs.
-        """
-        return [[my_class, negative_control] for my_class in class_list]
 
     def prepare_metadata(self) -> pd.DataFrame:
         """Prepare metadata for DESeq2 analysis.
 
         Returns:
-            DataFrame with metadata for comparison.
+            DataFrame with metadata (condition column) indexed by sample names.
 
         Raises:
             ValueError: If invalid class configuration.
         """
         if len(self.classes) != 2:
             raise ValueError(
-                "prepare_metadata() takes a list with exactly two classes (str) as a condition."
+                f"Expected exactly 2 classes for comparison, got {len(self.classes)}: {self.classes}"
             )
 
-        samples_to_compare = list(
-            self.raw_counts[
-                self.raw_counts.index.get_level_values("label").isin(self.classes)
-            ].index
-        )
+        # Filter samples and labels for the classes being compared
+        mask = self.sample_labels.isin(self.classes)
+        sample_names = self.raw_counts.index[mask]
+        labels = self.sample_labels[mask]
 
-        number_of_unique_classes = len(
-            (
-                self.raw_counts.loc[samples_to_compare]
-                .index.get_level_values("label")
-                .unique()
-            )
-        )
-        if number_of_unique_classes <= 1:
+        unique_labels = labels.unique()
+        if len(unique_labels) < 2:
             raise ValueError(
-                f"Provided counts for {number_of_unique_classes} class(es). Please provide counts for at least two classes."
+                f"Must have at least 2 unique classes in data. Got {len(unique_labels)}: {unique_labels.tolist()}"
             )
 
-        metadata = pd.DataFrame(samples_to_compare, columns=["index", "condition"])
-        metadata.set_index("index", inplace=True)
+        # Verify both classes exist in the filtered data
+        for cls in self.classes:
+            if cls not in unique_labels:
+                raise ValueError(
+                    f"Class '{cls}' not found in sample labels. Available: {unique_labels.tolist()}"
+                )
+
+        # Create metadata DataFrame with condition as categorical
+        # This is required by pydeseq2 to properly set reference levels
+        condition_cat = pd.Categorical(
+            labels.values, categories=self.classes, ordered=False
+        )
+
+        metadata = pd.DataFrame({"condition": condition_cat}, index=sample_names)
 
         return metadata
 
@@ -194,20 +201,20 @@ class DataProcessor:
             AnnData object with DESeq2 results.
         """
         metadata = self.prepare_metadata()
-        counts = self.raw_counts.loc[metadata.index]
+        counts = self.raw_counts.loc[metadata.index].copy()
 
         # Filter genes with low total counts
         counts = counts[counts.columns[counts.sum(axis=0) >= 10]]
 
-        # Convert multi-indexed DataFrame to single-indexed
-        counts.reset_index(level="label", drop=True, inplace=True)
+        print(f"DESeq2 analysis: {counts.shape[0]} samples, {counts.shape[1]} genes")
 
         dds = DeseqDataSet(
             counts=counts,
             metadata=metadata,
-            design_factors=metadata.columns,
+            design_factors=["condition"],
             refit_cooks=True,
             inference=DefaultInference(self.n_cpus),
+            quiet=True,
         )
         dds.deseq2()
         return dds
@@ -228,9 +235,16 @@ class DataProcessor:
         """
         dds = self.make_dds()
 
+        # pydeseq2 converts underscores to hyphens in factor levels
+        tested_level = self.classes[0].replace("_", "-")
+        ref_level = self.classes[1].replace("_", "-")
+        contrast = ["condition", tested_level, ref_level]
+
+        print(f"DESeq2 contrast: {tested_level} vs {ref_level}")
+
         stat_res = DeseqStats(
             dds,
-            contrast=("condition", *self.classes),
+            contrast=contrast,
             inference=DefaultInference(self.n_cpus),
             quiet=True,
         )
@@ -245,7 +259,9 @@ class DataProcessor:
         ]
 
         if sigs.empty:
-            print("Warning: No significant genes found with current thresholds.")
+            print(
+                f"Warning: No significant genes found (padj < {padj_value}, |log2FC| > {log2foldchange_value})"
+            )
 
         return dds, res, sigs
 
@@ -266,6 +282,7 @@ class Plotter:
         res: pd.DataFrame,
         sigs: pd.DataFrame,
         analysis_name: str,
+        figures_dir: Path = None,
     ):
         """Initialize plotter with DESeq2 results.
 
@@ -274,11 +291,14 @@ class Plotter:
             res: DataFrame with all DESeq2 results.
             sigs: DataFrame with significant genes.
             analysis_name: Name for this analysis (used in filenames).
+            figures_dir: Directory for saving figures.
         """
         self.dds = dds
         self.res = res
         self.sigs = sigs
         self.analysis_name = analysis_name
+        self.figures_dir = figures_dir or (Path.cwd() / "results" / "figures" / "deseq2")
+        self.figures_dir.mkdir(parents=True, exist_ok=True)
 
         if not Plotter.is_initialized:
             self._initialise_go()
@@ -297,6 +317,7 @@ class Plotter:
         """
         try:
             import urllib.request
+
             print(f"Downloading {url}...")
             target_path.parent.mkdir(parents=True, exist_ok=True)
             urllib.request.urlretrieve(url, target_path)
@@ -322,18 +343,17 @@ class Plotter:
 
         # Check and download missing files
         gene2go_gz_file = path_to_supporting_files / "gene2go.gz"
+        gene2go_file = path_to_supporting_files / "gene2go"
         obo_file = path_to_supporting_files / "go-basic.obo"
 
-        if not gene2go_gz_file.exists():
+        if not gene2go_gz_file.exists() or not gene2go_file.exists():
             cls._download_file(
-                "https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2go.gz",
-                gene2go_gz_file
+                "https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2go.gz", gene2go_gz_file
             )
 
         if not obo_file.exists():
             cls._download_file(
-                "https://current.geneontology.org/ontology/go-basic.obo",
-                obo_file
+                "https://current.geneontology.org/ontology/go-basic.obo", obo_file
             )
 
         # Verify files exist
@@ -347,9 +367,7 @@ class Plotter:
             from goatools.base import gunzip
 
             gene2go_file = gunzip(str(gene2go_gz_file))
-            genes = Gene2GoReader(
-                gene2go_file, taxids=[9606], namespaces={"BP"}
-            )
+            genes = Gene2GoReader(gene2go_file, taxids=[9606], namespaces={"BP"})
             ns2assoc = genes.get_ns2assc()
             obodag = GODag(str(obo_file))
 
@@ -391,8 +409,7 @@ class Plotter:
 
         fontsize = 12
         fig_extension = "png"
-        output_path = get_output_path()
-        fname = output_path / f"{self.analysis_name}_{plot_type}.{fig_extension}"
+        fname = self.figures_dir / f"{self.analysis_name}_{plot_type}.{fig_extension}"
 
         if plot_type == "volcano":
             fig = self.plot_volcano()
@@ -425,7 +442,7 @@ class Plotter:
                 fontweight="bold",
             )
             go_df = self.generate_go_table()
-            save_csv(go_df, f"{self.analysis_name}_go_terms")
+            save_csv(go_df, f"{self.analysis_name}_go_terms", output_path=self.figures_dir)
 
         fig.figure.savefig(fname, format=fig_extension, dpi=300, bbox_inches="tight")
         print(f"Figure saved: {fname}")
@@ -643,16 +660,12 @@ class Plotter:
             if gene in Plotter.geneid_symbol_mapper_human
         ]
 
-        print(
-            f"Mapped {len(sigs_ids)/len(self.sigs.index)*100:.2f}% of gene symbols."
-        )
+        print(f"Mapped {len(sigs_ids)/len(self.sigs.index)*100:.2f}% of gene symbols.")
 
         goea_results = Plotter.goeaobj.run_study(sigs_ids, prt=None)
         goea_results_sig = [r for r in goea_results if r.p_fdr_bh < 0.05]
 
-        inverted_mapping = {
-            v: k for k, v in Plotter.geneid_symbol_mapper_human.items()
-        }
+        inverted_mapping = {v: k for k, v in Plotter.geneid_symbol_mapper_human.items()}
 
         go_df = pd.DataFrame(
             list(
@@ -733,7 +746,7 @@ class AnalysisPipeline:
     def __init__(
         self,
         raw_counts: pd.DataFrame,
-        sample_labels: pd.Series = None,
+        sample_labels: pd.Series,
         output_dir: Path = None,
         padj_threshold: float = 0.05,
         log2fc_threshold: int = 2,
@@ -743,33 +756,19 @@ class AnalysisPipeline:
 
         Args:
             raw_counts: DataFrame with gene counts (samples as rows, genes as columns).
-            sample_labels: Series with sample labels. If None, extracts from index by splitting on "_".
+            sample_labels: Series with sample class labels.
             output_dir: Directory for output files. Defaults to results/differential_gene_expression.
             padj_threshold: Adjusted p-value threshold for significance.
             log2fc_threshold: Log2 fold-change threshold.
             n_cpus: Number of CPUs for parallel processing.
         """
-        # Prepare raw counts with multiindex if needed
-        if sample_labels is not None:
-            self.raw_counts = raw_counts.copy()
-            self.raw_counts.index = pd.MultiIndex.from_arrays(
-                [self.raw_counts.index, sample_labels], names=["samples", "label"]
+        if len(raw_counts) != len(sample_labels):
+            raise ValueError(
+                f"raw_counts ({len(raw_counts)}) and sample_labels ({len(sample_labels)}) must have same length"
             )
-        elif isinstance(raw_counts.index, pd.MultiIndex):
-            self.raw_counts = raw_counts
-        else:
-            # Extract labels from sample names and apply label mapping
-            labels = [i.split("_")[2] for i in raw_counts.index]
-            label_mapping = {
-                "HKSA": "HK S.aureus",
-                "HKEB": "HK E.coli",
-                "IMDM": "negative_control",
-            }
-            labels = [label_mapping.get(label, label) for label in labels]
-            self.raw_counts = raw_counts.copy()
-            self.raw_counts.index = pd.MultiIndex.from_arrays(
-                [self.raw_counts.index, labels], names=["samples", "label"]
-            )
+
+        self.raw_counts = raw_counts.copy()
+        self.sample_labels = pd.Series(sample_labels.values, index=raw_counts.index)
 
         self.padj_threshold = padj_threshold
         self.log2fc_threshold = log2fc_threshold
@@ -787,7 +786,7 @@ class AnalysisPipeline:
         self.de_genes = set()
 
     def run_analysis(
-        self, class_list: list[str], negative_control: str = "nc"
+        self, class_list: list[str], negative_control: str = "negative_control"
     ) -> dict:
         """Run DESeq2 analysis for all class pairs with negative control.
 
@@ -799,10 +798,7 @@ class AnalysisPipeline:
             Dictionary with results for each ligand.
         """
         # Create pairs with negative control
-        pairs = DataProcessor.make_pairs_with_negative_control(
-            class_list, negative_control
-        )
-
+        pairs = [[my_class, negative_control] for my_class in class_list]
         results_list = []
 
         for class_pair in pairs:
@@ -811,6 +807,7 @@ class AnalysisPipeline:
 
             processor = DataProcessor(
                 raw_counts=self.raw_counts,
+                sample_labels=self.sample_labels,
                 classes=class_pair,
                 n_cpus=self.n_cpus,
             )
@@ -828,7 +825,7 @@ class AnalysisPipeline:
             }
 
             # Save results CSV
-            res_output = self.output_dir / f"{ligand_name}_results.csv"
+            res_output = self.output_dir / f"{ligand_name}_deseq2_results.csv"
             res.to_csv(res_output)
             print(f"Saved results to {res_output}")
 
@@ -860,7 +857,7 @@ class AnalysisPipeline:
             merged.to_csv(merged_output)
             print(f"Saved merged results to {merged_output}")
 
-        return self.results
+        return processor, self.results
 
     def _generate_figures(
         self, ligand_name: str, dds: AnnData, res: pd.DataFrame, sigs: pd.DataFrame
@@ -873,7 +870,7 @@ class AnalysisPipeline:
             res: Full results DataFrame.
             sigs: Significant genes DataFrame.
         """
-        plotter = Plotter(dds, res, sigs, ligand_name)
+        plotter = Plotter(dds, res, sigs, ligand_name, figures_dir=self.figures_dir)
 
         # Generate individual plots
         plotter.make_figure("volcano")
@@ -886,158 +883,10 @@ class AnalysisPipeline:
         except Exception as e:
             print(f"Warning: GO enrichment failed for {ligand_name}: {e}")
 
-    def save_de_genes(self, filename: str = "de_genes.txt"):
-        """Save list of all differentially expressed genes.
+    def get_de_genes(self):
+        """Provide list of all differentially expressed genes.
 
         Args:
-            filename: Name of output file.
+            None.
         """
-        output_path = self.output_dir / filename
-        with open(output_path, "w") as f:
-            for gene in sorted(self.de_genes):
-                f.write(f"{gene}\n")
-        print(f"Saved {len(self.de_genes)} DE genes to {output_path}")
-
-    def create_supplementary_figure_1a(
-        self, comparison_pairs: list[Tuple[str, str]] = None
-    ):
-        """Create 1x2 supplementary figure with volcano and histogram.
-
-        Args:
-            comparison_pairs: List of (ligand, negative_control) pairs to plot.
-                            If None, uses all computed results.
-        """
-        if comparison_pairs is None:
-            comparison_pairs = [(k, "nc") for k in self.results.keys()]
-
-        for ligand_name, nc_name in comparison_pairs:
-            if ligand_name not in self.results:
-                print(f"Warning: No results for {ligand_name}")
-                continue
-
-            dds = self.results[ligand_name]["dds"]
-            res = self.results[ligand_name]["results"]
-            sigs = self.results[ligand_name]["significant"]
-
-            if sigs.empty:
-                print(f"Skipping {ligand_name}: No significant genes")
-                continue
-
-            plotter = Plotter(dds, res, sigs, ligand_name)
-
-            # Create 1x2 layout: volcano + histogram
-            fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-
-            # Volcano plot (left)
-            _plot_volcano_on_ax(axes[0], plotter, res)
-
-            # Histogram/heatmap (right)
-            # Use simplified version since we need subplot integration
-            num_top_sig = 50
-            if num_top_sig != "all":
-                sigs_plot = sigs.sort_values("padj")[:num_top_sig]
-            else:
-                sigs_plot = sigs
-
-            dds_sigs = dds[:, sigs_plot.index]
-            dds_sigs.layers["log1p"] = np.log1p(dds_sigs.layers["normed_counts"])
-
-            grapher = pd.DataFrame(
-                dds_sigs.layers["log1p"].T,
-                index=dds_sigs.var_names,
-                columns=dds_sigs.obs.condition,
-            )
-
-            sns.heatmap(grapher, cmap="RdYlBu_r", ax=axes[1], cbar_kws=dict(label="log1p counts"))
-            axes[1].set_title(f"{ligand_name} Top {len(sigs_plot)} DE Genes")
-            axes[1].set_xlabel("Sample Condition")
-            axes[1].set_ylabel("Gene")
-
-            plt.suptitle(f"{ligand_name} vs {nc_name}", fontsize=14, fontweight="bold")
-            plt.tight_layout()
-
-            output_path = self.figures_dir / f"Supplementary_Figure_1A_{ligand_name}.png"
-            plt.savefig(output_path, dpi=300, bbox_inches="tight")
-            print(f"Saved supplementary figure to {output_path}")
-            plt.close(fig)
-
-
-def _plot_volcano_on_ax(ax, plotter: Plotter, res: pd.DataFrame, log2foldchange: float = 2):
-    """Plot volcano plot on existing matplotlib axis.
-
-    Args:
-        ax: Matplotlib axis to plot on.
-        plotter: Plotter instance with data.
-        res: Results DataFrame.
-        log2foldchange: Log2 fold-change threshold.
-    """
-    _load_adjust_text()
-
-    grapher = res.assign(
-        padj_log=res["padj"].apply(
-            lambda x: -np.log10(x) if x != 0 else -np.log10(x + 1e-300)
-        ),
-        color="no_expression_change",
-    )
-
-    grapher.loc[grapher["log2FoldChange"] > log2foldchange, "color"] = "overexpressed"
-    grapher.loc[grapher["log2FoldChange"] < -log2foldchange, "color"] = "underexpressed"
-
-    grapher_subset = grapher[grapher["color"].isin(["overexpressed", "underexpressed"])]
-
-    sorted_padj = grapher_subset.sort_values("padj_log", ascending=False)
-    sorted_lfc = grapher_subset.sort_values("log2FoldChange", ascending=True)
-
-    annotation_subset = pd.concat(
-        [sorted_padj.head(20), sorted_lfc.head(10), sorted_lfc.tail(10)]
-    ).drop_duplicates()
-
-    ax.scatter(
-        grapher[grapher["color"] == "no_expression_change"]["log2FoldChange"],
-        grapher[grapher["color"] == "no_expression_change"]["padj_log"],
-        c="grey",
-        alpha=0.5,
-        s=20,
-        label="No change",
-    )
-    ax.scatter(
-        grapher[grapher["color"] == "overexpressed"]["log2FoldChange"],
-        grapher[grapher["color"] == "overexpressed"]["padj_log"],
-        c="orange",
-        alpha=0.7,
-        s=30,
-        label="Overexpressed",
-    )
-    ax.scatter(
-        grapher[grapher["color"] == "underexpressed"]["log2FoldChange"],
-        grapher[grapher["color"] == "underexpressed"]["padj_log"],
-        c="purple",
-        alpha=0.7,
-        s=30,
-        label="Underexpressed",
-    )
-
-    ax.axhline(1.3, color="k", linestyle="--", linewidth=0.5)
-    ax.axvline(2, color="k", linestyle="--", linewidth=0.5)
-    ax.axvline(-2, color="k", linestyle="--", linewidth=0.5)
-
-    texts = []
-    for i, row in annotation_subset.iterrows():
-        texts.append(
-            ax.text(
-                x=row.log2FoldChange,
-                y=row.padj_log,
-                s=row.name,
-                fontsize=7,
-                weight="bold",
-            )
-        )
-
-    if texts:
-        adjust_text(texts, arrowprops=dict(arrowstyle="-", color="k"), ax=ax)
-
-    ax.set_xlabel("log2 Fold Change", fontsize=11)
-    ax.set_ylabel("-log10 FDR", fontsize=11)
-    ax.set_ylim(-2, grapher["padj_log"].max() + 5)
-    ax.legend(fontsize=9)
-    ax.grid(True, alpha=0.3)
+        return self.de_genes
