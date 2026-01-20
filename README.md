@@ -81,6 +81,8 @@ All configuration is managed through `config.json`:
 
 ### Snakemake Preprocessing (Optional)
 
+Raw data can be downloaded from NCBI, accession number GSE313994.
+
 Run with `--run-snakemake` to execute the RNA-seq preprocessing:
 1. **Quality Control** - FastQC on raw reads
 2. **Trimming** - Adapter removal with Trimmomatic

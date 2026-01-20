@@ -136,9 +136,9 @@
     ]
   },
   "snakemake": {
-    "sample_dir": "",
+    "sample_dir": "~/MAT_rebase/data/raw",
     "work_dir": "~/MAT_rebase/pipeline/results",
-    "genome_dir": "",
+    "genome_dir": "~/reference_genome/GRCh38_GCA_000001405.40",
     "threads": 42
   },
   "class_labels": {
