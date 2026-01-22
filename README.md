@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/matseqm_logo.png" width="180">
+  <img src="assets/logo_MATseq.png" width="180">
 </p>
 
 <h1 align="center">MATseqm</h1>
