@@ -2,7 +2,7 @@
   <img src="assets/logo_MATseq.png" width="180">
 </p>
 
-<h1 align="center">MATseqm</h1>
+<h1 align="center">MATseq</h1>
 
 <p align="center">
 Machine-learning classification of pyrogen-induced monocyte transcriptomic signatures
