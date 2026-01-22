@@ -1,11 +1,11 @@
 {
   "paths": {
-    "data_dir": "~/MAT_rebase/data",
-    "deseq2_dir": "~/MAT_rebase/data/deseq2",
-    "results_dir": "~/MAT_rebase/results",
-    "cache_dir": "~/MAT_rebase/results/cache",
-    "figures_dir": "~/MAT_rebase/results/figures",
-    "featurecounts_dir": "~/MAT_rebase/results/featurecounts"
+    "data_dir": "~/MATseq/data",
+    "deseq2_dir": "~/MATseq/data/deseq2",
+    "results_dir": "~/MATseq/results",
+    "cache_dir": "~/MATseq/results/cache",
+    "figures_dir": "~/MATseq/results/figures",
+    "featurecounts_dir": "~/MATseq/results/featurecounts"
   },
   "deseq2": {
     "padj_threshold": 0.05,
@@ -136,8 +136,8 @@
     ]
   },
   "snakemake": {
-    "sample_dir": "~/MAT_rebase/data/raw",
-    "work_dir": "~/MAT_rebase/pipeline/results",
+    "sample_dir": "~/MATseq/data/raw",
+    "work_dir": "~/MATseq/results",
     "genome_dir": "~/reference_genome/GRCh38_GCA_000001405.40",
     "threads": 42
   },

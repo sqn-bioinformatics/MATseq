@@ -8,14 +8,14 @@
 rule featurecounts:
 # https://subread.sourceforge.net/SubreadUsersGuide.pdf
     input:
-        bam="umitools/{sample_id}.deduped.bam",
+        bam="sm_umitools/{sample_id}.deduped.bam",
         annotation = glob(config["GenomeDir"]+"/*.gtf"),
     output:
         counts = "featurecounts/{sample_id}.txt",
         statistics = "featurecounts/{sample_id}.txt.summary"
-    log: "logs/featurecounts/{sample_id}.log"
+    log: "sm_logs/featurecounts/{sample_id}.log"
     message: "Rule {rule} counts gene reads in {sample_id}."
-    benchmark: "benchmarks/featurecounts_{sample_id}.txt"
+    benchmark: "sm_benchmarks/featurecounts_{sample_id}.txt"
     threads: 42
     shell: "featureCounts -T {threads} -p --countReadPairs -C -B -t exon -g gene_id -a {input.annotation} -o {output.counts} {input.bam}"
 

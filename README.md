@@ -1,6 +1,12 @@
-# MATseq
+<p align="center">
+  <img src="assets/matseqm_logo.png" width="180">
+</p>
 
-Machine learning-assisted RNA-seq analysis pipeline for identifying pyrogenic contaminants using transcriptomic profiling of Monocyte Activation Test (MAT).
+<h1 align="center">MATseqm</h1>
+
+<p align="center">
+Machine-learning classification of pyrogen-induced monocyte transcriptomic signatures
+</p>
 
 ## Abstract
 
@@ -19,8 +25,8 @@ MATseq integrates differential expression analysis (DESeq2), feature selection, 
 
 ```bash
 # Clone repository
-git clone https://github.com/sqn-bioinformatics/MATseq.git
-cd MAT_rebase
+git clone https://github.com/sqn-bioinformatics/MATseq.git MATseq
+cd MATseq
 
 # Install dependencies via Poetry
 poetry install
@@ -193,6 +199,5 @@ If you use this work, please cite:
 
 > **Identifying pyrogenic contaminants using transcriptomic profiling of monocyte activation test with machine learning**
 > Tess AV Afanasyeva, Bruno FM de Albuquerque, Paulien Doodeman, Miranda C Dieker-Meijer, Marijke Molenaar-de Backer, Teunis JP van Dam, Anja ten Brinke
-
 > bioRxiv 2025.08.13.670109
 > https://doi.org/10.1101/2025.08.13.670109
