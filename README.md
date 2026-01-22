@@ -1,6 +1,6 @@
 <div align="center">
-  # ![logo] (assets/logo_MATseq.png" width="180")
-    Machine-learning classification of pyrogen-induced monocyte transcriptomic signatures
+# ![logo] (assets/logo_MATseq.png" width="180")
+# Machine-learning classification of pyrogen-induced monocyte transcriptomic signatures
 </div>
 
 ## Abstract
