@@ -23,8 +23,7 @@ if [ -z "$SAMPLEDIR" ] || [ ! -d "$SAMPLEDIR" ]; then
     exit 1
 fi
 
-snakemake --use-conda \
-          --directory ${WORKDIR} \
+snakemake --directory ${WORKDIR} \
           --cores ${THREADS} \
           --snakefile workflow/rules/0_MATseq.smk \
           --config SampleDir=${SAMPLEDIR} GenomeDir=${GENOMEDIR} \

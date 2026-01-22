@@ -139,7 +139,7 @@ class MATseqPipeline:
         print(f"Genome directory: {genome_dir}")
 
         work_dir = Path(
-            snakemake_config.get("work_dir", "~/MAT_rebase/pipeline/results")
+            snakemake_config.get("work_dir", "~/MATseq/pipeline/results")
         ).expanduser()
         threads = snakemake_config.get("threads", 42)
 

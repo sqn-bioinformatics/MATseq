@@ -100,16 +100,18 @@ class ModelPredictor:
             proba_df.to_csv(output_path)
             print(f"Saved probabilities to {output_path}")
 
-    def create_probability_heatmaps(self, output_dir: Path):
+    def create_probability_heatmaps(self, output_dir: Path, class_order: list = None):
         """Create heatmap visualizations of prediction probabilities.
 
         Args:
             output_dir: Directory to save figures.
+            class_order: Optional class order from config.
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        class_order = SUBSET_CLASS_ORDERS.get("training")
+        if class_order is None:
+            class_order = SUBSET_CLASS_ORDERS.get("training")
 
         for model_name, proba_df in self.probabilities.items():
             proba_df_ordered = proba_df.copy()
@@ -135,6 +137,38 @@ class ModelPredictor:
                 print(f"Saved heatmap to {output_path}")
             finally:
                 plt.close()
+
+            if self.true_labels is not None:
+                mask = self.true_labels.isin(["LPS", "negative_control"])
+                if mask.any():
+                    lps_idx = self.true_labels[self.true_labels == "LPS"].index
+                    nc_idx = self.true_labels[self.true_labels == "negative_control"].index
+                    if len(lps_idx) > 0 and len(nc_idx) > 0:
+                        sampled_lps = np.random.choice(lps_idx, size=1)
+                        subset_idx = np.concatenate([sampled_lps, nc_idx.values])
+
+                        proba_subset = proba_df.loc[subset_idx].copy()
+                        if class_order is not None:
+                            available_classes = [c for c in class_order if c in proba_subset.columns]
+                            proba_subset = proba_subset[available_classes]
+
+                        proba_subset.index = self.true_labels.loc[subset_idx].values
+
+                        plt.figure(figsize=(12, 8))
+                        sns.heatmap(
+                            proba_subset, cmap="YlGnBu", cbar_kws={"label": "Probability"}
+                        )
+                        plt.title(f"{model_name}")
+                        plt.xlabel("Class")
+                        plt.ylabel("Sample")
+                        plt.tight_layout()
+
+                        output_path_subset = output_dir / f"{model_name}_probabilities_heatmap_subset.png"
+                        try:
+                            plt.savefig(output_path_subset, dpi=300, bbox_inches="tight")
+                            print(f"Saved subset heatmap to {output_path_subset}")
+                        finally:
+                            plt.close()
 
 
 class ModelComparator:

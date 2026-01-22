@@ -8,7 +8,7 @@
 from glob import glob
 
 def required_files(wildcards):
-    STAR_FILES = glob(config["WorkDir"]+"/star/*.bam")
+    STAR_FILES = glob(config["WorkDir"]+"/sm_star/*.bam")
     outfiles= []
     for file in STAR_FILES:
         if wildcards.sample_id not in file:
@@ -18,13 +18,13 @@ def required_files(wildcards):
     return outfiles
 
 
-rule samtools_merge: 
+rule samtools_merge:
     input:
         bams = required_files,
-        summary="star_done.txt"
-    output: 
-        combined_bam = "samtools_merged/{sample_id}.merged.bam",
-    benchmark: "benchmarks/samtools_merge_{sample_id}.txt"
+        summary="sm_star_done.txt"
+    output:
+        combined_bam = "sm_samtools_merged/{sample_id}.merged.bam",
+    benchmark: "sm_benchmarks/samtools_merge_{sample_id}.txt"
     threads: 8
     shell: "samtools merge -@ {threads} -o {output.combined_bam} {input.bams}"
 
@@ -33,16 +33,16 @@ rule samtools_sort:
 # samtools - sort
 # http://www.htslib.org/doc/samtools-sort.html
     input:
-        aligned_bam = "samtools_merged/{sample_id}.merged.bam",
+        aligned_bam = "sm_samtools_merged/{sample_id}.merged.bam",
     output:
-        sorted_bam = "samtools/{sample_id}.sorted.bam"
+        sorted_bam = "sm_samtools/{sample_id}.sorted.bam"
     message: "Rule {rule} sorts {sample_id}."
-    benchmark: "benchmarks/samtools_sort_{sample_id}.txt"
+    benchmark: "sm_benchmarks/samtools_sort_{sample_id}.txt"
     threads: 8
     shell:
         " samtools sort \
         -@ {threads} \
-        -T samtools/ \
+        -T sm_samtools/ \
         -O bam \
         -o {output.sorted_bam} \
         --no-PG \
@@ -53,12 +53,12 @@ rule samtools_index:
 # samtools - index
 # http://www.htslib.org/doc/samtools-index.html
     input:
-        bam = "samtools/{sample_id}.sorted.bam"
+        bam = "sm_samtools/{sample_id}.sorted.bam"
     output:
-        "samtools/{sample_id}.sorted.bam.bai"
+        "sm_samtools/{sample_id}.sorted.bam.bai"
     message:
         "Rule {rule} indexes {sample_id}."
-    benchmark: "benchmarks/samtools_index_{sample_id}.txt"
+    benchmark: "sm_benchmarks/samtools_index_{sample_id}.txt"
     threads: 8
     shell:
         "samtools index {input.bam}"

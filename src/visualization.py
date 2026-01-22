@@ -552,7 +552,7 @@ class Plotter:
 
         Args:
             path_to_supporting_files: Path to directory containing gene2go and go-basic.obo files.
-                                     Defaults to ~/MAT_rebase/data/deseq2 if not provided.
+                                     Defaults to ~/MATseq/data/deseq2 if not provided.
         """
         print("Initializing GO terms...")
 

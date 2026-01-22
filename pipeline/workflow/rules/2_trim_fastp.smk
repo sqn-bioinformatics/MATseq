@@ -9,14 +9,14 @@ rule fastp:
 # fastp - A tool designed to provide fast all-in-one preprocessing for FastQ files.
 # https://github.com/OpenGene/fastp#quality-filter
     input:
-        R1 =  os.path.join(config["WorkDir"], "fastqs/{sample}_R1.fastq.gz"),
-        R2 = os.path.join(config["WorkDir"], "fastqs/{sample}_R2.fastq.gz")
+        R1 =  os.path.join(config["WorkDir"], "sm_fastqs/{sample}_R1.fastq.gz"),
+        R2 = os.path.join(config["WorkDir"], "sm_fastqs/{sample}_R2.fastq.gz")
     output:
-        R1_tp = "fastp/reads/{sample}_R1_trimmed.fastq",
-        R2_tp = "fastp/reads/{sample}_R2_trimmed.fastq",
-        json = "fastp/report/{sample}.json",
-        html = "fastp/report/{sample}.html",
-    benchmark: "benchmarks/fastp_{sample}.txt"
+        R1_tp = "sm_fastp/reads/{sample}_R1_trimmed.fastq",
+        R2_tp = "sm_fastp/reads/{sample}_R2_trimmed.fastq",
+        json = "sm_fastp/report/{sample}.json",
+        html = "sm_fastp/report/{sample}.html",
+    benchmark: "sm_benchmarks/fastp_{sample}.txt"
     priority: 50
     params:
         length_required = 36,
@@ -24,7 +24,7 @@ rule fastp:
     threads: 16
     resources:
         mem_mb= 5000
-    log: "logs/fastp/{sample}.log"
+    log: "sm_logs/fastp/{sample}.log"
     shell:
         "fastp \
         --in1 {input.R1} \

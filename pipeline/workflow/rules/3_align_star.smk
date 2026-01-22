@@ -12,9 +12,9 @@ rule star_index:
         annotation=glob(config["GenomeDir"]+"/*.gtf")
     output:
         genome_dir=directory(config["GenomeDir"]+"/index")
-    log: "logs/star_index/star_index.log"
+    log: "sm_logs/star_index/star_index.log"
     message: "Rule {rule} is indexing reference genome."
-    benchmark: "benchmarks/star_index.txt"
+    benchmark: "sm_benchmarks/star_index.txt"
     priority: 100
     params: overhang = 100
     threads: 8
@@ -31,12 +31,12 @@ rule star_index:
     
 checkpoint star_alignment:
     input:
-        R1="fastp/reads/{sample}_R1_trimmed.fastq",
-        R2="fastp/reads/{sample}_R2_trimmed.fastq",
+        R1="sm_fastp/reads/{sample}_R1_trimmed.fastq",
+        R2="sm_fastp/reads/{sample}_R2_trimmed.fastq",
         annotation=glob(config["GenomeDir"]+"/*.gtf")
     output:
-        bam = "star/{sample}_Aligned.out.bam",
-    benchmark: "benchmarks/star_alignment_{sample}.txt"
+        bam = "sm_star/{sample}_Aligned.out.bam",
+    benchmark: "sm_benchmarks/star_alignment_{sample}.txt"
     params: 
         overhang = 100,
         genome_dir=directory(config["GenomeDir"]+"/index")
@@ -46,7 +46,7 @@ checkpoint star_alignment:
     shell:
         "STAR \
         --runThreadN {threads} \
-        --outFileNamePrefix star/{wildcards.sample}_ \
+        --outFileNamePrefix sm_star/{wildcards.sample}_ \
         --genomeDir {params.genome_dir} \
         --readFilesIn {input.R1} {input.R2} \
         --sjdbGTFfile {input.annotation} \
@@ -54,6 +54,6 @@ checkpoint star_alignment:
         --outSAMtype BAM Unsorted"
 
 checkpoint star_all:
-    input: expand("star/{sample}_Aligned.out.bam", sample=SAMPLES)
-    output: "star_done.txt"
-    shell: "touch star_done.txt" 
+    input: expand("sm_star/{sample}_Aligned.out.bam", sample=SAMPLES)
+    output: "sm_star_done.txt"
+    shell: "touch sm_star_done.txt" 
