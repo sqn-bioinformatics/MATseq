@@ -44,21 +44,29 @@ poetry run python MATseq.py
 ```
 
 Optional arguments:
-- `--force-recompute`: Skip cache and recompute all steps
-- `--cache-dir PATH`: Directory for cached files (default: results/cache)
+
 - `--run-snakemake`: Run Snakemake preprocessing before pipeline
 - `--snakemake-dir PATH`: Directory containing Snakemake pipeline (default: pipeline/)
-- `--fastq-dir PATH`: Override FASTQ input directory for Snakemake
+- `--fastq-dir PATH`: Override raw data zipped ASTQ) directory for Snakemake
 - `--genome-dir PATH`: Override genome reference directory for Snakemake
 - `--snakemake-dry-run`: Validate Snakemake pipeline without running
+- `--force-recompute`: Skip cache and recompute all steps
+- `--cache-dir PATH`: Directory for cached files (default: results/cache)
+
 
 ### Configuration
 
-All configuration is managed through `config.json`:
+The configuration is managed through `config.json`:
+
+**Snakemake preprocessing:**
+- `snakemake.sample_dir`: Raw FASTQ files directory
+- `snakemake.work_dir`: Snakemake working directory
+- `snakemake.genome_dir`: Reference genome directory
+- `snakemake.threads`: Number of threads
 
 **Paths:**
 - `paths.data_dir`: Input data directory
-- `paths.deseq2_dir`: DESeq2 reference files (gene2go, go-basic.obo)
+- `paths.deseq2_dir`: DESeq2 reference files (gene2go, go-basic.obo should download automatically)
 - `paths.results_dir`: Output results directory
 - `paths.featurecounts_dir`: featureCounts output location
 
@@ -73,22 +81,14 @@ All configuration is managed through `config.json`:
 - `feature_selection.random_state`: Reproducibility seed
 
 **Model training:**
-- `model_training.apply_smote`: Enable SMOTE oversampling
+- `model_training.apply_smote`: Enable SMOTE oversampling (used in this paper)
 - `model_training.smote_k_neighbors`: SMOTE k-neighbors parameter
-
-**Snakemake preprocessing:**
-- `snakemake.sample_dir`: Raw FASTQ files directory
-- `snakemake.work_dir`: Snakemake working directory
-- `snakemake.genome_dir`: Reference genome directory
-- `snakemake.threads`: Number of threads
 
 ## Pipeline Steps
 
 ### Snakemake Preprocessing
 Snakemake will request a path to the raw data in fastq.gz format. Download the raw data from NCBI, GEO accession number GSE313994. Provide it with --genome-dir or in the config.json.
-
-Snakemake will request a path to a reference genome; we used GRCh38_GCA_000001405.15.
-Provide it with --fastq-dir or in the config.json.
+Snakemake will request a path to a reference genome; we used GRCh38_GCA_000001405.15. Provide it with --fastq-dir or in the config.json.
 
 Run with `--run-snakemake` to execute the RNA-seq preprocessing:
 1. **Quality Control** - FastQC on raw reads
