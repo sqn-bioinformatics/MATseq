@@ -1,9 +1,6 @@
 <div align="center">
-  <img src="assets/logo_MATseq.png" width="180">
-  <h1 style="margin-top: 0; margin-bottom: 0;">MATseq</h1>
-  <p style="margin-top: 4px;">
+  # ![logo] (assets/logo_MATseq.png" width="180")
     Machine-learning classification of pyrogen-induced monocyte transcriptomic signatures
-  </p>
 </div>
 
 ## Abstract
