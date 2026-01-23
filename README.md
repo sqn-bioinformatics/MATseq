@@ -156,16 +156,26 @@ results/
 │   │   └── {ligand}_go.png
 │   ├── pca/                        # PCA plots
 │   ├── venn/                       # Venn diagrams
-│   └── supplementary/              # TLR and gene expression plots
+│   └── supplementary/              # Step 8: TLR reporter and gene expression
+│       └── tlr_hek_blue.png
 ├── go_terms/                       # GO enrichment results
 │   └── {ligand}_go_terms.csv
-├── models/                         # Trained model files
+├── models/                         # Trained models
 ├── model_evaluation/               # Model performance metrics
 │   ├── confusion_matrices/
 │   └── evaluation_metrics.csv
-└── predictions/                    # Prediction outputs
-    ├── other_ligands/
-    └── bacterial/
+└── predictions/                    
+    ├── other_ligands/             
+    │   ├── {model}_predictions.csv
+    │   ├── {model}_probabilities.csv
+    │   └── {model}_probabilities_heatmap.png
+    ├── bacterial/                 
+    │   ├── {model}_predictions.csv
+    │   ├── {model}_probabilities.csv
+    │   └── {model}_probabilities_heatmap.png
+    └── training_wo_flapa/          # Step 7
+        ├── other_ligands/
+        └── bacterial/
 ```
 
 ## Project Structure

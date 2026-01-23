@@ -566,9 +566,19 @@ class MATseqPipeline:
         predictor.save_predictions(predictions_dir / "bacterial")
         predictor.create_probability_heatmaps(predictions_dir / "bacterial")
 
-        # Step 7: Model Training on training_wo_flapa and Prediction on Additional and Bacterial Ligands
+        # Step 7: TLR HEK visualization
+        print("\n--- STEP 7: TLR HEK BLUE VISUALIZATION ---")
+        tlr2_df, tlr4_df, flapa_data = load_tlr_data()
+
+        plot_tlr_hek_blue(
+            tlr2_df,
+            tlr4_df,
+            flapa_data,
+            output_filename="tlr_hek_blue.png",
+        )
+        # Step 8: Model Training on training_wo_flapa and Prediction on Additional and Bacterial Ligands
         print(
-            "\n--- STEP 7: MODEL TRAINING ON TRAINING_WO_FLAPA AND PREDICTION ON ADDITIONAL AND BACTERIAL LIGANDS ---"
+            "\n--- STEP 8: MODEL TRAINING ON TRAINING_WO_FLAPA AND PREDICTION ON ADDITIONAL AND BACTERIAL LIGANDS ---"
         )
         X_train_wo_flapa, y_train_wo_flapa = self.extract_and_run_pca_before_pipeline(
             df, "training_wo_flapa"
@@ -607,17 +617,6 @@ class MATseqPipeline:
         predictor_wo_flapa.save_predictions(predictions_dir_wo_flapa / "bacterial")
         predictor_wo_flapa.create_probability_heatmaps(
             predictions_dir_wo_flapa / "bacterial"
-        )
-
-        # Step 8: TLR HEK visualization
-        print("\n--- STEP 8: TLR HEK BLUE VISUALIZATION ---")
-        tlr2_df, tlr4_df, flapa_data = load_tlr_data()
-
-        plot_tlr_hek_blue(
-            tlr2_df,
-            tlr4_df,
-            flapa_data,
-            output_filename="tlr_hek_blue.png",
         )
 
         print("\n" + "=" * 80)
