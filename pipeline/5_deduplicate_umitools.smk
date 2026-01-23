@@ -2,7 +2,6 @@
 # name: MATseq pipeline
 # description: Monocyte activation test transcriptomes analysis pipeline
 # author: Tess Afanasyeva
-# date: 2024-01-01
 
 
 rule umitools_deduplication:
@@ -13,6 +12,7 @@ rule umitools_deduplication:
         deduplicated = "sm_umitools/{sample_id}.deduped.bam"
     message: "Rule {rule} removes duplicates in {sample_id}."
     benchmark: "sm_benchmarks/umitools_{sample_id}.txt"
+    conda: "environment.yml"
     shell: "umi_tools dedup \
     --paired \
     --method=directional \

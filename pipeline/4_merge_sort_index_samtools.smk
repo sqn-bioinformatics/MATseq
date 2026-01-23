@@ -2,13 +2,12 @@
 # name: MATseq pipeline
 # description: Monocyte activation test transcriptomes analysis pipeline
 # author: Tess Afanasyeva
-# date: 2024-01-01
 
 
 from glob import glob
 
 def required_files(wildcards):
-    STAR_FILES = glob(config["WorkDir"]+"/sm_star/*.bam")
+    STAR_FILES = glob(str(Path(WORKDIR) / "sm_star/*.bam"))
     outfiles= []
     for file in STAR_FILES:
         if wildcards.sample_id not in file:
@@ -26,6 +25,7 @@ rule samtools_merge:
         combined_bam = "sm_samtools_merged/{sample_id}.merged.bam",
     benchmark: "sm_benchmarks/samtools_merge_{sample_id}.txt"
     threads: 8
+    conda: "environment.yml"
     shell: "samtools merge -@ {threads} -o {output.combined_bam} {input.bams}"
 
 
@@ -39,6 +39,7 @@ rule samtools_sort:
     message: "Rule {rule} sorts {sample_id}."
     benchmark: "sm_benchmarks/samtools_sort_{sample_id}.txt"
     threads: 8
+    conda: "environment.yml"
     shell:
         " samtools sort \
         -@ {threads} \
@@ -60,5 +61,6 @@ rule samtools_index:
         "Rule {rule} indexes {sample_id}."
     benchmark: "sm_benchmarks/samtools_index_{sample_id}.txt"
     threads: 8
+    conda: "environment.yml"
     shell:
         "samtools index {input.bam}"

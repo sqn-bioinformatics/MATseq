@@ -22,6 +22,11 @@ dependencies:
   - bowtie2
   - tbb
   - fastqc
+  - fastp
+  - star
+  - samtools
+  - umi_tools
+  - subread
   - pip:
     - openpyxl
     - pandas

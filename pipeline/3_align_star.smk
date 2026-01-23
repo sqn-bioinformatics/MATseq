@@ -2,7 +2,6 @@
 # name: MATseq pipeline
 # description: Monocyte activation test transcriptomes analysis pipeline
 # author: Tess Afanasyeva
-# date: 2024-01-01
 
 rule star_index:
 # STAR - Spliced Transcripts Alignment to a Reference (c) Alexander Dobin, 2009-2020
@@ -20,6 +19,7 @@ rule star_index:
     threads: 8
     resources:
         mem_mb=32000
+    conda: "environment.yml"
     shell:
         'STAR \
         --runMode genomeGenerate \
@@ -43,6 +43,7 @@ checkpoint star_alignment:
     threads: 8
     resources:
         mem_mb=32000
+    conda: "environment.yml"
     shell:
         "STAR \
         --runThreadN {threads} \

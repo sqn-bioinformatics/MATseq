@@ -2,11 +2,9 @@
 # name: MATseq pipeline
 # description: Monocyte activation test transcriptomes analysis pipeline
 # author: Tess Afanasyeva
-# date: 2024-01-01
-
 
 def required_files(wildcards):
-    FILES = glob(config["SampleDir"]+"/*.fastq.gz") # HGHVMDSX3_104972-001-010_R for whatever reason is doubled, will cause program fail if run
+    FILES = glob(str(Path(SAMPLEDIR) / "*.fastq.gz"))
     for file in FILES:
         if wildcards.sample in file and wildcards.paired in file:
             print(f'Found {file}')
@@ -16,7 +14,7 @@ def required_files(wildcards):
 
 rule copy_and_rename:
     input: required_files
-    output: config["WorkDir"]+"/sm_fastqs/{sample}_{paired}.fastq.gz"
+    output: str(Path(WORKDIR) / "sm_fastqs/{sample}_{paired}.fastq.gz")
     benchmark: "sm_benchmarks/copy_and_rename_{sample}_{paired}.txt"
     threads: 16
     shell: 'cp -v "{input}" {output}'
@@ -33,6 +31,7 @@ rule fastqc:
     benchmark: "sm_benchmarks/fastqc_{sample}_{paired}.txt"
     threads: 18
     resources: mem_mb= 2000
+    conda: "environment.yml"
     shell:
         'fastqc \
         --threads {threads} \

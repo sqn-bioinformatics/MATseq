@@ -2,7 +2,6 @@
 # name: MATseq pipeline
 # description: Monocyte activation test transcriptomes analysis pipeline
 # author: Tess Afanasyeva
-# date: 2024-01-01
 
 
 rule featurecounts:
@@ -17,6 +16,7 @@ rule featurecounts:
     message: "Rule {rule} counts gene reads in {sample_id}."
     benchmark: "sm_benchmarks/featurecounts_{sample_id}.txt"
     threads: 42
+    conda: "environment.yml"
     shell: "featureCounts -T {threads} -p --countReadPairs -C -B -t exon -g gene_id -a {input.annotation} -o {output.counts} {input.bam}"
 
 # # Trim columns to leave those containing Geneid and sample_id name 

@@ -136,9 +136,9 @@
     ]
   },
   "snakemake": {
-    "sample_dir": "~/MATseq/data/raw",
+    "sample_dir": "/home/t.afanasyeva/MATseq/data/raw",
     "work_dir": "~/MATseq/results",
-    "genome_dir": "~/reference_genome/GRCh38_GCA_000001405.40",
+    "genome_dir": "/home/t.afanasyeva/reference_genome/GRCh38_GCA_000001405.15",
     "threads": 42
   },
   "class_labels": {

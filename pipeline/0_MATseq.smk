@@ -2,7 +2,6 @@
 # name: MATseq pipeline
 # description: Monocyte activation test transcriptomes analysis pipeline
 # author: Tess Afanasyeva
-# date: 2026-01-20
 
 import sys
 import random
@@ -85,7 +84,7 @@ ruleorder:
 		
 rule all:
 	input:
-		expand([config["WorkDir"]+"/sm_fastqs/{sample}_{paired}.fastq.gz",
+		expand([WORKDIR/"sm_fastqs/{sample}_{paired}.fastq.gz",
 				"sm_fastqc/{sample}_{paired}_fastqc.html",
 				"sm_fastp/report/{sample}.html",
 				"sm_star/{sample}_Aligned.out.bam",

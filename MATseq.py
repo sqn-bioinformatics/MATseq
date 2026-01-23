@@ -71,7 +71,6 @@ class MATseqPipeline:
 
     def run_snakemake_preprocessing(
         self,
-        snakemake_dir: Path = None,
         fastq_dir: Path = None,
         genome_dir: Path = None,
         dry_run: bool = False,
@@ -79,7 +78,6 @@ class MATseqPipeline:
         """Run Snakemake preprocessing pipeline to generate featurecounts.
 
         Args:
-            snakemake_dir: Directory containing Snakemake pipeline (default: pipeline/).
             fastq_dir: Override FASTQ input directory (default: from config.json).
             genome_dir: Override genome reference directory (required).
             dry_run: If True, only validate Snakemake without running.
@@ -90,8 +88,7 @@ class MATseqPipeline:
         import subprocess
         import json
 
-        if snakemake_dir is None:
-            snakemake_dir = Path.cwd() / "pipeline"
+        snakemake_dir = Path.cwd() / "pipeline"
 
         config_path = Path.cwd() / "config.json"
         with open(config_path) as f:
@@ -127,7 +124,7 @@ class MATseqPipeline:
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
 
-        snakefile = snakemake_dir / "workflow" / "rules" / "0_MATseq.smk"
+        snakefile = snakemake_dir / "0_MATseq.smk"
 
         if not snakefile.exists():
             print(f"Error: Snakemake pipeline not found at {snakefile}")
@@ -475,27 +472,27 @@ class MATseqPipeline:
         print("\n--- EVALUATING MODELS ---")
         eval_dir = self.results_dir / "model_evaluation"
 
-        # # Evaluation 1: Full feature set
-        # print("Evaluation on full feature set (X_train)...")
-        # trainer.evaluate(X_train, y_train, eval_dir=eval_dir, cv=5, eval_name="full")
+        # Evaluation 1: Full feature set
+        print("Evaluation on full feature set (X_train)...")
+        trainer.evaluate(X_train, y_train, eval_dir=eval_dir, cv=5, eval_name="full")
 
-        # # Evaluation 2: Feature-selected genes
-        # print("Evaluation on feature-selected genes (X_fs)...")
-        # trainer.evaluate(X_fs, y_train, eval_dir=eval_dir, cv=5, eval_name="fs")
+        # Evaluation 2: Feature-selected genes
+        print("Evaluation on feature-selected genes (X_fs)...")
+        trainer.evaluate(X_fs, y_train, eval_dir=eval_dir, cv=5, eval_name="fs")
 
         # Evaluation 3: X_train subsetted to genes in X_fs ∪ de_genes
-        # print("X_fs:", X_fs)
-        # fs_genes = set(X_fs.columns)
-        # print(f"Feature Selections genes: {fs_genes}")
-        # print(f"Differentially expressed genes: {de_genes}")
-        # union_genes = list(fs_genes | de_genes)
-        # print("Union genes:", union_genes)
+        print("X_fs:", X_fs)
+        fs_genes = set(X_fs.columns)
+        print(f"Feature Selections genes: {fs_genes}")
+        print(f"Differentially expressed genes: {de_genes}")
+        union_genes = list(fs_genes | de_genes)
+        print("Union genes:", union_genes)
 
-        # X_fs_de = X_train[union_genes]
-        # print(f"Evaluation on FS ∪ DE genes ({len(union_genes)} genes)...")
-        # trainer.evaluate(X_fs_de, y_train, eval_dir=eval_dir, cv=5, eval_name="fs_de")
+        X_fs_de = X_train[union_genes]
+        print(f"Evaluation on FS ∪ DE genes ({len(union_genes)} genes)...")
+        trainer.evaluate(X_fs_de, y_train, eval_dir=eval_dir, cv=5, eval_name="fs_de")
 
-        # print("Model evaluation complete. Results saved to results/model_evaluation")
+        print("Model evaluation complete. Results saved to results/model_evaluation")
 
         # Step 5: DESeq2 Analysis (on other ligands and bacterial subsets)
         print(
@@ -661,12 +658,6 @@ def main():
         help="Run Snakemake preprocessing pipeline first to generate featurecounts",
     )
     parser.add_argument(
-        "--snakemake-dir",
-        type=Path,
-        default=None,
-        help="Directory containing Snakemake pipeline (default: pipeline/)",
-    )
-    parser.add_argument(
         "--fastq-dir",
         type=Path,
         default=None,
@@ -696,7 +687,6 @@ def main():
         print("MAT-seq Analysis Pipeline - WITH SNAKEMAKE PREPROCESSING")
         print("=" * 80)
         success = pipeline.run_snakemake_preprocessing(
-            snakemake_dir=args.snakemake_dir,
             fastq_dir=args.fastq_dir,
             genome_dir=args.genome_dir,
             dry_run=args.snakemake_dry_run,

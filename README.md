@@ -30,10 +30,6 @@ cd MATseq
 # Install dependencies via Poetry
 poetry install
 
-# Activate virtual environment
-poetry shell
-```
-
 ## Usage
 
 ### Running the Pipeline
@@ -46,9 +42,9 @@ poetry run python MATseq.py
 Optional arguments:
 
 - `--run-snakemake`: Run Snakemake preprocessing before pipeline
-- `--snakemake-dir PATH`: Directory containing Snakemake pipeline (default: pipeline/)
-- `--fastq-dir PATH`: Override raw data zipped ASTQ) directory for Snakemake
-- `--genome-dir PATH`: Override genome reference directory for Snakemake
+- `--snakemake-dir PATH`: Directory containing Snakemake pipeline
+- `--fastq-dir PATH`: Raw data (zipped FASTQ) directory for Snakemake
+- `--genome-dir PATH`: Genome reference directory for Snakemake
 - `--snakemake-dry-run`: Validate Snakemake pipeline without running
 - `--force-recompute`: Skip cache and recompute all steps
 - `--cache-dir PATH`: Directory for cached files (default: results/cache)
@@ -92,9 +88,11 @@ Snakemake will request a path to a reference genome; we used GRCh38_GCA_00000140
 
 Run with `--run-snakemake` to execute the RNA-seq preprocessing:
 1. **Quality Control** - FastQC on raw reads
-2. **Trimming** - Adapter removal with Trimmomatic
+2. **Trimming** - Adapter removal with fastp
 3. **Alignment** - STAR alignment to reference genome
-4. **Quantification** - featureCounts gene-level counting
+4. **Merge/Sort/Index** - SAMtools BAM processing
+5. **Deduplication** - UMI-tools deduplication
+6. **Quantification** - featureCounts gene-level counting
 
 ### Main Pipeline
 
@@ -119,21 +117,23 @@ Run with `--run-snakemake` to execute the RNA-seq preprocessing:
    - Evaluate with cross-validation
    - Generate performance metrics and confusion matrices
 
-5. **Additional Ligand Analysis** (`deseq2_other_ligands`)
-   - DESeq2 analysis on additional ligands (LPS, LTA, MPLA, Pam2)
+5. **Additional Ligand and Bacterial Analysis** (`deseq2_other_ligands`, `deseq2_bacterial`)
+   - DESeq2 analysis on additional ligands (LTA, MPLA, Pam2)
+   - DESeq2 analysis on bacterial samples (HK E.coli, HK S.aureus)
    - Generate visualization outputs
 
-6. **Prediction on New Data** (`predict_other_ligands`)
+6. **Prediction on New Data** (`predict_other_ligands`, `predict_bacterial`)
    - Apply trained models to additional ligands and bacterial samples
    - Generate probability heatmaps and predictions
 
-7. **Extended Training** (`training_wo_flapa`)
-   - Retrain models on extended dataset (training + predictions)
-   - Evaluate performance on held-out bacterial samples
+7. **TLR Reporter Visualization** (`tlr_hek_blue`)
+   - Supplementary Figure 2
 
-8. **TLR Reporter Visualization** (`tlr_hek_blue`)
-   - Generate dose-response curves for TLR2 (Pam3) and TLR4 (LPS)
-   - Visualize Fla-PA contamination levels
+8. **Extended Training** (`training_wo_flapa`)
+   - Retrain models on dataset without Fla-Pa samples
+   - Supplementary Figure 3
+
+
 
 ## Output Structure
 
@@ -172,12 +172,18 @@ results/
 
 ```
 MATseq/
-├── MATseq.py           # Main pipeline orchestration
-├── config.json         # Unified configuration
+├── MATseq.py           
+├── config.json         
 ├── pyproject.toml      # Poetry dependencies
 ├── pipeline/           # Snakemake preprocessing
-│   ├── run.sh          # Snakemake runner script
-│   └── workflow/       # Snakemake rules
+│   ├── 0_MATseq.smk                       # Main workflow
+│   ├── 1_control_quality_fastqc.smk       # FastQC quality control
+│   ├── 2_trim_fastp.smk                   # Fastp adapter trimming
+│   ├── 3_align_star.smk                   # STAR alignment
+│   ├── 4_merge_sort_index_samtools.smk    # SAMtools processing
+│   ├── 5_deduplicate_umitools.smk         # UMI-tools deduplication
+│   ├── 6_count_reads_featurecounts.smk    # featureCounts quantification
+│   └── environment.yml                    # Conda environment spec
 ├── src/
 │   ├── cache.py               # Caching system
 │   ├── config.py              # Configuration loading

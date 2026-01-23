@@ -2,15 +2,13 @@
 # name: MATseq pipeline
 # description: Monocyte activation test transcriptomes analysis pipeline
 # author: Tess Afanasyeva
-# date: 2024-01-01
-
 
 rule fastp:
 # fastp - A tool designed to provide fast all-in-one preprocessing for FastQ files.
 # https://github.com/OpenGene/fastp#quality-filter
     input:
-        R1 =  os.path.join(config["WorkDir"], "sm_fastqs/{sample}_R1.fastq.gz"),
-        R2 = os.path.join(config["WorkDir"], "sm_fastqs/{sample}_R2.fastq.gz")
+        R1 = str(Path(WORKDIR) / "sm_fastqs/{sample}_R1.fastq.gz"),
+        R2 = str(Path(WORKDIR) / "sm_fastqs/{sample}_R2.fastq.gz")
     output:
         R1_tp = "sm_fastp/reads/{sample}_R1_trimmed.fastq",
         R2_tp = "sm_fastp/reads/{sample}_R2_trimmed.fastq",
@@ -25,6 +23,7 @@ rule fastp:
     resources:
         mem_mb= 5000
     log: "sm_logs/fastp/{sample}.log"
+    conda: "environment.yml"
     shell:
         "fastp \
         --in1 {input.R1} \
