@@ -45,7 +45,6 @@ Optional arguments:
 - `--fastq-dir PATH`: Raw data (zipped FASTQ) directory for Snakemake
 - `--snakemake-dry-run`: Validate Snakemake pipeline without running
 - `--run-snakemake`: Run Snakemake preprocessing before pipeline
-
 - `--force-recompute`: Skip cache and recompute all steps
 - `--cache-dir PATH`: Directory for cached files (default: results/cache)
 
