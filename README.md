@@ -13,12 +13,14 @@ The monocyte activation test is an in vitro pyrogenicity assessment method that 
 
 MATseq integrates differential expression analysis (DESeq2), feature selection, and machine learning models to classify ligand-induced transcriptomic signatures in monocyte samples. The pipeline processes raw RNA-seq counts through quality control, normalization, feature engineering, and model training to predict ligand classes with high accuracy.
 
+
 ## Installation
 
 ### Prerequisites
 
 - Python >=3.10, <3.13
 - [Poetry](https://python-poetry.org/) for dependency management
+
 
 ### Setup
 
@@ -38,12 +40,12 @@ poetry run python MATseq.py
 ```
 
 Optional arguments:
-
-- `--run-snakemake`: Run Snakemake preprocessing before pipeline
 - `--snakemake-dir PATH`: Directory containing Snakemake pipeline
-- `--fastq-dir PATH`: Raw data (zipped FASTQ) directory for Snakemake
 - `--genome-dir PATH`: Genome reference directory for Snakemake
+- `--fastq-dir PATH`: Raw data (zipped FASTQ) directory for Snakemake
 - `--snakemake-dry-run`: Validate Snakemake pipeline without running
+- `--run-snakemake`: Run Snakemake preprocessing before pipeline
+
 - `--force-recompute`: Skip cache and recompute all steps
 - `--cache-dir PATH`: Directory for cached files (default: results/cache)
 
@@ -78,7 +80,7 @@ The configuration is managed through `config.json`:
 - `model_training.apply_smote`: Enable SMOTE oversampling (used in this paper)
 - `model_training.smote_k_neighbors`: SMOTE k-neighbors parameter
 
-## Pipeline Steps
+## Execution
 
 ### Snakemake Preprocessing
 Snakemake will request a path to the raw data in fastq.gz format. Download the raw data from NCBI, GEO accession number GSE313994. Provide it with --genome-dir or in the config.json.
