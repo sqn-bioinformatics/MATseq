@@ -134,6 +134,36 @@ Run with `--run-snakemake` to execute the RNA-seq preprocessing:
    - Supplementary Figure 3
 
 
+## Project Structure
+
+```
+MATseq/
+├── MATseq.py           
+├── config.json         
+├── pyproject.toml      # Poetry dependencies
+├── pipeline/           # Snakemake preprocessing
+│   ├── 0_MATseq.smk                       # Main workflow
+│   ├── 1_control_quality_fastqc.smk       # FastQC quality control
+│   ├── 2_trim_fastp.smk                   # Fastp adapter trimming
+│   ├── 3_align_star.smk                   # STAR alignment
+│   ├── 4_merge_sort_index_samtools.smk    # SAMtools processing
+│   ├── 5_deduplicate_umitools.smk         # UMI-tools deduplication
+│   ├── 6_count_reads_featurecounts.smk    # featureCounts quantification
+│   └── environment.yml                    # Conda environment spec
+├── src/
+│   ├── cache.py               # Caching system
+│   ├── config.py              # Configuration loading
+│   ├── preprocessing.py       # Data loading and filtering
+│   ├── feature_engineering.py # Feature selection pipeline
+│   ├── feature_analysis.py    # Feature selection analysis
+│   ├── model_training.py      # ML model training
+│   ├── prediction.py          # Model prediction
+│   ├── pydeseq2.py           # DESeq2 wrapper
+│   └── visualization.py       # Plotting functions
+├── data/               # Input data
+└── results/            # Output directory (generated)
+```
+
 
 ## Output Structure
 
@@ -178,35 +208,6 @@ results/
         └── bacterial/
 ```
 
-## Project Structure
-
-```
-MATseq/
-├── MATseq.py           
-├── config.json         
-├── pyproject.toml      # Poetry dependencies
-├── pipeline/           # Snakemake preprocessing
-│   ├── 0_MATseq.smk                       # Main workflow
-│   ├── 1_control_quality_fastqc.smk       # FastQC quality control
-│   ├── 2_trim_fastp.smk                   # Fastp adapter trimming
-│   ├── 3_align_star.smk                   # STAR alignment
-│   ├── 4_merge_sort_index_samtools.smk    # SAMtools processing
-│   ├── 5_deduplicate_umitools.smk         # UMI-tools deduplication
-│   ├── 6_count_reads_featurecounts.smk    # featureCounts quantification
-│   └── environment.yml                    # Conda environment spec
-├── src/
-│   ├── cache.py               # Caching system
-│   ├── config.py              # Configuration loading
-│   ├── preprocessing.py       # Data loading and filtering
-│   ├── feature_engineering.py # Feature selection pipeline
-│   ├── feature_analysis.py    # Feature selection analysis
-│   ├── model_training.py      # ML model training
-│   ├── prediction.py          # Model prediction
-│   ├── pydeseq2.py           # DESeq2 wrapper
-│   └── visualization.py       # Plotting functions
-├── data/               # Input data
-└── results/            # Output directory (generated)
-```
 
 ## Citation
 
