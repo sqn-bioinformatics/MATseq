@@ -30,12 +30,10 @@ cd MATseq
 # Install dependencies via Poetry
 poetry install
 
-## Usage
+# Execute Snakemake pipeline :
+poetry run python MATseq.py --run-snakemake
 
-### Running the Pipeline
-
-Execute the main pipeline:
-```bash
+# Execute the analysis:
 poetry run python MATseq.py
 ```
 
