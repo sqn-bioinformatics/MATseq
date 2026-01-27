@@ -63,6 +63,7 @@ venv/
 
 #ignore misc caches
 cache/
+/cache
 
 
 
