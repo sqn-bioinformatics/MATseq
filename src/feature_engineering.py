@@ -81,7 +81,9 @@ def create_feature_pipeline(
     assert n_estimators > 0, f"n_estimators must be positive, got {n_estimators}"
     assert max_depth > 0, f"max_depth must be positive, got {max_depth}"
     assert max_features > 0, f"max_features must be positive, got {max_features}"
-    assert feature_threshold > 0, f"feature_threshold must be positive, got {feature_threshold}"
+    assert (
+        feature_threshold > 0
+    ), f"feature_threshold must be positive, got {feature_threshold}"
 
     en = ExtraTreesClassifier(
         n_estimators=n_estimators, max_depth=max_depth, random_state=random_state

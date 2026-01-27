@@ -23,7 +23,7 @@ def merge_counts(
     - Merges all files into a single DataFrame with genes as rows and samples as columns
 
     Args:
-        featurecounts_dir: Path to directory containing featurecounts .txt files
+        featurecounts_dir: Path to directory containing featurecounts.txt files
         output_path: Optional path to save the merged output file
 
     Returns:
@@ -192,8 +192,12 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
 
     data_dir = Path(data_dir)
     assert data_dir.exists(), f"Data directory not found: {data_dir}"
-    assert (data_dir / "Supplementary_Table_5.csv").exists(), f"Missing Supplementary_Table_5.csv in {data_dir}"
-    assert (data_dir / "Supplementary_Table_6.csv").exists(), f"Missing Supplementary_Table_6.csv in {data_dir}"
+    assert (
+        data_dir / "Supplementary_Table_5.csv"
+    ).exists(), f"Missing Supplementary_Table_5.csv in {data_dir}"
+    assert (
+        data_dir / "Supplementary_Table_6.csv"
+    ).exists(), f"Missing Supplementary_Table_6.csv in {data_dir}"
 
     tlr4_raw = pd.read_csv(data_dir / "Supplementary_Table_5.csv")
     tlr4_lps_mask = tlr4_raw["OD630nm_LPS_Replicate1"].notna()

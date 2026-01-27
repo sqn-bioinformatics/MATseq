@@ -10,7 +10,7 @@ from pydeseq2.ds import DeseqStats
 from pydeseq2.default_inference import DefaultInference
 
 from .visualization import Plotter
-from .cache import load_gene2go, PipelineCache
+from .cache import PipelineCache
 
 
 class DataProcessor:

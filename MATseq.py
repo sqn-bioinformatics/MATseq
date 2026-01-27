@@ -9,6 +9,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).parent))
+rs = np.random.RandomState(125984651485)
 
 from src import (
     # Configuration
@@ -338,9 +339,9 @@ class MATseqPipeline:
 
         def _feature_select():
             print(f"Running feature selection for {subset_name}...")
-            pipe = create_feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(
-                transform="pandas"
-            )
+            pipe = create_feature_pipeline(
+                **FEATURE_SELECTION_CONFIG, random_state=rs
+            ).set_output(transform="pandas")
             X_selected = pipe.fit_transform(X, y)
             feature_names = pipe[:-1].get_feature_names_out()
             X_fs = pd.DataFrame(X_selected, columns=feature_names, index=X.index)

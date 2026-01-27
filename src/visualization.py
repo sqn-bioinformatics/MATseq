@@ -433,17 +433,6 @@ def plot_pca_for_pandas(
 
 
 class Plotter:
-    """Comprehensive visualization and analysis class for genomic data.
-
-    This class provides methods for creating various plots and performing GO enrichment analysis.
-    It maintains class-level GO term data that is initialized once and shared across instances.
-
-    Attributes:
-        geneid_symbol_mapper_human: Mapping from gene symbols to gene IDs.
-        goeaobj: GO enrichment analysis object.
-        is_initialized: Flag indicating if GO terms have been initialized.
-    """
-
     geneid_symbol_mapper_human = None
     goeaobj = None
     total_go_terms = None

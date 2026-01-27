@@ -18,8 +18,7 @@
     "n_estimators": 250,
     "max_depth": 5,
     "max_features": 250,
-    "feature_threshold": 0.001,
-    "random_state": 42
+    "feature_threshold": 0.001
   },
   "model_training": {
     "random_state": 42,

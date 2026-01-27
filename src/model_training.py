@@ -377,8 +377,14 @@ class ModelTrainer:
         print(f"All models saved to {output_dir}")
         return output_dir
 
-    def evaluate(self, X: np.ndarray, y: np.ndarray, eval_dir: Path = None,
-                 cv: int = 5, eval_name: str = None) -> pd.DataFrame:
+    def evaluate(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        eval_dir: Path = None,
+        cv: int = 5,
+        eval_name: str = None,
+    ) -> pd.DataFrame:
         """Evaluate all trained models using cross-validation.
 
         Args:
@@ -404,7 +410,10 @@ class ModelTrainer:
         X_array = X.values if isinstance(X, pd.DataFrame) else X
         y_array = y.values if isinstance(y, pd.Series) else y
 
-        if not hasattr(self.label_encoder, 'classes_') or self.label_encoder.classes_ is None:
+        if (
+            not hasattr(self.label_encoder, "classes_")
+            or self.label_encoder.classes_ is None
+        ):
             self.label_encoder.fit(y_array)
         y_encoded = self.label_encoder.transform(y_array)
         smote = ModelFactory.create_smote(random_state=self.random_state)
@@ -412,13 +421,17 @@ class ModelTrainer:
 
         all_fold_results = []
         summary_results = []
-        sss = StratifiedShuffleSplit(n_splits=cv, test_size=0.2, random_state=self.random_state)
+        sss = StratifiedShuffleSplit(
+            n_splits=cv, test_size=0.2, random_state=self.random_state
+        )
 
         for model_name, model in self.trained_models.items():
             print(f"Evaluating {model_name}...")
             fold_scores = []
 
-            for fold_idx, (train_idx, test_idx) in enumerate(sss.split(X_resampled, y_resampled)):
+            for fold_idx, (train_idx, test_idx) in enumerate(
+                sss.split(X_resampled, y_resampled)
+            ):
                 X_train_fold = X_resampled[train_idx]
                 X_test_fold = X_resampled[test_idx]
                 y_train_fold = y_resampled[train_idx]
@@ -431,29 +444,35 @@ class ModelTrainer:
                 scores = make_score(y_test_fold, y_pred_encoded)
                 fold_scores.append(scores)
 
-                all_fold_results.append({
-                    "model": model_name,
-                    "fold": fold_idx,
-                    **scores,
-                })
+                all_fold_results.append(
+                    {
+                        "model": model_name,
+                        "fold": fold_idx,
+                        **scores,
+                    }
+                )
 
                 if fig_dir:
                     y_pred = self.label_encoder.inverse_transform(y_pred_encoded)
                     y_test = self.label_encoder.inverse_transform(y_test_fold)
                     self._save_confusion_matrix(
-                        y_pred, y_test,
-                        f"{prefix}{model_name}_fold_{fold_idx}",
-                        fig_dir
+                        y_pred, y_test, f"{prefix}{model_name}_fold_{fold_idx}", fig_dir
                     )
 
-            avg_scores = {k: np.mean([s[k] for s in fold_scores]) for k in fold_scores[0].keys()}
-            std_scores = {k: np.std([s[k] for s in fold_scores]) for k in fold_scores[0].keys()}
+            avg_scores = {
+                k: np.mean([s[k] for s in fold_scores]) for k in fold_scores[0].keys()
+            }
+            std_scores = {
+                k: np.std([s[k] for s in fold_scores]) for k in fold_scores[0].keys()
+            }
 
-            summary_results.append({
-                "model": model_name,
-                **{f"{k}_mean": v for k, v in avg_scores.items()},
-                **{f"{k}_std": v for k, v in std_scores.items()},
-            })
+            summary_results.append(
+                {
+                    "model": model_name,
+                    **{f"{k}_mean": v for k, v in avg_scores.items()},
+                    **{f"{k}_std": v for k, v in std_scores.items()},
+                }
+            )
 
         fold_df = pd.DataFrame(all_fold_results)
         summary_df = pd.DataFrame(summary_results)
@@ -469,7 +488,9 @@ class ModelTrainer:
 
         return summary_df
 
-    def _save_confusion_matrix(self, y_pred, y_test, name: str, output_dir: Path) -> None:
+    def _save_confusion_matrix(
+        self, y_pred, y_test, name: str, output_dir: Path
+    ) -> None:
         """Save confusion matrix visualization.
 
         Args:

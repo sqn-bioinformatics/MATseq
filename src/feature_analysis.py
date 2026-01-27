@@ -10,6 +10,7 @@ from collections import Counter
 from matplotlib_venn import venn2
 
 from .feature_engineering import create_feature_pipeline
+from .config import FEATURE_SELECTION_CONFIG
 
 
 class FeatureSelectionAnalyzer:
@@ -37,7 +38,6 @@ class FeatureSelectionAnalyzer:
         X: pd.DataFrame,
         y: np.ndarray,
         n_runs: int = 1000,
-        random_states: List[int] = None,
         pipeline_config: Dict = None,
     ) -> Dict[int, set]:
         """Run feature selection pipeline multiple times with different seeds.
@@ -46,8 +46,8 @@ class FeatureSelectionAnalyzer:
             X: Feature matrix (samples x features).
             y: Target labels.
             n_runs: Number of runs to perform.
-            random_states: List of random states. If None, uses range(n_runs).
-            pipeline_config: Config dict for create_feature_pipeline (excluding random_state).
+            random_states: List of random states.
+            pipeline_config: Config dict for create_feature_pipeline.
 
         Returns:
             Dictionary mapping run number to selected gene set.
@@ -56,11 +56,8 @@ class FeatureSelectionAnalyzer:
         assert len(y) > 0, "y cannot be empty"
         assert n_runs > 0, f"n_runs must be positive, got {n_runs}"
 
-        if random_states is None:
-            random_states = list(range(n_runs))
-
-        if pipeline_config is None:
-            pipeline_config = {}
+        rs = np.random.RandomState(125984651485)
+        random_states = rs.randint(-5000, 5000, size=n_runs)
 
         self.feature_sets = []
         gene_counts = Counter()
@@ -71,7 +68,7 @@ class FeatureSelectionAnalyzer:
                 print(f"  Completed {i + 1}/{n_runs} runs...")
 
             pipe = create_feature_pipeline(
-                **pipeline_config, random_state=random_state
+                **FEATURE_SELECTION_CONFIG, random_state=random_state
             ).set_output(transform="pandas")
             X_selected = pipe.fit_transform(X, y)
             selected_genes = pipe[:-1].get_feature_names_out()
