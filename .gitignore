@@ -50,9 +50,9 @@ env/
 venv/
 
 #ignore data files (except requiring manual download)
-/data/deseq2/*.obo
-/data/deseq2/*.gz
-/data/deseq2/gene2go
+/data/go_terms_support/*.obo
+/data/go_terms_support/*.gz
+/data/go_terms_support/gene2go
 /data/raw/
 
 

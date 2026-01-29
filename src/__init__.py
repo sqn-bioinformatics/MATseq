@@ -42,31 +42,27 @@ from .config import (
     BACTERIAL_LIGANDS_ORIGINAL_NAMES,
 )
 
-# Optional import for DESeq2 (requires pydeseq2)
-try:
-    from .pydeseq2 import (
-        DataProcessor as DESeq2DataProcessor,
-        Plotter,
-        AnalysisPipeline,
-    )
-except ImportError:
-    DESeq2DataProcessor = None
-    Plotter = None
-    AnalysisPipeline = None
+from .pydeseq2 import (
+    DataProcessor as DESeq2DataProcessor,
+    AnalysisPipeline,
+)
 
-# Optional import for visualization (requires goatools)
-try:
-    from .visualization import (
-        plot_gene_expression_by_class,
-        plot_tlr_hek_blue,
-        plot_pca_for_pandas,
-        make_probability_matrix,
-    )
-except ImportError:
-    plot_gene_expression_by_class = None
-    plot_tlr_hek_blue = None
-    plot_pca_for_pandas = None
-    make_probability_matrix = None
+from .visualization import (
+    plot_gene_expression_by_class,
+    plot_tlr_hek_blue,
+    plot_pca_pandas,
+    plot_volcano,
+    plot_heatmap,
+    plot_pca_deseq2,
+    plot_go,
+    make_probability_matrix,
+)
+
+from .go_term_analysis import (
+    initialize_go,
+    generate_go_table,
+    run_go_analysis,
+)
 
 # Feature analysis
 from .feature_analysis import (
@@ -116,12 +112,19 @@ __all__ = [
     "make_probability_matrix",
     # DESeq2 analysis
     "DESeq2DataProcessor",
-    "Plotter",
     "AnalysisPipeline",
     # Visualization
     "plot_gene_expression_by_class",
     "plot_tlr_hek_blue",
-    "plot_pca_for_pandas",
+    "plot_pca_pandas",
+    "plot_volcano",
+    "plot_heatmap",
+    "plot_pca_deseq2",
+    "plot_go",
+    # GO term analysis
+    "initialize_go",
+    "generate_go_table",
+    "run_go_analysis",
     # Feature analysis
     "FeatureSelectionAnalyzer",
     "VennDiagramGenerator",

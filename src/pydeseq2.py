@@ -9,7 +9,8 @@ from pydeseq2.dds import DeseqDataSet
 from pydeseq2.ds import DeseqStats
 from pydeseq2.default_inference import DefaultInference
 
-from .visualization import Plotter
+from .visualization import plot_volcano, plot_heatmap, plot_go
+from .go_term_analysis import run_go_analysis
 from .cache import PipelineCache
 
 
@@ -320,14 +321,21 @@ class AnalysisPipeline:
             res: Full results DataFrame.
             sigs: Significant genes DataFrame.
         """
-        plotter = Plotter(dds, res, sigs, ligand_name, figures_dir=self.figures_dir)
+        plot_volcano(res, ligand_name, output_path=self.figures_dir)
+        plot_heatmap(dds, sigs, ligand_name, output_path=self.figures_dir)
 
-        plotter.make_figure("volcano")
-        plotter.make_figure("histogram")
-
-        # Try GO enrichment if available
         try:
-            plotter.make_figure("go")
+            go_terms_dir = Path.cwd() / "results" / "go_terms"
+            go_terms_dir.mkdir(parents=True, exist_ok=True)
+            go_df = run_go_analysis(sigs, ligand_name, output_dir=go_terms_dir)
+            if not go_df.empty:
+                go_fig_dir = Path.cwd() / "results" / "figures" / "go"
+                plot_go(
+                    go_df,
+                    title=f"{ligand_name} Top 20 Significant GO Terms",
+                    output_path=go_fig_dir,
+                    output_filename=f"{ligand_name}_go.png",
+                )
         except Exception as e:
             print(f"Warning: GO enrichment failed for {ligand_name}: {e}")
 

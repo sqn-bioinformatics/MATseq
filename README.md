@@ -30,12 +30,11 @@ cd MATseq
 # Install dependencies via Poetry
 poetry install
 
-## Usage
+# Running the Pipeline
+## Run Snakemake preprocessing
+poetry run python MATseq.py --run-snakemake
 
-### Running the Pipeline
-
-Execute the main pipeline:
-```bash
+## Run Analysis
 poetry run python MATseq.py
 ```
 
@@ -49,42 +48,11 @@ Optional arguments:
 - `--force-recompute`: Skip cache and recompute all steps
 - `--cache-dir PATH`: Directory for cached files (default: results/cache)
 
-
-### Configuration
-
-The configuration is managed through `config.json`:
-
-**Snakemake preprocessing:**
-- `snakemake.sample_dir`: Raw FASTQ files directory
-- `snakemake.work_dir`: Snakemake working directory
-- `snakemake.genome_dir`: Reference genome directory
-- `snakemake.threads`: Number of threads
-
-**Paths:**
-- `paths.data_dir`: Input data directory
-- `paths.deseq2_dir`: DESeq2 reference files (gene2go, go-basic.obo should download automatically)
-- `paths.results_dir`: Output results directory
-- `paths.featurecounts_dir`: featureCounts output location
-
-**DESeq2 parameters:**
-- `deseq2.padj_threshold`: Adjusted p-value threshold (default: 0.05)
-- `deseq2.log2fc_threshold`: Log2 fold-change threshold (default: 2)
-- `deseq2.n_cpus`: Number of CPUs for parallel processing
-
-**Feature selection:**
-- `feature_selection.k_best`: Number of top features to select
-- `feature_selection.n_estimators`: Random forest estimators
-- `feature_selection.random_state`: Reproducibility seed
-
-**Model training:**
-- `model_training.apply_smote`: Enable SMOTE oversampling (used in this paper)
-- `model_training.smote_k_neighbors`: SMOTE k-neighbors parameter
-
 ## Pipeline Steps
 
 ### Snakemake Preprocessing
-Snakemake will request a path to the raw data in fastq.gz format. Download the raw data from NCBI, GEO accession number GSE313994. Provide it with --genome-dir or in the config.json.
-Snakemake will request a path to a reference genome; we used GRCh38_GCA_000001405.15. Provide it with --fastq-dir or in the config.json.
+Snakemake pipeline processes raw FASTQ into MATseq_count_summary.csv. It must be run before the remainder of the pipeline. 
+Snakemake will request a path to the raw data in fastq.gz format. Download the raw data from NCBI, GEO accession number GSE313994. Provide it with --genome-dir or in the config.json. It will also request a path to a reference genome; we used GRCh38_GCA_000001405.15. Provide it with --fastq-dir or in the config.json.
 
 Run with `--run-snakemake` to execute the RNA-seq preprocessing:
 1. **Quality Control** - FastQC on raw reads
@@ -133,35 +101,70 @@ Run with `--run-snakemake` to execute the RNA-seq preprocessing:
    - Retrain models on dataset without Fla-Pa samples
    - Supplementary Figure 3
 
+### Configuration
 
+The configuration is managed through `config.json`:
+
+**Snakemake preprocessing:**
+- `snakemake.sample_dir`: Raw FASTQ files directory
+- `snakemake.work_dir`: Snakemake working directory
+- `snakemake.genome_dir`: Reference genome directory
+- `snakemake.threads`: Number of threads
+
+**Paths:**
+- `paths.data_dir`: Input data directory
+- `paths.go_terms_support_dir`: GO enrichment support files directory
+- `paths.results_dir`: Output results directory
+- `paths.featurecounts_dir`: featureCounts output location
+
+**GO Enrichment Files:**
+The following files must be in `data/go_terms_support/`:
+- `go-basic.obo` - Download from: https://current.geneontology.org/ontology/go-basic.obo
+- `gene2go.gz` - Download from: https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2go.gz
+
+MATseq will attempt to download these files automatically if missing (may be slow).
+
+**DESeq2 parameters:**
+- `deseq2.padj_threshold`: Adjusted p-value threshold (default: 0.05)
+- `deseq2.log2fc_threshold`: Log2 fold-change threshold (default: 2)
+- `deseq2.n_cpus`: Number of CPUs for parallel processing
+
+**Feature selection:**
+- `feature_selection.k_best`: Number of top features to select
+- `feature_selection.n_estimators`: Random forest estimators
+- `feature_selection.random_state`: Reproducibility seed
+
+**Model training:**
+- `model_training.apply_smote`: Enable SMOTE oversampling (used in this paper)
+- `model_training.smote_k_neighbors`: SMOTE k-neighbors parameter
 
 ## Output Structure
 
 ```
 results/
-├── cache/                          # Cached pipeline step outputs
-├── counts/                         # Processed count matrices
+├── cache/                          
+├── counts/                         
 │   └── MATseq_count_summary.csv
-├── subsets/                        # Training/test data subsets
+├── subsets/                        
 │   ├── training_data_with_labels.csv
 │   ├── other_ligands_data_with_labels.csv
 │   └── bacterial_data_with_labels.csv
-├── differential_gene_expression/   # DESeq2 results
+├── differential_gene_expression/   
 │   ├── {ligand}_deseq2_results.csv
 │   └── merged_results.csv
 ├── figures/
-│   ├── deseq2/                     # DESeq2 visualizations
+│   ├── deseq2/                     
 │   │   ├── {ligand}_volcano.png
 │   │   ├── {ligand}_histogram.png
 │   │   └── {ligand}_go.png
-│   ├── pca/                        # PCA plots
-│   ├── venn/                       # Venn diagrams
-│   └── supplementary/              # Step 8: TLR reporter and gene expression
+│   ├── pca/                        
+│   ├── venn/                       
+│   └── supplementary/              
 │       └── tlr_hek_blue.png
-├── go_terms/                       # GO enrichment results
+├── go_terms/                       
 │   └── {ligand}_go_terms.csv
-├── models/                         # Trained models
-├── model_evaluation/               # Model performance metrics
+├── models/                         
+├── model_evaluation/               
 │   ├── confusion_matrices/
 │   └── evaluation_metrics.csv
 └── predictions/                    
@@ -173,7 +176,7 @@ results/
     │   ├── {model}_predictions.csv
     │   ├── {model}_probabilities.csv
     │   └── {model}_probabilities_heatmap.png
-    └── training_wo_flapa/          # Step 7
+    └── training_wo_flapa/          
         ├── other_ligands/
         └── bacterial/
 ```
@@ -184,28 +187,38 @@ results/
 MATseq/
 ├── MATseq.py           
 ├── config.json         
-├── pyproject.toml      # Poetry dependencies
-├── pipeline/           # Snakemake preprocessing
-│   ├── 0_MATseq.smk                       # Main workflow
-│   ├── 1_control_quality_fastqc.smk       # FastQC quality control
-│   ├── 2_trim_fastp.smk                   # Fastp adapter trimming
-│   ├── 3_align_star.smk                   # STAR alignment
-│   ├── 4_merge_sort_index_samtools.smk    # SAMtools processing
-│   ├── 5_deduplicate_umitools.smk         # UMI-tools deduplication
-│   ├── 6_count_reads_featurecounts.smk    # featureCounts quantification
-│   └── environment.yml                    # Conda environment spec
+├── pyproject.toml      
+├── pipeline/           
+│   ├── 0_MATseq.smk                       
+│   ├── 1_control_quality_fastqc.smk       
+│   ├── 2_trim_fastp.smk                   
+│   ├── 3_align_star.smk                   
+│   ├── 4_merge_sort_index_samtools.smk    
+│   ├── 5_deduplicate_umitools.smk         
+│   ├── 6_count_reads_featurecounts.smk    
+│   └── environment.yml                    
 ├── src/
-│   ├── cache.py               # Caching system
-│   ├── config.py              # Configuration loading
-│   ├── preprocessing.py       # Data loading and filtering
-│   ├── feature_engineering.py # Feature selection pipeline
-│   ├── feature_analysis.py    # Feature selection analysis
-│   ├── model_training.py      # ML model training
-│   ├── prediction.py          # Model prediction
-│   ├── pydeseq2.py           # DESeq2 wrapper
-│   └── visualization.py       # Plotting functions
-├── data/               # Input data
-└── results/            # Output directory (generated)
+│   ├── cache.py               
+│   ├── config.py              
+│   ├── preprocessing.py       
+│   ├── feature_engineering.py 
+│   ├── feature_analysis.py    
+│   ├── model_training.py      
+│   ├── prediction.py          
+│   ├── pydeseq2.py           
+│   ├── visualization.py       
+│   └── go_term_analysis.py    
+├── data/               
+│   ├── go_terms_support/      
+│   │   ├── go-basic.obo                                                        # (required)
+│   │   ├── gene2go.gz                                                          # (required)
+│   │   └──  gene_result_ncbi_human_proteincoding.txt 
+│   ├── reference_genome/
+│   │   └── GRCh38_GCA_000001405.15/
+│   │   │   ├── GCA_000001405.15_GRCh38_full_analysis_set.refseq_annotation     # (required)
+│   │   │   └── GCA_000001405.15_GRCh38_no_alt_analysis_set                     # (required)
+│   └── raw/                                                                    # FASTQ (required)
+└── results/            
 ```
 
 ## Citation

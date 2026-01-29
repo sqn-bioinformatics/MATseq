@@ -9,7 +9,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).parent))
-rs = np.random.RandomState(125984651485)
+random_state = np.random.RandomState(13213548)
 
 from src import (
     # Configuration
@@ -38,7 +38,7 @@ from src import (
     make_score,
     get_confusion_matrix,
     # Visualization
-    plot_pca_for_pandas,
+    plot_pca_pandas,
     plot_gene_expression_by_class,
     plot_tlr_hek_blue,
     make_probability_matrix,
@@ -314,7 +314,7 @@ class MATseqPipeline:
             (False, ""),
             (True, "_labeled"),
         ]:
-            plot_pca_for_pandas(
+            plot_pca_pandas(
                 name=f"{subset_name}_selected{suffix}",
                 with_sample_names=with_names,
                 output_filename=f"{subset_name}_pca{suffix}.png",
@@ -340,7 +340,7 @@ class MATseqPipeline:
         def _feature_select():
             print(f"Running feature selection for {subset_name}...")
             pipe = create_feature_pipeline(
-                **FEATURE_SELECTION_CONFIG, random_state=rs
+                **FEATURE_SELECTION_CONFIG, random_state=random_state
             ).set_output(transform="pandas")
             X_selected = pipe.fit_transform(X, y)
             feature_names = pipe[:-1].get_feature_names_out()
@@ -371,7 +371,7 @@ class MATseqPipeline:
             (False, ""),
             (True, "_labeled"),
         ]:
-            plot_pca_for_pandas(
+            plot_pca_pandas(
                 name=f"{subset_name}_selected{suffix}",
                 with_sample_names=with_names,
                 output_filename=f"{subset_name}_pca_selected{suffix}.png",

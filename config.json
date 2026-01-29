@@ -1,7 +1,7 @@
 {
   "paths": {
     "data_dir": "~/MATseq/data",
-    "deseq2_dir": "~/MATseq/data/deseq2",
+    "go_terms_support_dir": "~/MATseq/data/go_terms_support",
     "results_dir": "~/MATseq/results",
     "cache_dir": "~/MATseq/results/cache",
     "figures_dir": "~/MATseq/results/figures",

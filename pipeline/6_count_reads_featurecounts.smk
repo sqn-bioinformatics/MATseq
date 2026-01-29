@@ -19,30 +19,6 @@ rule featurecounts:
     conda: "environment.yml"
     shell: "featureCounts -T {threads} -p --countReadPairs -C -B -t exon -g gene_id -a {input.annotation} -o {output.counts} {input.bam}"
 
-# # Trim columns to leave those containing Geneid and sample_id name 
-# rule trim:
-#     input:
-#         rules.featurecounts.output.counts
-#     output:
-#         "featurecounts/{sample_id}_clean.txt"
-#     log: "logs/featurecounts_trim/{sample_id}.log"
-#     benchmark: "benchmarks/featurecounts_trim/{sample_id}.txt"
-#     run: 
-#         shell("cut -f1,7 {input} > {output}")
-#         shell("cut -f1 {input} > genes.txt")
-#         shell("genes.txt > output.txt")
-
-# # Merge genecounts into one dataset
-# rule merge:
-#     input:
-#         rules.trim.output
-#     output:
-#         temp="{gene_id}.txt",
-#     run:
-#         shell("cp {input} {output.temp}"),
-#         shell("paste {input} > genereads_summary/output.txt")
-
-
 
 
 

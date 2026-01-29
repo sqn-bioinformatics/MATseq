@@ -5,13 +5,22 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Any, Dict
 
-_CONFIG_FILE = Path(__file__).parent / "config.json"
-_config_cache: Dict[str, Any] = None
+
+def _find_config_path() -> Path:
+    """Find config.json in project root or current working directory."""
+    candidates = [
+        Path(__file__).parent.parent / "config.json",
+        Path.cwd() / "config.json",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
 
 
 @lru_cache
 def _load_config() -> dict[str, Any]:
-    config_path = Path(__file__).parent.parent / "config.json"
+    config_path = _find_config_path()
     try:
         with config_path.open() as f:
             return json.load(f)
@@ -36,16 +45,32 @@ def get_config(key: str) -> Any:
     return config
 
 
+def _get_project_root() -> Path:
+    """Get project root directory."""
+    src_dir = Path(__file__).parent
+    if src_dir.name == "src":
+        return src_dir.parent
+    return Path.cwd()
+
+
 def expand_path(path_str: str) -> Path:
-    """Expand home directory and convert to Path.
+    """Expand path relative to project root or home directory.
 
     Args:
-        path_str: Path string (may contain ~).
+        path_str: Path string (may contain ~ or relative path).
 
     Returns:
-        Expanded Path object.
+        Expanded absolute Path object.
     """
-    return Path(path_str).expanduser()
+    path = Path(path_str)
+    if path_str.startswith("~"):
+        return path.expanduser()
+    if path_str.startswith("~/MATseq"):
+        relative = path_str.replace("~/MATseq/", "")
+        return _get_project_root() / relative
+    if not path.is_absolute():
+        return _get_project_root() / path
+    return path
 
 
 def get_work_dir() -> Path:
@@ -68,9 +93,9 @@ def get_data_dir() -> Path:
     return expand_path(get_config("paths.data_dir"))
 
 
-def get_deseq2_dir() -> Path:
-    """Get DESeq2 data directory path."""
-    return expand_path(get_config("paths.deseq2_dir"))
+def get_go_terms_support_dir() -> Path:
+    """Get GO terms support data directory path."""
+    return expand_path(get_config("paths.go_terms_support_dir"))
 
 
 def get_results_dir() -> Path:
