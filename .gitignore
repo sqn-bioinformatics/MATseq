@@ -55,12 +55,15 @@ venv/
 /data/go_terms_support/gene2go
 /data/raw/
 
-
 #ignore markdown files
 *.md
 
 #ignore claude cache
-.claude
+/.claude
+
+#ignore misc caches
+cache/
+/cache
 
 
 
