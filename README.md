@@ -52,8 +52,8 @@ Optional arguments:
 ## Pipeline Steps
 
 ### Snakemake Preprocessing
-Snakemake pipeline processes raw FASTQ into MATseq_count_summary.csv. It must be run before the remainder of the pipeline. 
-Snakemake will request a path to the raw data in fastq.gz format. Download the raw data from NCBI, GEO accession number GSE313994. Provide it with --genome-dir or in the config.json. It will also request a path to a reference genome; we used GRCh38_GCA_000001405.15. Provide it with --fastq-dir or in the config.json.
+
+Snakemake pipeline processes raw FASTQ into MATseq_count_summary.csv. It must be run before the remainder of the pipeline. Snakemake will request a path to the raw data in fastq.gz format. Download the raw data from [NCBI GEO database](https://www.ncbi.nlm.nih.gov/geo/), GEO accession number GSE313994. Provide it with --genome-dir or in the config.json. It will also request a path to a reference genome; we used GRCh38_GCA_000001405.15. Download a reference genome from [NCBI](https://www.ncbi.nlm.nih.gov/datasets/genome/). Provide it with --fastq-dir or in the config.json.
 
 Run with `--run-snakemake` to execute the RNA-seq preprocessing:
 1. **Quality Control** - FastQC on raw reads
@@ -62,6 +62,43 @@ Run with `--run-snakemake` to execute the RNA-seq preprocessing:
 4. **Merge/Sort/Index** - SAMtools BAM processing
 5. **Deduplication** - UMI-tools deduplication
 6. **Quantification** - featureCounts gene-level counting
+
+### Configuration
+
+The configuration is managed through `config.json`:
+
+**Snakemake preprocessing:**
+- `snakemake.sample_dir`: Raw FASTQ files directory
+- `snakemake.work_dir`: Snakemake working directory
+- `snakemake.genome_dir`: Reference genome directory
+- `snakemake.threads`: Number of threads
+
+**Paths:**
+- `paths.data_dir`: Input data directory
+- `paths.go_terms_support_dir`: GO enrichment support files directory
+- `paths.results_dir`: Output results directory
+- `paths.featurecounts_dir`: featureCounts output location
+
+**GO Enrichment Files:**
+The following files must be in `data/go_terms_support/`:
+- `go-basic.obo` - Download from: https://current.geneontology.org/ontology/go-basic.obo
+- `gene2go.gz` - Download from: https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2go.gz
+
+MATseq will attempt to download these files automatically if missing (may be slow).
+
+**DESeq2 parameters:**
+- `deseq2.padj_threshold`: Adjusted p-value threshold (default: 0.05)
+- `deseq2.log2fc_threshold`: Log2 fold-change threshold (default: 2)
+- `deseq2.n_cpus`: Number of CPUs for parallel processing
+
+**Feature selection:**
+- `feature_selection.k_best`: Number of top features to select
+- `feature_selection.n_estimators`: Random forest estimators
+- `feature_selection.random_state`: Reproducibility seed
+
+**Model training:**
+- `model_training.apply_smote`: Enable SMOTE oversampling (used in this paper)
+- `model_training.smote_k_neighbors`: SMOTE k-neighbors parameter
 
 ### Main Pipeline
 
@@ -102,42 +139,6 @@ Run with `--run-snakemake` to execute the RNA-seq preprocessing:
    - Retrain models on dataset without Fla-Pa samples
    - Supplementary Figure 3
 
-### Configuration
-
-The configuration is managed through `config.json`:
-
-**Snakemake preprocessing:**
-- `snakemake.sample_dir`: Raw FASTQ files directory
-- `snakemake.work_dir`: Snakemake working directory
-- `snakemake.genome_dir`: Reference genome directory
-- `snakemake.threads`: Number of threads
-
-**Paths:**
-- `paths.data_dir`: Input data directory
-- `paths.go_terms_support_dir`: GO enrichment support files directory
-- `paths.results_dir`: Output results directory
-- `paths.featurecounts_dir`: featureCounts output location
-
-**GO Enrichment Files:**
-The following files must be in `data/go_terms_support/`:
-- `go-basic.obo` - Download from: https://current.geneontology.org/ontology/go-basic.obo
-- `gene2go.gz` - Download from: https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2go.gz
-
-MATseq will attempt to download these files automatically if missing (may be slow).
-
-**DESeq2 parameters:**
-- `deseq2.padj_threshold`: Adjusted p-value threshold (default: 0.05)
-- `deseq2.log2fc_threshold`: Log2 fold-change threshold (default: 2)
-- `deseq2.n_cpus`: Number of CPUs for parallel processing
-
-**Feature selection:**
-- `feature_selection.k_best`: Number of top features to select
-- `feature_selection.n_estimators`: Random forest estimators
-- `feature_selection.random_state`: Reproducibility seed
-
-**Model training:**
-- `model_training.apply_smote`: Enable SMOTE oversampling (used in this paper)
-- `model_training.smote_k_neighbors`: SMOTE k-neighbors parameter
 
 ## Output Structure
 
