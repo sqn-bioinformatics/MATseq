@@ -214,22 +214,22 @@ class ModelTrainer:
             smote_sampling_strategy: SMOTE sampling strategy ('not majority' or 'all').
             smote_k_neighbors: Number of neighbors for SMOTE.
         """
-        assert isinstance(
-            X, (np.ndarray, pd.DataFrame)
-        ), f"X must be ndarray or DataFrame, got {type(X)}"
-        assert X.ndim == 2, f"X must be 2D, got shape {X.shape}"
-        assert len(X) > 0, f"X must have samples, got {len(X)}"
-        assert isinstance(
-            y, (np.ndarray, pd.Series)
-        ), f"y must be ndarray or Series, got {type(y)}"
-        assert y.ndim == 1, f"y must be 1D, got shape {y.shape}"
-        assert len(X) == len(y), f"X and y must have same length: {len(X)} vs {len(y)}"
-        assert isinstance(
-            apply_smote, bool
-        ), f"apply_smote must be bool, got {type(apply_smote)}"
-        assert isinstance(
-            random_state, int
-        ), f"random_state must be int, got {type(random_state)}"
+        if not isinstance(X, (np.ndarray, pd.DataFrame)):
+            raise TypeError(f"X must be ndarray or DataFrame, got {type(X)}")
+        if X.ndim != 2:
+            raise ValueError(f"X must be 2D, got shape {X.shape}")
+        if len(X) == 0:
+            raise ValueError(f"X must have samples, got {len(X)}")
+        if not isinstance(y, (np.ndarray, pd.Series)):
+            raise TypeError(f"y must be ndarray or Series, got {type(y)}")
+        if y.ndim != 1:
+            raise ValueError(f"y must be 1D, got shape {y.shape}")
+        if len(X) != len(y):
+            raise ValueError(f"X and y must have same length: {len(X)} vs {len(y)}")
+        if not isinstance(apply_smote, bool):
+            raise TypeError(f"apply_smote must be bool, got {type(apply_smote)}")
+        if not isinstance(random_state, int):
+            raise TypeError(f"random_state must be int, got {type(random_state)}")
 
         self.X = X
         self.y = y
@@ -254,9 +254,6 @@ class ModelTrainer:
             Tuple of (X_resampled, y_resampled_encoded) or (X, y_encoded) if no SMOTE.
         """
         y_encoded = self.label_encoder.fit_transform(self.y)
-        assert isinstance(
-            y_encoded, np.ndarray
-        ), f"Expected numpy.ndarray, got {type(y_encoded)}"
 
         if self.apply_smote:
             smote = ModelFactory.create_smote(
@@ -267,16 +264,10 @@ class ModelTrainer:
             X_resampled, y_resampled = smote.fit_resample(self.X, y_encoded)
             self.X_train = X_resampled
             self.y_train = y_resampled
-            assert isinstance(
-                self.y_train, np.ndarray
-            ), f"Expected numpy.ndarray, got {type(self.y_train)}"
             return X_resampled, y_resampled
         else:
             self.X_train = self.X.values if isinstance(self.X, pd.DataFrame) else self.X
             self.y_train = y_encoded
-            assert isinstance(
-                self.y_train, np.ndarray
-            ), f"Expected numpy.ndarray, got {type(self.y_train)}"
             return self.X_train, y_encoded
 
     def train_all_models(self) -> Dict:
@@ -304,9 +295,8 @@ class ModelTrainer:
         Returns:
             Predicted labels (encoded).
         """
-        assert isinstance(
-            X_test, np.ndarray
-        ), f"Expected numpy.ndarray, got {type(X_test)}"
+        if not isinstance(X_test, np.ndarray):
+            raise TypeError(f"X_test must be ndarray, got {type(X_test)}")
         if model_name not in self.trained_models:
             raise ValueError(f"Model '{model_name}' not trained. Train models first.")
         return self.trained_models[model_name].predict(X_test)
@@ -321,9 +311,8 @@ class ModelTrainer:
         Returns:
             Probability matrix (n_samples x n_classes).
         """
-        assert isinstance(
-            X_test, np.ndarray
-        ), f"Expected numpy.ndarray, got {type(X_test)}"
+        if not isinstance(X_test, np.ndarray):
+            raise TypeError(f"X_test must be ndarray, got {type(X_test)}")
         if model_name not in self.trained_models:
             raise ValueError(f"Model '{model_name}' not trained. Train models first.")
 
@@ -416,8 +405,6 @@ class ModelTrainer:
         ):
             self.label_encoder.fit(y_array)
         y_encoded = self.label_encoder.transform(y_array)
-        smote = ModelFactory.create_smote(random_state=self.random_state)
-        X_resampled, y_resampled = smote.fit_resample(X_array, y_encoded)
 
         all_fold_results = []
         summary_results = []
@@ -430,12 +417,19 @@ class ModelTrainer:
             fold_scores = []
 
             for fold_idx, (train_idx, test_idx) in enumerate(
-                sss.split(X_resampled, y_resampled)
+                sss.split(X_array, y_encoded)
             ):
-                X_train_fold = X_resampled[train_idx]
-                X_test_fold = X_resampled[test_idx]
-                y_train_fold = y_resampled[train_idx]
-                y_test_fold = y_resampled[test_idx]
+                X_train_fold = X_array[train_idx]
+                X_test_fold = X_array[test_idx]
+                y_train_fold = y_encoded[train_idx]
+                y_test_fold = y_encoded[test_idx]
+
+                smote = ModelFactory.create_smote(
+                    random_state=self.random_state + fold_idx
+                )
+                X_train_fold, y_train_fold = smote.fit_resample(
+                    X_train_fold, y_train_fold
+                )
 
                 model_clone = clone(model)
                 model_clone.fit(X_train_fold, y_train_fold)

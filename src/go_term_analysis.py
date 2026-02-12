@@ -1,12 +1,11 @@
 """GO term enrichment analysis using goatools."""
 
 import gzip
-import ftplib
 import shutil
 import pandas as pd
 from pathlib import Path
 from collections import namedtuple
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List
 
 
 from goatools.base import download_go_basic_obo
@@ -14,10 +13,6 @@ from goatools.base import download_ncbi_associations
 from goatools.obo_parser import GODag
 from goatools.anno.genetogo_reader import Gene2GoReader
 from goatools.goea.go_enrichment_ns import GOEnrichmentStudyNS
-
-
-global _is_initialized
-_is_initialized: bool = False
 
 
 def _get_data_dir() -> Path:
@@ -88,14 +83,16 @@ def _parse_geneid2nt(gene_file: Path) -> Dict[int, Any]:
     return geneid2nt
 
 
-def initialize_go(data_dir: Path = None):
+def initialize_go(data_dir: Path = None) -> tuple:
     """Initialize GO enrichment analysis objects.
 
     Loads GO ontology, gene associations, and creates enrichment study object.
-    Must be called before generate_go_table().
 
     Args:
         data_dir: Directory containing GO data files.
+
+    Returns:
+        Tuple of (goeaobj, geneid_symbol_mapper) for GO enrichment analysis.
     """
     print("Initializing GO terms...")
 
@@ -114,8 +111,8 @@ def initialize_go(data_dir: Path = None):
             shutil.move(downloaded, gene2go_gz)
 
         print("Extracting gene2go.gz...")
-        with gzip.open(gene2go_gz, 'rb') as f_in:
-            with open(gene2go_file, 'wb') as f_out:
+        with gzip.open(gene2go_gz, "rb") as f_in:
+            with open(gene2go_file, "wb") as f_out:
                 shutil.copyfileobj(f_in, f_out)
         print(f"gene2go extracted to {gene2go_file}")
 
@@ -140,7 +137,7 @@ def initialize_go(data_dir: Path = None):
 
     geneid2nt = _parse_geneid2nt(gene_file)
 
-    _goeaobj = GOEnrichmentStudyNS(
+    goeaobj = GOEnrichmentStudyNS(
         geneid2nt.keys(),
         ns2assoc,
         obodag,
@@ -149,41 +146,42 @@ def initialize_go(data_dir: Path = None):
         methods=["fdr_bh"],
     )
 
-    _geneid_symbol_mapper = {
+    geneid_symbol_mapper = {
         geneid2nt[key].Symbol: geneid2nt[key].GeneID for key in geneid2nt
     }
 
-    _is_initialized = True
     print("GO initialization complete.")
+    return goeaobj, geneid_symbol_mapper
 
 
-def generate_go_table(sigs: pd.DataFrame) -> pd.DataFrame:
+def generate_go_table(
+    sigs: pd.DataFrame, goeaobj, geneid_symbol_mapper: dict
+) -> pd.DataFrame:
     """Generate GO enrichment table for significant genes.
 
     Args:
         sigs: DataFrame with significant genes (gene symbols as index).
+        goeaobj: GO enrichment study object.
+        geneid_symbol_mapper: Dictionary mapping gene symbols to gene IDs.
 
     Returns:
         DataFrame with GO enrichment results.
     """
-    if not _is_initialized:
-        initialize_go()
-
     sigs_list = [str(gene) for gene in sigs.index]
     sigs_ids = [
-        int(_geneid_symbol_mapper[gene])
+        int(geneid_symbol_mapper[gene])
         for gene in sigs_list
-        if gene in _geneid_symbol_mapper
+        if gene in geneid_symbol_mapper
     ]
     print(
         f"Mapped {len(sigs_ids)/len(sigs_list)*100:.2f}% of "
         "significantly differentially expressed gene symbols to gene IDs."
     )
 
-    goea_results = _goeaobj.run_study(sigs_ids, prt=None)
+    goea_results = goeaobj.run_study(sigs_ids, prt=None)
     goea_results_sig = [r for r in goea_results if r.p_fdr_bh < 0.05]
 
-    inverted_mapping = {v: k for k, v in _geneid_symbol_mapper.items()}
+    inverted_mapping = {v: k for k, v in geneid_symbol_mapper.items()}
 
     go_df = pd.DataFrame(
         [
@@ -221,6 +219,9 @@ def run_go_analysis(
     sigs: pd.DataFrame,
     analysis_name: str,
     output_dir: Path = None,
+    data_dir: Path = None,
+    goeaobj=None,
+    geneid_symbol_mapper: dict = None,
 ) -> pd.DataFrame:
     """Run GO enrichment analysis and save results to CSV.
 
@@ -228,14 +229,16 @@ def run_go_analysis(
         sigs: DataFrame with significant genes.
         analysis_name: Name for output files.
         output_dir: Directory for output CSV.
+        data_dir: Directory containing GO data files.
+        goeaobj: Pre-initialized GO enrichment object (avoids re-initialization).
+        geneid_symbol_mapper: Pre-built gene symbol to ID mapping.
 
     Returns:
         DataFrame with GO enrichment results.
     """
-    if not _is_initialized:
-        initialize_go()
-
-    go_df = generate_go_table(sigs)
+    if goeaobj is None or geneid_symbol_mapper is None:
+        goeaobj, geneid_symbol_mapper = initialize_go(data_dir)
+    go_df = generate_go_table(sigs, goeaobj, geneid_symbol_mapper)
 
     if output_dir is None:
         output_dir = Path(__file__).parent.parent / "results" / "go_terms"
@@ -246,3 +249,46 @@ def run_go_analysis(
     print(f"GO table saved: {csv_path}")
 
     return go_df
+
+
+def merge_go_tables(
+    go_files: List[Path],
+    output_dir: Path = None,
+    output_filename: str = "GO_merged_results.csv",
+) -> pd.DataFrame:
+    """Merge GO enrichment results from multiple ligand analyses.
+
+    Args:
+        go_files: List of paths to GO result CSV files.
+        output_dir: Directory for output files. Defaults to results/go_terms.
+        output_filename: Name for merged output file.
+
+    Returns:
+        Merged DataFrame with all GO terms.
+    """
+    if not go_files:
+        raise ValueError("No GO files provided")
+
+    merged_df = None
+
+    for go_file in go_files:
+        ligand_name = go_file.stem.split("_")[0]
+        df = pd.read_csv(go_file, index_col=0)
+
+        df.insert(0, "Ligand", ligand_name)
+
+        if merged_df is None:
+            merged_df = df
+        else:
+            merged_df = pd.concat([merged_df, df], axis=0)
+
+    merged_df = merged_df.sort_values("fdr", ascending=True).reset_index(drop=True)
+
+    if output_dir is None:
+        output_dir = Path(__file__).parent.parent / "results" / "go_terms"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / output_filename
+    merged_df.to_csv(output_path)
+    print(f"Saved merged GO table to {output_path}")
+
+    return merged_df

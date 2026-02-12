@@ -9,7 +9,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).parent))
-random_state = np.random.RandomState(13213548)
+random_state = 138
 
 from src import (
     # Configuration
@@ -19,8 +19,6 @@ from src import (
     TRAINING_LIGANDS,
     ADDITIONAL_LIGANDS,
     BACTERIAL_LIGANDS,
-    TRAINING_LIGANDS_WO_FLAPA,
-    DESEQ2_CONFIG,
     FEATURE_SELECTION_CONFIG,
     MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
@@ -39,9 +37,7 @@ from src import (
     get_confusion_matrix,
     # Visualization
     plot_pca_pandas,
-    plot_gene_expression_by_class,
     plot_tlr_hek_blue,
-    make_probability_matrix,
     # DESeq2 analysis
     AnalysisPipeline,
     # Feature analysis
@@ -49,7 +45,6 @@ from src import (
     VennDiagramGenerator,
     # Prediction and comparison
     ModelPredictor,
-    ModelComparator,
 )
 
 from src.cache import PipelineCache
@@ -118,12 +113,6 @@ class MATseqPipeline:
             print(f"Current value: '{fastq_dir}'")
             print("Set via --fastq-dir or in config.json snakemake.sample_dir")
             return False
-
-        # Write validated paths back to config
-        config["snakemake"]["sample_dir"] = str(fastq_dir)
-        config["snakemake"]["genome_dir"] = str(genome_dir)
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
 
         snakefile = snakemake_dir / "0_MATseq.smk"
 
@@ -228,7 +217,6 @@ class MATseqPipeline:
                 X=X,
                 y=y,
                 n_runs=n_runs,
-                pipeline_config=FEATURE_SELECTION_CONFIG,
             )
 
             analyzer.create_gene_frequency_table(de_genes=de_genes)
@@ -429,34 +417,34 @@ class MATseqPipeline:
         )
         X_train, y_train = self.extract_and_run_pca_before_pipeline(df, "training")
 
-        deseq2_pipeline_training = AnalysisPipeline(
-            raw_counts=X_train,
-            sample_labels=y_train,
-            padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
-            log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
-            n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
-            cache=self.cache,
-            force_recompute=self.force_recompute,
-        )
-        deseq2_pipeline_training.run_analysis(
-            TRAINING_LIGANDS, negative_control="negative_control"
-        )
+        # deseq2_pipeline_training = AnalysisPipeline(
+        #     raw_counts=X_train,
+        #     sample_labels=y_train,
+        #     padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
+        #     log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
+        #     n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
+        #     cache=self.cache,
+        #     force_recompute=self.force_recompute,
+        # )
+        # deseq2_pipeline_training.run_analysis(
+        #     TRAINING_LIGANDS, negative_control="negative_control"
+        # )
 
-        # Step 3: Venn Diagram of Feature Selection Analysis (on training subset)
-        print(
-            "\n--- STEP 3: GENERATING VENN DIAGRAM OF POST-FEATURE SELECTION AND DIFFERENTIALLY EXPRESSED GENES IN TRAINING SUBSET ---"
-        )
+        # # Step 3: Venn Diagram of Feature Selection Analysis (on training subset)
+        # print(
+        #     "\n--- STEP 3: GENERATING VENN DIAGRAM OF POST-FEATURE SELECTION AND DIFFERENTIALLY EXPRESSED GENES IN TRAINING SUBSET ---"
+        # )
 
-        de_genes = deseq2_pipeline_training.get_de_genes()
-        fs_analyzer, fs_genes = self.run_venn_feature_selection_multiple_times(
-            X_train, y_train, n_runs=1000, de_genes=de_genes
-        )
-        venn_gen = VennDiagramGenerator()
-        venn_gen.plot_venn(
-            de_genes,
-            fs_genes,
-            output_filename="venn_de_vs_fs.png",
-        )
+        # de_genes = deseq2_pipeline_training.get_de_genes()
+        # fs_analyzer, fs_genes = self.run_venn_feature_selection_multiple_times(
+        #     X_train, y_train, n_runs=1000, de_genes=de_genes
+        # )
+        # venn_gen = VennDiagramGenerator()
+        # venn_gen.plot_venn(
+        #     de_genes,
+        #     fs_genes,
+        #     output_filename="venn_de_vs_fs.png",
+        # )
 
         # Step 4: Model Training
         print("\n--- STEP 4: MODEL TRAINING ---")
@@ -470,30 +458,30 @@ class MATseqPipeline:
         models_dir = self.results_dir / "models"
         trainer.save_models(models_dir)
 
-        print("\n--- EVALUATING MODELS ---")
-        eval_dir = self.results_dir / "model_evaluation"
+        # print("\n--- EVALUATING MODELS ---")
+        # eval_dir = self.results_dir / "model_evaluation"
 
-        # Evaluation 1: Full feature set
-        print("Evaluation on full feature set (X_train)...")
-        trainer.evaluate(X_train, y_train, eval_dir=eval_dir, cv=5, eval_name="full")
+        # # Evaluation 1: Full feature set
+        # print("Evaluation on full feature set (X_train)...")
+        # trainer.evaluate(X_train, y_train, eval_dir=eval_dir, cv=5, eval_name="full")
 
-        # Evaluation 2: Feature-selected genes
-        print("Evaluation on feature-selected genes (X_fs)...")
-        trainer.evaluate(X_fs, y_train, eval_dir=eval_dir, cv=5, eval_name="fs")
+        # # Evaluation 2: Feature-selected genes
+        # print("Evaluation on feature-selected genes (X_fs)...")
+        # trainer.evaluate(X_fs, y_train, eval_dir=eval_dir, cv=5, eval_name="fs")
 
-        # Evaluation 3: X_train subsetted to genes in X_fs ∪ de_genes
-        print("X_fs:", X_fs)
-        fs_genes = set(X_fs.columns)
-        print(f"Feature Selections genes: {fs_genes}")
-        print(f"Differentially expressed genes: {de_genes}")
-        union_genes = list(fs_genes | de_genes)
-        print("Union genes:", union_genes)
+        # # Evaluation 3: X_train subsetted to genes in X_fs ∪ de_genes
+        # print("X_fs:", X_fs)
+        # fs_genes = set(X_fs.columns)
+        # print(f"Feature Selections genes: {fs_genes}")
+        # print(f"Differentially expressed genes: {de_genes}")
+        # union_genes = list(fs_genes | de_genes)
+        # print("Union genes:", union_genes)
 
-        X_fs_de = X_train[union_genes]
-        print(f"Evaluation on FS ∪ DE genes ({len(union_genes)} genes)...")
-        trainer.evaluate(X_fs_de, y_train, eval_dir=eval_dir, cv=5, eval_name="fs_de")
+        # X_fs_de = X_train[union_genes]
+        # print(f"Evaluation on FS ∪ DE genes ({len(union_genes)} genes)...")
+        # trainer.evaluate(X_fs_de, y_train, eval_dir=eval_dir, cv=5, eval_name="fs_de")
 
-        print("Model evaluation complete. Results saved to results/model_evaluation")
+        # print("Model evaluation complete. Results saved to results/model_evaluation")
 
         # Step 5: DESeq2 Analysis (on other ligands and bacterial subsets)
         print(
@@ -503,36 +491,36 @@ class MATseqPipeline:
             df, "other_ligands"
         )
 
-        deseq2_pipeline_other_ligand = AnalysisPipeline(
-            raw_counts=X_other_ligands,
-            sample_labels=y_other_ligands,
-            padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
-            log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
-            n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
-            cache=self.cache,
-            force_recompute=self.force_recompute,
-        )
-        deseq2_pipeline_other_ligand.run_analysis(
-            ADDITIONAL_LIGANDS, negative_control="negative_control"
-        )
+        # deseq2_pipeline_other_ligand = AnalysisPipeline(
+        #     raw_counts=X_other_ligands,
+        #     sample_labels=y_other_ligands,
+        #     padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
+        #     log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
+        #     n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
+        #     cache=self.cache,
+        #     force_recompute=self.force_recompute,
+        # )
+        # deseq2_pipeline_other_ligand.run_analysis(
+        #     ADDITIONAL_LIGANDS, negative_control="negative_control"
+        # )
 
         X_bacterial, y_bacterial = self.extract_and_run_pca_before_pipeline(
             df, "bacterial"
         )
 
-        deseq2_pipeline_bacterial = AnalysisPipeline(
-            raw_counts=X_bacterial,
-            sample_labels=y_bacterial,
-            padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
-            log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
-            n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
-            cache=self.cache,
-            force_recompute=self.force_recompute,
-        )
-        deseq2_pipeline_bacterial.run_analysis(
-            BACTERIAL_LIGANDS,
-            negative_control="negative_control",
-        )
+        # deseq2_pipeline_bacterial = AnalysisPipeline(
+        #     raw_counts=X_bacterial,
+        #     sample_labels=y_bacterial,
+        #     padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
+        #     log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
+        #     n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
+        #     cache=self.cache,
+        #     force_recompute=self.force_recompute,
+        # )
+        # deseq2_pipeline_bacterial.run_analysis(
+        #     BACTERIAL_LIGANDS,
+        #     negative_control="negative_control",
+        # )
 
         # Step 6: Predict classes of other ligands
         print("\n--- STEP 6: CLASS PREDICTION ON ADDITIONAL AND BACTERIAL LIGANDS ---")
@@ -556,7 +544,10 @@ class MATseqPipeline:
             y_test=y_other_with_lps,
         )
         predictor.save_predictions(predictions_dir / "other_ligands")
-        predictor.create_probability_heatmaps(predictions_dir / "other_ligands")
+        predictor.create_probability_heatmaps(
+            predictions_dir / "other_ligands",
+            subset="other_ligands",
+        )
 
         X_bacterial_fs = pipe.transform(X_bacterial_with_lps)
         predictor.predict_samples(
@@ -565,18 +556,21 @@ class MATseqPipeline:
             y_test=y_bacterial_with_lps,
         )
         predictor.save_predictions(predictions_dir / "bacterial")
-        predictor.create_probability_heatmaps(predictions_dir / "bacterial")
-
-        # Step 7: TLR HEK visualization
-        print("\n--- STEP 7: TLR HEK BLUE VISUALIZATION ---")
-        tlr2_df, tlr4_df, flapa_data = load_tlr_data()
-
-        plot_tlr_hek_blue(
-            tlr2_df,
-            tlr4_df,
-            flapa_data,
-            output_filename="tlr_hek_blue.png",
+        predictor.create_probability_heatmaps(
+            predictions_dir / "bacterial",
+            subset="bacterial",
         )
+
+        # # Step 7: TLR HEK visualization
+        # print("\n--- STEP 7: TLR HEK BLUE VISUALIZATION ---")
+        # tlr2_df, tlr4_df, flapa_data = load_tlr_data()
+
+        # plot_tlr_hek_blue(
+        #     tlr2_df,
+        #     tlr4_df,
+        #     flapa_data,
+        #     output_filename="tlr_hek_blue.png",
+        # )
         # Step 8: Model Training on training_wo_flapa and Prediction on Additional and Bacterial Ligands
         print(
             "\n--- STEP 8: MODEL TRAINING ON TRAINING_WO_FLAPA AND PREDICTION ON ADDITIONAL AND BACTERIAL LIGANDS ---"
@@ -606,7 +600,8 @@ class MATseqPipeline:
         )
         predictor_wo_flapa.save_predictions(predictions_dir_wo_flapa / "other_ligands")
         predictor_wo_flapa.create_probability_heatmaps(
-            predictions_dir_wo_flapa / "other_ligands"
+            predictions_dir_wo_flapa / "other_ligands",
+            subset="other_ligands",
         )
 
         X_bacterial_fs_wo_flapa = pipe_wo_flapa.transform(X_bacterial_with_lps)
@@ -617,7 +612,8 @@ class MATseqPipeline:
         )
         predictor_wo_flapa.save_predictions(predictions_dir_wo_flapa / "bacterial")
         predictor_wo_flapa.create_probability_heatmaps(
-            predictions_dir_wo_flapa / "bacterial"
+            predictions_dir_wo_flapa / "bacterial",
+            subset="bacterial",
         )
 
         print("\n" + "=" * 80)

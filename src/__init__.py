@@ -30,11 +30,9 @@ from .config import (
     CLASS_ORDER_BACTERIAL,
     SUBSET_PALETTES,
     SUBSET_CLASS_ORDERS,
-    DESEQ2_CONFIG,
     FEATURE_SELECTION_CONFIG,
     MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
-    CLASS_LABELS,
     TRAINING_LIGANDS,
     TRAINING_LIGANDS_WO_FLAPA,
     ADDITIONAL_LIGANDS,
@@ -55,13 +53,13 @@ from .visualization import (
     plot_heatmap,
     plot_pca_deseq2,
     plot_go,
-    make_probability_matrix,
 )
 
 from .go_term_analysis import (
     initialize_go,
     generate_go_table,
     run_go_analysis,
+    merge_go_tables,
 )
 
 # Feature analysis
@@ -83,11 +81,9 @@ __all__ = [
     "CLASS_ORDER_BACTERIAL",
     "SUBSET_PALETTES",
     "SUBSET_CLASS_ORDERS",
-    "DESEQ2_CONFIG",
     "FEATURE_SELECTION_CONFIG",
     "MODEL_FACTORY_CONFIG",
     "MODEL_TRAINING_CONFIG",
-    "CLASS_LABELS",
     "TRAINING_LIGANDS",
     "ADDITIONAL_LIGANDS",
     "BACTERIAL_LIGANDS",
@@ -109,7 +105,6 @@ __all__ = [
     "multiclass_roc_auc_score",
     "make_score",
     "get_confusion_matrix",
-    "make_probability_matrix",
     # DESeq2 analysis
     "DESeq2DataProcessor",
     "AnalysisPipeline",
@@ -125,6 +120,7 @@ __all__ = [
     "initialize_go",
     "generate_go_table",
     "run_go_analysis",
+    "merge_go_tables",
     # Feature analysis
     "FeatureSelectionAnalyzer",
     "VennDiagramGenerator",

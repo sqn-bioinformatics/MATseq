@@ -15,7 +15,6 @@ import scanpy as sc
 
 from .preprocessing import normalize_rpm
 from .config import CUSTOM_PALETTE_6
-from .go_term_analysis import generate_go_table, run_go_analysis
 
 
 def plot_tlr_panel(
@@ -361,7 +360,7 @@ def plot_pca_pandas(
 def plot_volcano(
     res: pd.DataFrame,
     analysis_name: str,
-    log2foldchange: float = 2,
+    log2foldchange: float = 2.0,
     output_path: Path = None,
     output_filename: str = None,
 ) -> Path:
@@ -450,7 +449,6 @@ def plot_volcano(
         ax.spines[spine].set_linewidth(1.5)
 
     fig.patch.set_facecolor("white")
-    plt.tight_layout()
 
     if output_path is None:
         output_path = Path(__file__).parent.parent / "results" / "figures" / "deseq2"
@@ -534,7 +532,11 @@ def plot_heatmap(
         edgecolor="black",
     )
     g.ax_heatmap.set_xticklabels([])
+    g.ax_heatmap.tick_params(bottom=False)
     g.ax_heatmap.set(xlabel=None)
+    reordered_genes = grapher.index[g.dendrogram_row.reordered_ind]
+    g.ax_heatmap.set_yticks(np.arange(len(reordered_genes)) + 0.5)
+    g.ax_heatmap.set_yticklabels(reordered_genes, fontsize=8)
     g.ax_col_dendrogram.set_title(
         f"{analysis_name} Differentially Expressed Genes",
         fontsize=12,
@@ -692,48 +694,6 @@ def plot_go(
     try:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Figure saved: {save_path}")
-    finally:
-        plt.close()
-
-    return save_path
-
-
-def make_probability_matrix(
-    model_name: str, test_pred: pd.DataFrame, output_path: Path = None
-) -> Path:
-    """Create heatmap of model prediction probabilities.
-
-    Args:
-        model_name: Name of model for title.
-        test_pred: DataFrame with prediction probabilities (samples x classes).
-        output_path: Directory to save figure.
-
-    Returns:
-        Path to saved figure.
-    """
-    if output_path is None:
-        project_root = Path(__file__).parent.parent
-        output_path = project_root / "results" / "figures"
-        output_path.mkdir(parents=True, exist_ok=True)
-
-    fig, ax = plt.subplots(figsize=(12, 8))
-
-    sns.heatmap(test_pred, cmap="YlGnBu", ax=ax)
-    ax.set_title(f"{model_name} predictions", fontsize=15)
-    ax.set_xlabel("Reference", fontsize=15)
-    ax.set_ylabel("Sample", fontsize=15, labelpad=10)
-
-    for spine in ["top", "right"]:
-        ax.spines[spine].set_visible(False)
-    for spine in ["left", "bottom"]:
-        ax.spines[spine].set_linewidth(1.5)
-
-    plt.tight_layout()
-
-    save_path = output_path / f"{model_name}_predictions.png"
-    try:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        print(f"Figure saved to: {save_path.absolute()}")
     finally:
         plt.close()
 

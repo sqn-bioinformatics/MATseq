@@ -20,8 +20,10 @@ class ModelPredictor:
         Args:
             trainer: Trained ModelTrainer instance with fitted models.
         """
-        assert hasattr(trainer, 'trained_models'), "trainer must have trained_models attribute"
-        assert len(trainer.trained_models) > 0, "trainer must have at least one trained model"
+        if not hasattr(trainer, "trained_models"):
+            raise AttributeError("trainer must have trained_models attribute")
+        if len(trainer.trained_models) == 0:
+            raise ValueError("trainer must have at least one trained model")
         self.trainer = trainer
         self.predictions = {}
         self.probabilities = {}
@@ -50,7 +52,6 @@ class ModelPredictor:
             y_pred_encoded = model.predict(X_test)
             y_pred = self.trainer.decode_predictions(y_pred_encoded)
 
-            # Create prediction DataFrame
             pred_df = pd.DataFrame(
                 {
                     "sample": (
@@ -65,19 +66,13 @@ class ModelPredictor:
             predictions_dict[model_name] = pred_df
             self.predictions[model_name] = pred_df
 
-            # Get probabilities if available
-            if hasattr(model, "predict_proba"):
-                proba = model.predict_proba(X_test)
-                proba_df = pd.DataFrame(
-                    proba,
-                    columns=self.trainer.label_encoder.classes_,
-                    index=(
-                        sample_names
-                        if sample_names is not None
-                        else np.arange(len(y_pred))
-                    ),
-                )
-                self.probabilities[model_name] = proba_df
+            proba = model.predict_proba(X_test)
+            proba_df = pd.DataFrame(
+                proba,
+                columns=self.trainer.label_encoder.classes_,
+                index=(sample_names),
+            )
+            self.probabilities[model_name] = proba_df
 
         return predictions_dict
 
@@ -100,27 +95,39 @@ class ModelPredictor:
             proba_df.to_csv(output_path)
             print(f"Saved probabilities to {output_path}")
 
-    def create_probability_heatmaps(self, output_dir: Path, class_order: list = None):
+    def create_probability_heatmaps(self, output_dir: Path, subset: str = "training"):
         """Create heatmap visualizations of prediction probabilities.
 
         Args:
             output_dir: Directory to save figures.
-            class_order: Optional class order from config.
+            subset: Key into SUBSET_CLASS_ORDERS ("training", "other_ligands", "bacterial").
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        if class_order is None:
-            class_order = SUBSET_CLASS_ORDERS.get("training")
+        class_order = SUBSET_CLASS_ORDERS.get(subset, SUBSET_CLASS_ORDERS["training"])
 
         for model_name, proba_df in self.probabilities.items():
             proba_df_ordered = proba_df.copy()
-            if class_order is not None:
-                available_classes = [c for c in class_order if c in proba_df.columns]
-                proba_df_ordered = proba_df_ordered[available_classes]
+
+            available_classes = [c for c in class_order if c in proba_df.columns]
+            proba_df_ordered = proba_df_ordered[available_classes]
 
             if self.true_labels is not None:
-                proba_df_ordered.index = self.true_labels.values
+                rng = np.random.default_rng(42)
+                nc_idx = self.true_labels[self.true_labels == "negative_control"].index
+                lps_idx = self.true_labels[self.true_labels == "LPS"].index
+                rand_nc = list(rng.choice(nc_idx, size=1, replace=False))
+                rand_lps = list(rng.choice(lps_idx, size=1, replace=False))
+                remaining = [
+                    i
+                    for cls in class_order
+                    if cls not in ("negative_control", "LPS")
+                    for i in self.true_labels[self.true_labels == cls].index
+                ]
+                ordered_idx = rand_nc + rand_lps + remaining
+                proba_df_ordered = proba_df_ordered.loc[ordered_idx]
+                proba_df_ordered.index = self.true_labels.loc[ordered_idx].values
 
             plt.figure(figsize=(12, 8))
             sns.heatmap(
@@ -137,38 +144,6 @@ class ModelPredictor:
                 print(f"Saved heatmap to {output_path}")
             finally:
                 plt.close()
-
-            if self.true_labels is not None:
-                mask = self.true_labels.isin(["LPS", "negative_control"])
-                if mask.any():
-                    lps_idx = self.true_labels[self.true_labels == "LPS"].index
-                    nc_idx = self.true_labels[self.true_labels == "negative_control"].index
-                    if len(lps_idx) > 0 and len(nc_idx) > 0:
-                        sampled_lps = np.random.choice(lps_idx, size=1)
-                        subset_idx = np.concatenate([sampled_lps, nc_idx.values])
-
-                        proba_subset = proba_df.loc[subset_idx].copy()
-                        if class_order is not None:
-                            available_classes = [c for c in class_order if c in proba_subset.columns]
-                            proba_subset = proba_subset[available_classes]
-
-                        proba_subset.index = self.true_labels.loc[subset_idx].values
-
-                        plt.figure(figsize=(12, 8))
-                        sns.heatmap(
-                            proba_subset, cmap="YlGnBu", cbar_kws={"label": "Probability"}
-                        )
-                        plt.title(f"{model_name}")
-                        plt.xlabel("Class")
-                        plt.ylabel("Sample")
-                        plt.tight_layout()
-
-                        output_path_subset = output_dir / f"{model_name}_probabilities_heatmap_subset.png"
-                        try:
-                            plt.savefig(output_path_subset, dpi=300, bbox_inches="tight")
-                            print(f"Saved subset heatmap to {output_path_subset}")
-                        finally:
-                            plt.close()
 
 
 class ModelComparator:
@@ -195,13 +170,20 @@ class ModelComparator:
             n_runs: Number of independent runs.
             random_states: List of random states for runs. If None, uses 0 to n_runs-1.
         """
-        assert len(X_train) > 0, "X_train cannot be empty"
-        assert len(y_train) > 0, "y_train cannot be empty"
-        assert len(X_test) > 0, "X_test cannot be empty"
-        assert len(y_test) > 0, "y_test cannot be empty"
-        assert len(X_train) == len(y_train), "X_train and y_train must have same length"
-        assert len(X_test) == len(y_test), "X_test and y_test must have same length"
-        assert n_runs > 0, f"n_runs must be positive, got {n_runs}"
+        if len(X_train) == 0:
+            raise ValueError("X_train cannot be empty")
+        if len(y_train) == 0:
+            raise ValueError("y_train cannot be empty")
+        if len(X_test) == 0:
+            raise ValueError("X_test cannot be empty")
+        if len(y_test) == 0:
+            raise ValueError("y_test cannot be empty")
+        if len(X_train) != len(y_train):
+            raise ValueError("X_train and y_train must have same length")
+        if len(X_test) != len(y_test):
+            raise ValueError("X_test and y_test must have same length")
+        if n_runs <= 0:
+            raise ValueError(f"n_runs must be positive, got {n_runs}")
 
         self.X_train = X_train
         self.y_train = y_train

@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Union
 from collections import Counter
 from matplotlib_venn import venn2
 
@@ -36,9 +36,8 @@ class FeatureSelectionAnalyzer:
     def run_multiple_selections(
         self,
         X: pd.DataFrame,
-        y: np.ndarray,
+        y: Union[np.ndarray, pd.Series],
         n_runs: int = 1000,
-        pipeline_config: Dict = None,
     ) -> Dict[int, set]:
         """Run feature selection pipeline multiple times with different seeds.
 
@@ -46,18 +45,19 @@ class FeatureSelectionAnalyzer:
             X: Feature matrix (samples x features).
             y: Target labels.
             n_runs: Number of runs to perform.
-            random_states: List of random states.
-            pipeline_config: Config dict for create_feature_pipeline.
 
         Returns:
             Dictionary mapping run number to selected gene set.
         """
-        assert len(X) > 0, "X cannot be empty"
-        assert len(y) > 0, "y cannot be empty"
-        assert n_runs > 0, f"n_runs must be positive, got {n_runs}"
+        if len(X) == 0:
+            raise ValueError("X cannot be empty")
+        if len(y) == 0:
+            raise ValueError("y cannot be empty")
+        if n_runs <= 0:
+            raise ValueError(f"n_runs must be positive, got {n_runs}")
 
-        rs = np.random.RandomState(125984651485)
-        random_states = rs.randint(-5000, 5000, size=n_runs)
+        rng = np.random.default_rng(125)
+        random_states = rng.integers(0, 500000, size=n_runs)
 
         self.feature_sets = []
         gene_counts = Counter()
@@ -70,12 +70,10 @@ class FeatureSelectionAnalyzer:
             pipe = create_feature_pipeline(
                 **FEATURE_SELECTION_CONFIG, random_state=random_state
             ).set_output(transform="pandas")
-            X_selected = pipe.fit_transform(X, y)
+            pipe.fit_transform(X, y)
             selected_genes = pipe[:-1].get_feature_names_out()
             self.feature_sets.append(selected_genes)
-
-            for gene in selected_genes:
-                gene_counts[gene] += 1
+            gene_counts.update(selected_genes)
 
         self.gene_frequency = gene_counts
         print(f"Completed {n_runs} feature selection runs")
@@ -141,11 +139,9 @@ class FeatureSelectionAnalyzer:
         with open(input_path, "rb") as f:
             self.feature_sets = pickle.load(f)
 
-        # Recalculate gene frequency
         gene_counts = Counter()
         for gene_set in self.feature_sets:
-            for gene in gene_set:
-                gene_counts[gene] += 1
+            gene_counts.update(gene_set)
 
         self.gene_frequency = gene_counts
         print(f"Loaded {len(self.feature_sets)} feature sets")

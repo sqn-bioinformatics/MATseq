@@ -4,8 +4,7 @@ import pickle
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Callable, Optional, Dict
-from collections import namedtuple
+from typing import Any, Callable, Optional
 
 
 class PipelineCache:
@@ -33,7 +32,7 @@ class PipelineCache:
         """
         if self.manifest_path.exists():
             try:
-                with open(self.manifest_path, "r") as f:
+                with open(self.manifest_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Warning: Could not load manifest, starting fresh: {e}")
@@ -43,7 +42,7 @@ class PipelineCache:
     def _save_manifest(self):
         """Save manifest of cached files."""
         try:
-            with open(self.manifest_path, "w") as f:
+            with open(self.manifest_path, "w", encoding="utf-8") as f:
                 json.dump(self.manifest, f, indent=2)
         except IOError as e:
             print(f"Warning: Could not save manifest: {e}")

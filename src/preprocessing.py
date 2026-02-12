@@ -35,8 +35,10 @@ def merge_counts(
     else:
         featurecounts_path = Path(featurecounts_dir).expanduser()
 
-    assert featurecounts_path.exists(), f"Directory not found: {featurecounts_path}"
-    assert featurecounts_path.is_dir(), f"Not a directory: {featurecounts_path}"
+    if not featurecounts_path.exists():
+        raise FileNotFoundError(f"Directory not found: {featurecounts_path}")
+    if not featurecounts_path.is_dir():
+        raise NotADirectoryError(f"Not a directory: {featurecounts_path}")
 
     txt_files = [
         f for f in featurecounts_path.glob("*.txt") if not f.name.endswith(".summary")
@@ -55,9 +57,9 @@ def merge_counts(
     counts_df = counts_df.rename_axis(index="samples", columns=None)
     filtered_counts_df = filter_counts(counts_df)
 
-    # Set default output path
     if output_path is None:
         output_path = Path(__file__).parent.parent / "results" / "counts"
+    output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
 
     csv_path = output_path / "MATseq_count_summary.csv"
@@ -80,9 +82,12 @@ def filter_counts(
     Returns:
         DataFrame: Filtered counts data with samples as rows and genes as columns.
     """
-    assert isinstance(df, pd.DataFrame), f"df must be DataFrame, got {type(df)}"
-    assert len(df) > 0, "df cannot be empty"
-    assert min_reads > 0, f"min_reads must be positive, got {min_reads}"
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError(f"df must be DataFrame, got {type(df)}")
+    if len(df) == 0:
+        raise ValueError("df cannot be empty")
+    if min_reads <= 0:
+        raise ValueError(f"min_reads must be positive, got {min_reads}")
 
     df = df.T
     df = df[~df.index.duplicated(keep="last")]
@@ -90,7 +95,8 @@ def filter_counts(
 
     mask = df.sum(axis=1) > min_reads
     df = df[mask]
-    assert len(df) > 0, f"No samples remain after filtering with min_reads={min_reads}"
+    if len(df) == 0:
+        raise ValueError(f"No samples remain after filtering with min_reads={min_reads}")
 
     return df
 
@@ -133,12 +139,21 @@ def extract_subset(
         for c in selected_classes
         if c in sample_id
     ]
-    assert len(subset_indices) > 0, f"No samples found for subset '{name}'"
+    if not subset_indices:
+        raise ValueError(f"No samples found for subset '{name}'")
 
     subset_data = df.iloc[subset_indices].copy()
 
-    # Extract label from position 2 of index
-    subset_data["label"] = [i.split("_")[2] for i in subset_data.index]
+    labels = []
+    for sample_id in subset_data.index:
+        parts = sample_id.split("_")
+        if len(parts) < 3:
+            raise ValueError(
+                f"Sample ID '{sample_id}' does not match expected format "
+                "'<run>_<batch>_<ligand>_...'"
+            )
+        labels.append(parts[2])
+    subset_data["label"] = labels
 
     # Replace label names
     label_mapping = {
@@ -148,9 +163,9 @@ def extract_subset(
     }
     subset_data["label"] = subset_data["label"].replace(label_mapping)
 
-    # Set default output path
     if output_path is None:
         output_path = Path(__file__).parent.parent / "results" / "subsets"
+    output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
 
     csv_path = output_path / f"{name}_data_with_labels.csv"
@@ -169,8 +184,10 @@ def normalize_rpm(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         DataFrame: Normalized counts in RPM.
     """
-    assert isinstance(df, pd.DataFrame), f"df must be DataFrame, got {type(df)}"
-    assert len(df) > 0, "df cannot be empty"
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError(f"df must be DataFrame, got {type(df)}")
+    if len(df) == 0:
+        raise ValueError("df cannot be empty")
 
     row_sums = df.sum(axis=1).replace(0, 1)
     return df.div(row_sums, axis=0) * 1000000
@@ -191,13 +208,11 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
         data_dir = Path(__file__).parent.parent / "data" / "supplementary_data"
 
     data_dir = Path(data_dir)
-    assert data_dir.exists(), f"Data directory not found: {data_dir}"
-    assert (
-        data_dir / "Supplementary_Table_5.csv"
-    ).exists(), f"Missing Supplementary_Table_5.csv in {data_dir}"
-    assert (
-        data_dir / "Supplementary_Table_6.csv"
-    ).exists(), f"Missing Supplementary_Table_6.csv in {data_dir}"
+    if not data_dir.exists():
+        raise FileNotFoundError(f"Data directory not found: {data_dir}")
+    for fname in ("Supplementary_Table_5.csv", "Supplementary_Table_6.csv"):
+        if not (data_dir / fname).exists():
+            raise FileNotFoundError(f"Missing {fname} in {data_dir}")
 
     tlr4_raw = pd.read_csv(data_dir / "Supplementary_Table_5.csv")
     tlr4_lps_mask = tlr4_raw["OD630nm_LPS_Replicate1"].notna()

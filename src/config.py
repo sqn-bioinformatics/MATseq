@@ -63,54 +63,14 @@ def expand_path(path_str: str) -> Path:
         Expanded absolute Path object.
     """
     path = Path(path_str)
-    if path_str.startswith("~"):
-        return path.expanduser()
     if path_str.startswith("~/MATseq"):
         relative = path_str.replace("~/MATseq/", "")
         return _get_project_root() / relative
+    if path_str.startswith("~"):
+        return path.expanduser()
     if not path.is_absolute():
         return _get_project_root() / path
     return path
-
-
-def get_work_dir() -> Path:
-    """Get Snakemake working directory."""
-    return expand_path(get_config("snakemake.work_dir"))
-
-
-def get_sample_dir() -> Path:
-    """Get directory containing input samples."""
-    return expand_path(get_config("snakemake.sample_dir"))
-
-
-def get_genome_dir() -> Path:
-    """Get genome reference directory."""
-    return expand_path(get_config("snakemake.genome_dir"))
-
-
-def get_data_dir() -> Path:
-    """Get data directory path."""
-    return expand_path(get_config("paths.data_dir"))
-
-
-def get_go_terms_support_dir() -> Path:
-    """Get GO terms support data directory path."""
-    return expand_path(get_config("paths.go_terms_support_dir"))
-
-
-def get_results_dir() -> Path:
-    """Get results directory path."""
-    return expand_path(get_config("paths.results_dir"))
-
-
-def get_cache_dir() -> Path:
-    """Get cache directory path."""
-    return expand_path(get_config("paths.cache_dir"))
-
-
-def get_figures_dir() -> Path:
-    """Get figures directory path."""
-    return expand_path(get_config("paths.figures_dir"))
 
 
 def get_featurecounts_dir() -> Path:
@@ -145,8 +105,6 @@ DESEQ2_CONFIG = _config["deseq2"]
 FEATURE_SELECTION_CONFIG = _config["feature_selection"]
 MODEL_FACTORY_CONFIG = _config["model_factory"]
 MODEL_TRAINING_CONFIG = _config["model_training"]
-CLASS_LABELS = _config["class_labels"]
-
 TRAINING_LIGANDS = _config["ligands"]["training"]
 ADDITIONAL_LIGANDS = _config["ligands"]["additional"]
 BACTERIAL_LIGANDS_ORIGINAL_NAMES = _config["ligands"]["bacterial"]

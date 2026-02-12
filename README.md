@@ -41,7 +41,6 @@ poetry run python MATseq.py
 ```
 
 Optional arguments:
-- `--snakemake-dir PATH`: Directory containing Snakemake pipeline
 - `--genome-dir PATH`: Genome reference directory for Snakemake
 - `--fastq-dir PATH`: Raw data (zipped FASTQ) directory for Snakemake
 - `--snakemake-dry-run`: Validate Snakemake pipeline without running

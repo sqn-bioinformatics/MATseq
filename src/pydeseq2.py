@@ -10,7 +10,7 @@ from pydeseq2.ds import DeseqStats
 from pydeseq2.default_inference import DefaultInference
 
 from .visualization import plot_volcano, plot_heatmap, plot_go
-from .go_term_analysis import run_go_analysis
+from .go_term_analysis import initialize_go, run_go_analysis, merge_go_tables
 from .cache import PipelineCache
 
 
@@ -36,14 +36,14 @@ class DataProcessor:
             cache: PipelineCache instance for disk-based caching.
             force_recompute: Skip cache and recompute.
         """
-        assert isinstance(
-            raw_counts, pd.DataFrame
-        ), f"raw_counts must be DataFrame, got {type(raw_counts)}"
-        assert isinstance(
-            sample_labels, pd.Series
-        ), f"sample_labels must be Series, got {type(sample_labels)}"
-        assert isinstance(classes, list), f"classes must be list, got {type(classes)}"
-        assert isinstance(n_cpus, int), f"n_cpus must be int, got {type(n_cpus)}"
+        if not isinstance(raw_counts, pd.DataFrame):
+            raise TypeError(f"raw_counts must be DataFrame, got {type(raw_counts)}")
+        if not isinstance(sample_labels, pd.Series):
+            raise TypeError(f"sample_labels must be Series, got {type(sample_labels)}")
+        if not isinstance(classes, list):
+            raise TypeError(f"classes must be list, got {type(classes)}")
+        if not isinstance(n_cpus, int):
+            raise TypeError(f"n_cpus must be int, got {type(n_cpus)}")
 
         if len(raw_counts) != len(sample_labels):
             raise ValueError(
@@ -238,6 +238,8 @@ class AnalysisPipeline:
 
         self.results = {}
         self.de_genes = set()
+        self._goeaobj = None
+        self._geneid_symbol_mapper = None
 
     def run_analysis(
         self, class_list: list[str], negative_control: str = "negative_control"
@@ -253,7 +255,6 @@ class AnalysisPipeline:
         """
         filtered_list = [c for c in class_list if c != negative_control]
         pairs = [[my_class, negative_control] for my_class in filtered_list]
-        results_list = []
 
         for class_pair in pairs:
             ligand_name = class_pair[0]
@@ -287,28 +288,20 @@ class AnalysisPipeline:
 
             res_copy = res.copy()
             res_copy.columns = [f"{col}_{ligand_name}" for col in res_copy.columns]
-            results_list.append(res_copy)
 
             if not sigs.empty:
                 self._generate_figures(ligand_name, dds, res, sigs)
 
-        # Merge all results
-        if results_list:
-            merged = results_list[0]
-            for res_df in results_list[1:]:
-                merged = pd.merge(
-                    merged,
-                    res_df,
-                    left_index=True,
-                    right_index=True,
-                    how="outer",
-                )
+        go_terms_dir = Path.cwd() / "results" / "go_terms"
+        go_files = [
+            go_terms_dir / f"{ligand}_go_terms.csv"
+            for ligand in filtered_list
+            if (go_terms_dir / f"{ligand}_go_terms.csv").exists()
+        ]
+        if go_files:
+            merge_go_tables(go_files, output_dir=go_terms_dir)
 
-            merged_output = self.output_dir / "merged_results.csv"
-            merged.to_csv(merged_output)
-            print(f"Saved merged results to {merged_output}")
-
-        return processor, self.results
+        return self.results
 
     def _generate_figures(
         self, ligand_name: str, dds: AnnData, res: pd.DataFrame, sigs: pd.DataFrame
@@ -327,7 +320,15 @@ class AnalysisPipeline:
         try:
             go_terms_dir = Path.cwd() / "results" / "go_terms"
             go_terms_dir.mkdir(parents=True, exist_ok=True)
-            go_df = run_go_analysis(sigs, ligand_name, output_dir=go_terms_dir)
+            if self._goeaobj is None:
+                self._goeaobj, self._geneid_symbol_mapper = initialize_go()
+            go_df = run_go_analysis(
+                sigs,
+                ligand_name,
+                output_dir=go_terms_dir,
+                goeaobj=self._goeaobj,
+                geneid_symbol_mapper=self._geneid_symbol_mapper,
+            )
             if not go_df.empty:
                 go_fig_dir = Path.cwd() / "results" / "figures" / "go"
                 plot_go(
@@ -340,54 +341,5 @@ class AnalysisPipeline:
             print(f"Warning: GO enrichment failed for {ligand_name}: {e}")
 
     def get_de_genes(self):
-        """Provide list of all differentially expressed genes.
-
-        Args:
-            None.
-        """
+        """Return set of all differentially expressed genes."""
         return self.de_genes
-
-
-def merge_go_tables(
-    go_files: List[Path],
-    output_dir: Path = None,
-    output_filename: str = "Supplementary_Table_3_genes_GO.csv",
-) -> pd.DataFrame:
-    """Merge GO enrichment results from multiple ligand analyses.
-
-    Args:
-        go_files: List of paths to GO result CSV files.
-        output_dir: Directory for output files. Defaults to results/differential_gene_expression.
-        output_filename: Name for merged output file.
-
-    Returns:
-        Merged DataFrame with all GO terms.
-    """
-    if not go_files:
-        raise ValueError("No GO files provided")
-
-    if output_dir is None:
-        output_dir = Path.cwd() / "results" / "differential_gene_expression"
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    merged_df = None
-
-    for go_file in go_files:
-        ligand_name = go_file.stem.split("_")[0]
-        df = pd.read_csv(go_file, index_col=0)
-
-        df.insert(0, "Ligand", ligand_name)
-
-        if merged_df is None:
-            merged_df = df
-        else:
-            merged_df = pd.concat([merged_df, df], axis=0)
-
-    merged_df = merged_df.sort_values("fdr", ascending=True)
-
-    output_path = output_dir / output_filename
-    merged_df.to_csv(output_path)
-    print(f"Saved merged GO table to {output_path}")
-
-    return merged_df

@@ -6,7 +6,7 @@
 
 from glob import glob
 
-def required_files(wildcards):
+def get_bam_files(wildcards):
     STAR_FILES = glob(str(Path(WORKDIR) / "sm_star/*.bam"))
     outfiles= []
     for file in STAR_FILES:
@@ -19,7 +19,7 @@ def required_files(wildcards):
 
 rule samtools_merge:
     input:
-        bams = required_files,
+        bams = get_bam_files,
         summary="sm_star_done.txt"
     output:
         combined_bam = "sm_samtools_merged/{sample_id}.merged.bam",

@@ -3,7 +3,7 @@
 # description: Monocyte activation test transcriptomes analysis pipeline
 # author: Tess Afanasyeva
 
-def required_files(wildcards):
+def get_fastq_file(wildcards):
     FILES = glob(str(Path(SAMPLEDIR) / "*.fastq.gz"))
     for file in FILES:
         if wildcards.sample in file and wildcards.paired in file:
@@ -13,7 +13,7 @@ def required_files(wildcards):
             print(f"No: {wildcards.sample}, {wildcards.paired }")
 
 rule copy_and_rename:
-    input: required_files
+    input: get_fastq_file
     output: str(Path(WORKDIR) / "sm_fastqs/{sample}_{paired}.fastq.gz")
     benchmark: "sm_benchmarks/copy_and_rename_{sample}_{paired}.txt"
     threads: 16

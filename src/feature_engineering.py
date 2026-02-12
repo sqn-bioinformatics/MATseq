@@ -18,7 +18,8 @@ class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMi
 
     def transform(self, X):
         """Normalize counts to library size (RPM)."""
-        assert X is not None, "X cannot be None"
+        if X is None:
+            raise ValueError("X cannot be None")
 
         X_is_df = isinstance(X, pd.DataFrame)
 
@@ -31,7 +32,8 @@ class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMi
             index = None
             columns = None
 
-        assert values.ndim == 2, f"Expected 2D array, got shape {values.shape}"
+        if values.ndim != 2:
+            raise ValueError(f"Expected 2D array, got shape {values.shape}")
 
         totals = values.sum(axis=1, keepdims=True)
         totals[totals == 0.0] = 1.0
@@ -77,13 +79,16 @@ def create_feature_pipeline(
     Returns:
         Pipeline: Sklearn pipeline for feature engineering.
     """
-    assert k_best > 0, f"k_best must be positive, got {k_best}"
-    assert n_estimators > 0, f"n_estimators must be positive, got {n_estimators}"
-    assert max_depth > 0, f"max_depth must be positive, got {max_depth}"
-    assert max_features > 0, f"max_features must be positive, got {max_features}"
-    assert (
-        feature_threshold > 0
-    ), f"feature_threshold must be positive, got {feature_threshold}"
+    if k_best <= 0:
+        raise ValueError(f"k_best must be positive, got {k_best}")
+    if n_estimators <= 0:
+        raise ValueError(f"n_estimators must be positive, got {n_estimators}")
+    if max_depth <= 0:
+        raise ValueError(f"max_depth must be positive, got {max_depth}")
+    if max_features <= 0:
+        raise ValueError(f"max_features must be positive, got {max_features}")
+    if feature_threshold <= 0:
+        raise ValueError(f"feature_threshold must be positive, got {feature_threshold}")
 
     en = ExtraTreesClassifier(
         n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
