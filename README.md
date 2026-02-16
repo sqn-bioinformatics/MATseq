@@ -105,22 +105,25 @@ MATseq will attempt to download these files automatically if missing (may be slo
    - Merge featureCounts outputs
    - Filter samples by read count threshold (>1M reads)
    - Extract training/test/bacterial subsets with proper labels
+   - Generate PCA plots for each subset
 
 2. **DESeq2 Differential Expression** (`deseq2_training`)
    - Differential expression analysis on training data
    - Identify significant genes (padj < 0.05, |log2FC| > 2)
-   - Generate volcano plots, heatmaps, PCA, GO enrichment
+   - Generate volcano plots and heatmaps per ligand
+   - Run GO enrichment per ligand; merge into single GO table
 
 3. **Feature Selection Analysis** (`venn_diagram`)
    - Run feature selection 1000x with different random seeds
    - Compare feature-selected genes vs DESeq2 differentially expressed genes
    - Generate Venn diagrams and gene frequency tables
+   - Run GO enrichment on DE ∩ FS and FS \ DE gene sets
 
 4. **Model Training** (`model_training`)
    - Train classification models (LinearSVC, SGDClassifier, RandomForest, XGBoost)
    - Apply SMOTE for class balancing
-   - Evaluate with cross-validation
-   - Generate performance metrics and confusion matrices
+   - Evaluate on full gene set, feature-selected genes, and FS ∪ DE genes (3 evaluations)
+   - Generate per-fold confusion matrices and summary metrics
 
 5. **Additional Ligand and Bacterial Analysis** (`deseq2_other_ligands`, `deseq2_bacterial`)
    - DESeq2 analysis on additional ligands (LTA, MPLA, Pam2)
@@ -132,52 +135,72 @@ MATseq will attempt to download these files automatically if missing (may be slo
    - Generate probability heatmaps and predictions
 
 7. **TLR Reporter Visualization** (`tlr_hek_blue`)
-   - Supplementary Figure 2
 
 8. **Extended Training** (`training_wo_flapa`)
    - Retrain models on dataset without Fla-Pa samples
-   - Supplementary Figure 3
 
 
 ## Output Structure
 
 ```
 results/
-├── cache/                          
-├── counts/                         
+├── cache/                             
+├── counts/
 │   └── MATseq_count_summary.csv
-├── subsets/                        
+├── subsets/
 │   ├── training_data_with_labels.csv
 │   ├── other_ligands_data_with_labels.csv
-│   └── bacterial_data_with_labels.csv
-├── differential_gene_expression/   
-│   ├── {ligand}_deseq2_results.csv
-│   └── merged_results.csv
+│   ├── bacterial_data_with_labels.csv
+│   └── training_wo_flapa_data_with_labels.csv
+├── differential_gene_expression/
+│   └── {ligand}_deseq2_results.csv
+├── go_terms/
+│   ├── {ligand}_go_terms.csv           # Per-ligand GO enrichment
+│   ├── GO_merged_results.csv           # All per-ligand terms merged
+│   ├── de_intersect_fs_go_terms.csv    # GO for DE ∩ FS gene set
+│   └── fs_only_go_terms.csv            # GO for FS \ DE gene set
+├── feature_analysis/
+│   ├── gene_frequency_table.csv        # Gene selection frequency across 1000 runs
+│   └── list_of_gene_name_set_1000      # Pickle: all 1000 feature sets
+├── models/
+│   ├── label_encoder.pkl
+│   └── {model_name}.pkl
+├── model_evaluation/
+│   ├── full_model_evaluation.csv           # Metrics on all genes
+│   ├── full_model_evaluation_per_fold.csv
+│   ├── fs_model_evaluation.csv             # Metrics on feature-selected genes
+│   ├── fs_model_evaluation_per_fold.csv
+│   ├── fs_de_model_evaluation.csv          # Metrics on FS ∪ DE genes
+│   └── fs_de_model_evaluation_per_fold.csv
 ├── figures/
-│   ├── deseq2/                     
+│   ├── deseq2/
 │   │   ├── {ligand}_volcano.png
-│   │   ├── {ligand}_histogram.png
-│   │   └── {ligand}_go.png
-│   ├── pca/                        
-│   ├── venn/                       
-│   └── supplementary/              
+│   │   └── {ligand}_histogram.png
+│   ├── go/
+│   │   ├── {ligand}_go.png
+│   │   ├── de_intersect_fs_go.png
+│   │   └── fs_only_go.png
+│   ├── pca/
+│   │   ├── {subset}_pca.png
+│   │   ├── {subset}_pca_labeled.png
+│   │   ├── {subset}_pca_selected.png
+│   │   └── {subset}_pca_selected_labeled.png
+│   ├── venn/
+│   │   └── venn_de_vs_fs.png
+│   ├── model_evaluation/
+│   │   └── Confusion_Matrix_{prefix}{model}_fold_{n}.png
+│   └── supplementary/
 │       └── tlr_hek_blue.png
-├── go_terms/                       
-│   └── {ligand}_go_terms.csv
-├── models/                         
-├── model_evaluation/               
-│   ├── confusion_matrices/
-│   └── evaluation_metrics.csv
-└── predictions/                    
-    ├── other_ligands/             
+└── predictions/
+    ├── other_ligands/
     │   ├── {model}_predictions.csv
     │   ├── {model}_probabilities.csv
     │   └── {model}_probabilities_heatmap.png
-    ├── bacterial/                 
+    ├── bacterial/
     │   ├── {model}_predictions.csv
     │   ├── {model}_probabilities.csv
     │   └── {model}_probabilities_heatmap.png
-    └── training_wo_flapa/          
+    └── training_wo_flapa/
         ├── other_ligands/
         └── bacterial/
 ```
