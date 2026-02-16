@@ -142,45 +142,6 @@ class FeatureSelectionAnalyzer:
         self.gene_frequency = gene_counts
         print(f"Loaded {len(self.feature_sets)} feature sets")
 
-    def create_fs_de_go_table(
-        self,
-        de_genes: set,
-        fs_genes: set,
-        go_df: pd.DataFrame = None,
-        output_filename: str = "Supplementary_Table_4_fsde_GO.csv",
-    ) -> pd.DataFrame:
-        """Create table of GO terms for genes in both DE and feature selection.
-
-        Args:
-            de_genes: Set of differentially expressed genes.
-            fs_genes: Set of feature-selected genes.
-            go_df: GO enrichment results DataFrame. If None, creates stub.
-            output_filename: Name for output file.
-
-        Returns:
-            DataFrame with GO terms for DE+FS genes.
-        """
-        fsde_genes = de_genes & fs_genes
-
-        if go_df is None:
-            data = {
-                "Gene": list(fsde_genes),
-                "In DE": [True] * len(fsde_genes),
-                "In FS": [True] * len(fsde_genes),
-            }
-            fsde_table = pd.DataFrame(data)
-        else:
-            fsde_table = go_df[
-                go_df["gene_symbols"].apply(
-                    lambda x: any(gene in fsde_genes for gene in x.split(", "))
-                )
-            ]
-
-        output_path = self.output_dir / output_filename
-        fsde_table.to_csv(output_path, index=False)
-        print(f"Saved FS+DE GO table to {output_path}")
-
-        return fsde_table
 
 
 class VennDiagramGenerator:

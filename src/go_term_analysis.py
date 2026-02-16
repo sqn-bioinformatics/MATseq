@@ -154,28 +154,26 @@ def initialize_go(data_dir: Path = None) -> tuple:
     return goeaobj, geneid_symbol_mapper
 
 
-def generate_go_table(
-    sigs: pd.DataFrame, goeaobj, geneid_symbol_mapper: dict
-) -> pd.DataFrame:
-    """Generate GO enrichment table for significant genes.
+def generate_go_table(genes: set, goeaobj, geneid_symbol_mapper: dict) -> pd.DataFrame:
+    """Generate GO enrichment table for a set of gene symbols.
 
     Args:
-        sigs: DataFrame with significant genes (gene symbols as index).
+        genes: Set of gene symbol strings.
         goeaobj: GO enrichment study object.
         geneid_symbol_mapper: Dictionary mapping gene symbols to gene IDs.
 
     Returns:
         DataFrame with GO enrichment results.
     """
-    sigs_list = [str(gene) for gene in sigs.index]
+    genes_list = [str(g) for g in genes]
     sigs_ids = [
         int(geneid_symbol_mapper[gene])
-        for gene in sigs_list
+        for gene in genes_list
         if gene in geneid_symbol_mapper
     ]
     print(
-        f"Mapped {len(sigs_ids)/len(sigs_list)*100:.2f}% of "
-        "significantly differentially expressed gene symbols to gene IDs."
+        f"Mapped {len(sigs_ids)/len(genes_list)*100:.2f}% of "
+        "gene symbols to gene IDs."
     )
 
     goea_results = goeaobj.run_study(sigs_ids, prt=None)
@@ -216,7 +214,7 @@ def generate_go_table(
 
 
 def run_go_analysis(
-    sigs: pd.DataFrame,
+    genes: set,
     analysis_name: str,
     output_dir: Path = None,
     data_dir: Path = None,
@@ -226,7 +224,7 @@ def run_go_analysis(
     """Run GO enrichment analysis and save results to CSV.
 
     Args:
-        sigs: DataFrame with significant genes.
+        genes: Set of gene symbol strings.
         analysis_name: Name for output files.
         output_dir: Directory for output CSV.
         data_dir: Directory containing GO data files.
@@ -238,7 +236,7 @@ def run_go_analysis(
     """
     if goeaobj is None or geneid_symbol_mapper is None:
         goeaobj, geneid_symbol_mapper = initialize_go(data_dir)
-    go_df = generate_go_table(sigs, goeaobj, geneid_symbol_mapper)
+    go_df = generate_go_table(genes, goeaobj, geneid_symbol_mapper)
 
     if output_dir is None:
         output_dir = Path(__file__).parent.parent / "results" / "go_terms"
@@ -249,6 +247,75 @@ def run_go_analysis(
     print(f"GO table saved: {csv_path}")
 
     return go_df
+
+
+def create_fs_de_go_table(
+    de_genes: set,
+    fs_genes: set,
+    goeaobj=None,
+    geneid_symbol_mapper=None,
+    output_dir: Path = None,
+) -> tuple:
+    """Create GO tables for de intersect fs and fs-only gene sets.
+
+    Args:
+        de_genes: Set of differentially expressed gene symbols.
+        fs_genes: Set of feature-selected gene symbols.
+        goeaobj: Pre-initialized GO enrichment object.
+        geneid_symbol_mapper: Pre-built gene symbol to ID mapping.
+        output_dir: Directory for output files. Defaults to results/go_terms.
+
+    Returns:
+        Tuple of (go_df_intersect, go_df_fs_only) DataFrames.
+    """
+    if goeaobj is None or geneid_symbol_mapper is None:
+        goeaobj, geneid_symbol_mapper = initialize_go()
+
+    if output_dir is None:
+        output_dir = Path(__file__).parent.parent / "results" / "go_terms"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    de_intersect_fs = de_genes & fs_genes
+    fs_only = fs_genes - de_genes
+
+    go_df_intersect = run_go_analysis(
+        de_intersect_fs,
+        "de_intersect_fs",
+        output_dir=output_dir,
+        goeaobj=goeaobj,
+        geneid_symbol_mapper=geneid_symbol_mapper,
+    )
+
+    go_df_fs_only = run_go_analysis(
+        fs_only,
+        "fs_only",
+        output_dir=output_dir,
+        goeaobj=goeaobj,
+        geneid_symbol_mapper=geneid_symbol_mapper,
+    )
+
+    go_fig_dir = Path(__file__).parent.parent / "results" / "figures" / "go"
+    go_fig_dir.mkdir(parents=True, exist_ok=True)
+
+    from .visualization import plot_go
+
+    if not go_df_intersect.empty:
+        plot_go(
+            go_df_intersect,
+            title="DE ∩ FS Top 20 Significant GO Terms",
+            output_path=go_fig_dir,
+            output_filename="de_intersect_fs_go.png",
+        )
+
+    if not go_df_fs_only.empty:
+        plot_go(
+            go_df_fs_only,
+            title="FS \\ DE Top 20 Significant GO Terms",
+            output_path=go_fig_dir,
+            output_filename="fs_only_go.png",
+        )
+
+    return go_df_intersect, go_df_fs_only
 
 
 def merge_go_tables(

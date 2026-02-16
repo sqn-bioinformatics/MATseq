@@ -323,7 +323,7 @@ class AnalysisPipeline:
             if self._goeaobj is None:
                 self._goeaobj, self._geneid_symbol_mapper = initialize_go()
             go_df = run_go_analysis(
-                sigs,
+                set(sigs.index),
                 ligand_name,
                 output_dir=go_terms_dir,
                 goeaobj=self._goeaobj,
@@ -339,6 +339,12 @@ class AnalysisPipeline:
                 )
         except Exception as e:
             print(f"Warning: GO enrichment failed for {ligand_name}: {e}")
+
+    def get_go_objects(self) -> tuple:
+        """Return (goeaobj, geneid_symbol_mapper), initializing if needed."""
+        if self._goeaobj is None:
+            self._goeaobj, self._geneid_symbol_mapper = initialize_go()
+        return self._goeaobj, self._geneid_symbol_mapper
 
     def get_de_genes(self):
         """Return set of all differentially expressed genes."""

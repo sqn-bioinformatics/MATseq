@@ -44,6 +44,8 @@ from src import (
     # Feature analysis
     FeatureSelectionAnalyzer,
     VennDiagramGenerator,
+    # GO term analysis
+    create_fs_de_go_table,
     # Prediction and comparison
     ModelPredictor,
 )
@@ -447,7 +449,13 @@ class MATseqPipeline:
             output_filename="venn_de_vs_fs.png",
         )
 
-        fs_analyzer.create_fs_de_go_table(de_genes=de_genes, fs_genes=fs_genes)
+        goeaobj, geneid_symbol_mapper = deseq2_pipeline_training.get_go_objects()
+        create_fs_de_go_table(
+            de_genes=de_genes,
+            fs_genes=fs_genes,
+            goeaobj=goeaobj,
+            geneid_symbol_mapper=geneid_symbol_mapper,
+        )
 
         # Step 4: Model Training
         print("\n--- STEP 4: MODEL TRAINING ---")
@@ -482,154 +490,154 @@ class MATseqPipeline:
 
         print("Model evaluation complete. Results saved to results/model_evaluation")
 
-        # Step 5: DESeq2 Analysis (on other ligands and bacterial subsets)
-        print(
-            "\n--- STEP 5: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ON REMAINING LIGANDS ---"
-        )
-        X_other_ligands, y_other_ligands = self.extract_and_run_pca_before_pipeline(
-            df, "other_ligands"
-        )
+        # # Step 5: DESeq2 Analysis (on other ligands and bacterial subsets)
+        # print(
+        #     "\n--- STEP 5: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ON REMAINING LIGANDS ---"
+        # )
+        # X_other_ligands, y_other_ligands = self.extract_and_run_pca_before_pipeline(
+        #     df, "other_ligands"
+        # )
 
-        deseq2_pipeline_other_ligand = AnalysisPipeline(
-            raw_counts=X_other_ligands,
-            sample_labels=y_other_ligands,
-            padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
-            log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
-            n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
-            cache=self.cache,
-            force_recompute=self.force_recompute,
-        )
-        deseq2_pipeline_other_ligand.run_analysis(
-            ADDITIONAL_LIGANDS, negative_control="negative_control"
-        )
+        # deseq2_pipeline_other_ligand = AnalysisPipeline(
+        #     raw_counts=X_other_ligands,
+        #     sample_labels=y_other_ligands,
+        #     padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
+        #     log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
+        #     n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
+        #     cache=self.cache,
+        #     force_recompute=self.force_recompute,
+        # )
+        # deseq2_pipeline_other_ligand.run_analysis(
+        #     ADDITIONAL_LIGANDS, negative_control="negative_control"
+        # )
 
-        X_bacterial, y_bacterial = self.extract_and_run_pca_before_pipeline(
-            df, "bacterial"
-        )
+        # X_bacterial, y_bacterial = self.extract_and_run_pca_before_pipeline(
+        #     df, "bacterial"
+        # )
 
-        deseq2_pipeline_bacterial = AnalysisPipeline(
-            raw_counts=X_bacterial,
-            sample_labels=y_bacterial,
-            padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
-            log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
-            n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
-            cache=self.cache,
-            force_recompute=self.force_recompute,
-        )
-        deseq2_pipeline_bacterial.run_analysis(
-            BACTERIAL_LIGANDS,
-            negative_control="negative_control",
-        )
+        # deseq2_pipeline_bacterial = AnalysisPipeline(
+        #     raw_counts=X_bacterial,
+        #     sample_labels=y_bacterial,
+        #     padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
+        #     log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2),
+        #     n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
+        #     cache=self.cache,
+        #     force_recompute=self.force_recompute,
+        # )
+        # deseq2_pipeline_bacterial.run_analysis(
+        #     BACTERIAL_LIGANDS,
+        #     negative_control="negative_control",
+        # )
 
-        # Step 6: Predict classes of other ligands
-        print("\n--- STEP 6: CLASS PREDICTION ON ADDITIONAL AND BACTERIAL LIGANDS ---")
+        # # Step 6: Predict classes of other ligands
+        # print("\n--- STEP 6: CLASS PREDICTION ON ADDITIONAL AND BACTERIAL LIGANDS ---")
 
-        # Added LPS for plotting
-        lps_mask_train = y_train == "LPS"
-        X_train_lps = X_train[lps_mask_train]
-        y_train_lps = y_train[lps_mask_train]
-        X_other_with_lps = pd.concat([X_other_ligands, X_train_lps])
-        y_other_with_lps = pd.concat([y_other_ligands, y_train_lps])
-        X_bacterial_with_lps = pd.concat([X_bacterial, X_train_lps])
-        y_bacterial_with_lps = pd.concat([y_bacterial, y_train_lps])
+        # # Added LPS for plotting
+        # lps_mask_train = y_train == "LPS"
+        # X_train_lps = X_train[lps_mask_train]
+        # y_train_lps = y_train[lps_mask_train]
+        # X_other_with_lps = pd.concat([X_other_ligands, X_train_lps])
+        # y_other_with_lps = pd.concat([y_other_ligands, y_train_lps])
+        # X_bacterial_with_lps = pd.concat([X_bacterial, X_train_lps])
+        # y_bacterial_with_lps = pd.concat([y_bacterial, y_train_lps])
 
-        predictor = ModelPredictor(trainer)
-        predictions_dir = self.results_dir / "predictions"
+        # predictor = ModelPredictor(trainer)
+        # predictions_dir = self.results_dir / "predictions"
 
-        X_other_fs = pipe.transform(X_other_with_lps)
-        predictor.predict_samples(
-            X_other_fs,
-            sample_names=X_other_with_lps.index.to_numpy(),
-            y_test=y_other_with_lps,
-        )
-        predictor.save_predictions(predictions_dir / "other_ligands")
-        predictor.create_probability_heatmaps(
-            predictions_dir / "other_ligands",
-            subset="other_ligands",
-        )
+        # X_other_fs = pipe.transform(X_other_with_lps)
+        # predictor.predict_samples(
+        #     X_other_fs,
+        #     sample_names=X_other_with_lps.index.to_numpy(),
+        #     y_test=y_other_with_lps,
+        # )
+        # predictor.save_predictions(predictions_dir / "other_ligands")
+        # predictor.create_probability_heatmaps(
+        #     predictions_dir / "other_ligands",
+        #     subset="other_ligands",
+        # )
 
-        X_bacterial_fs = pipe.transform(X_bacterial_with_lps)
-        predictor.predict_samples(
-            X_bacterial_fs,
-            sample_names=X_bacterial_with_lps.index.to_numpy(),
-            y_test=y_bacterial_with_lps,
-        )
-        predictor.save_predictions(predictions_dir / "bacterial")
-        predictor.create_probability_heatmaps(
-            predictions_dir / "bacterial",
-            subset="bacterial",
-        )
+        # X_bacterial_fs = pipe.transform(X_bacterial_with_lps)
+        # predictor.predict_samples(
+        #     X_bacterial_fs,
+        #     sample_names=X_bacterial_with_lps.index.to_numpy(),
+        #     y_test=y_bacterial_with_lps,
+        # )
+        # predictor.save_predictions(predictions_dir / "bacterial")
+        # predictor.create_probability_heatmaps(
+        #     predictions_dir / "bacterial",
+        #     subset="bacterial",
+        # )
 
-        # Step 7: TLR HEK visualization
-        print("\n--- STEP 7: TLR HEK BLUE VISUALIZATION ---")
-        tlr_data_dir = Path(__file__).parent / "data" / "supplementary_data"
-        tlr2_df, tlr4_df, flapa_data = load_tlr_data(data_dir=tlr_data_dir)
+        # # Step 7: TLR HEK visualization
+        # print("\n--- STEP 7: TLR HEK BLUE VISUALIZATION ---")
+        # tlr_data_dir = Path(__file__).parent / "data" / "supplementary_data"
+        # tlr2_df, tlr4_df, flapa_data = load_tlr_data(data_dir=tlr_data_dir)
 
-        plot_tlr_hek_blue(
-            tlr2_df,
-            tlr4_df,
-            flapa_data,
-            output_filename="tlr_hek_blue.png",
-        )
-        # Step 8: Model Training on training_wo_flapa and Prediction on Additional and Bacterial Ligands
-        print(
-            "\n--- STEP 8: MODEL TRAINING ON TRAINING_WO_FLAPA AND PREDICTION ON ADDITIONAL AND BACTERIAL LIGANDS ---"
-        )
-        X_train_wo_flapa, y_train_wo_flapa = self.extract_and_run_pca_before_pipeline(
-            df, "training_wo_flapa"
-        )
-        pipe_wo_flapa, X_fs_wo_flapa = self.run_feature_selection(
-            X_train_wo_flapa,
-            y_train_wo_flapa,
-            "training_wo_flapa",
-        )
-        trainer_wo_flapa = self.train_models(
-            X_fs_wo_flapa, y_train_wo_flapa, "training_wo_flapa"
-        )
+        # plot_tlr_hek_blue(
+        #     tlr2_df,
+        #     tlr4_df,
+        #     flapa_data,
+        #     output_filename="tlr_hek_blue.png",
+        # )
+        # # Step 8: Model Training on training_wo_flapa and Prediction on Additional and Bacterial Ligands
+        # print(
+        #     "\n--- STEP 8: MODEL TRAINING ON TRAINING_WO_FLAPA AND PREDICTION ON ADDITIONAL AND BACTERIAL LIGANDS ---"
+        # )
+        # X_train_wo_flapa, y_train_wo_flapa = self.extract_and_run_pca_before_pipeline(
+        #     df, "training_wo_flapa"
+        # )
+        # pipe_wo_flapa, X_fs_wo_flapa = self.run_feature_selection(
+        #     X_train_wo_flapa,
+        #     y_train_wo_flapa,
+        #     "training_wo_flapa",
+        # )
+        # trainer_wo_flapa = self.train_models(
+        #     X_fs_wo_flapa, y_train_wo_flapa, "training_wo_flapa"
+        # )
 
-        predictor_wo_flapa = ModelPredictor(trainer_wo_flapa)
-        predictions_dir_wo_flapa = (
-            self.results_dir / "predictions" / "training_wo_flapa"
-        )
+        # predictor_wo_flapa = ModelPredictor(trainer_wo_flapa)
+        # predictions_dir_wo_flapa = (
+        #     self.results_dir / "predictions" / "training_wo_flapa"
+        # )
 
-        X_other_fs_wo_flapa = pipe_wo_flapa.transform(X_other_with_lps)
-        predictor_wo_flapa.predict_samples(
-            X_other_fs_wo_flapa,
-            sample_names=X_other_with_lps.index.to_numpy(),
-            y_test=y_other_with_lps,
-        )
-        predictor_wo_flapa.save_predictions(predictions_dir_wo_flapa / "other_ligands")
-        predictor_wo_flapa.create_probability_heatmaps(
-            predictions_dir_wo_flapa / "other_ligands",
-            subset="other_ligands",
-        )
+        # X_other_fs_wo_flapa = pipe_wo_flapa.transform(X_other_with_lps)
+        # predictor_wo_flapa.predict_samples(
+        #     X_other_fs_wo_flapa,
+        #     sample_names=X_other_with_lps.index.to_numpy(),
+        #     y_test=y_other_with_lps,
+        # )
+        # predictor_wo_flapa.save_predictions(predictions_dir_wo_flapa / "other_ligands")
+        # predictor_wo_flapa.create_probability_heatmaps(
+        #     predictions_dir_wo_flapa / "other_ligands",
+        #     subset="other_ligands",
+        # )
 
-        X_bacterial_fs_wo_flapa = pipe_wo_flapa.transform(X_bacterial_with_lps)
-        predictor_wo_flapa.predict_samples(
-            X_bacterial_fs_wo_flapa,
-            sample_names=X_bacterial_with_lps.index.to_numpy(),
-            y_test=y_bacterial_with_lps,
-        )
-        predictor_wo_flapa.save_predictions(predictions_dir_wo_flapa / "bacterial")
-        predictor_wo_flapa.create_probability_heatmaps(
-            predictions_dir_wo_flapa / "bacterial",
-            subset="bacterial",
-        )
+        # X_bacterial_fs_wo_flapa = pipe_wo_flapa.transform(X_bacterial_with_lps)
+        # predictor_wo_flapa.predict_samples(
+        #     X_bacterial_fs_wo_flapa,
+        #     sample_names=X_bacterial_with_lps.index.to_numpy(),
+        #     y_test=y_bacterial_with_lps,
+        # )
+        # predictor_wo_flapa.save_predictions(predictions_dir_wo_flapa / "bacterial")
+        # predictor_wo_flapa.create_probability_heatmaps(
+        #     predictions_dir_wo_flapa / "bacterial",
+        #     subset="bacterial",
+        # )
 
-        print("\n" + "=" * 80)
-        print("PIPELINE COMPLETED SUCCESSFULLY")
-        print("=" * 80)
-        print(f"Results saved to: {self.results_dir.absolute()}")
-        print(f"Cache saved to: {self.cache.cache_dir.absolute()}")
+        # print("\n" + "=" * 80)
+        # print("PIPELINE COMPLETED SUCCESSFULLY")
+        # print("=" * 80)
+        # print(f"Results saved to: {self.results_dir.absolute()}")
+        # print(f"Cache saved to: {self.cache.cache_dir.absolute()}")
 
-        return {
-            "feature_selection": pipe,
-            "feature_analysis": fs_analyzer,
-            "models": trainer,
-            "predictor": predictor,
-            "models_wo_flapa": trainer_wo_flapa,
-            "predictor_wo_flapa": predictor_wo_flapa,
-        }
+        # return {
+        #     "feature_selection": pipe,
+        #     "feature_analysis": fs_analyzer,
+        #     "models": trainer,
+        #     "predictor": predictor,
+        #     "models_wo_flapa": trainer_wo_flapa,
+        #     "predictor_wo_flapa": predictor_wo_flapa,
+        # }
 
 
 def main():

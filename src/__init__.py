@@ -61,6 +61,7 @@ from .go_term_analysis import (
     generate_go_table,
     run_go_analysis,
     merge_go_tables,
+    create_fs_de_go_table,
 )
 
 # Feature analysis
@@ -123,6 +124,7 @@ __all__ = [
     "generate_go_table",
     "run_go_analysis",
     "merge_go_tables",
+    "create_fs_de_go_table",
     # Feature analysis
     "FeatureSelectionAnalyzer",
     "VennDiagramGenerator",

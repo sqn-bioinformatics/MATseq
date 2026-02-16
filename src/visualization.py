@@ -670,7 +670,7 @@ def plot_go(
     ax.grid(True, alpha=0.3, linestyle="-", linewidth=0.5, axis="x")
 
     cbar = fig.colorbar(
-        color_mapper, ax=ax, orientation="vertical", pad=0.01, format="{x:.4f}"
+        color_mapper, ax=ax, orientation="vertical", pad=0.01, format=mpl.ticker.LogFormatterSciNotation()
     )
     cbar.ax.set_position([0.8, 0.5, 0.2, 0.3])
     cbar.ax.set_title("padj", loc="left", pad=4.0)
