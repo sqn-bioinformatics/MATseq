@@ -89,16 +89,20 @@ CLASS_ORDER_TRAINING = _config["class_orders"]["training"]
 CLASS_ORDER_OTHER_LIGANDS = _config["class_orders"]["other_ligands"]
 CLASS_ORDER_BACTERIAL = _config["class_orders"]["bacterial"]
 
+CLASS_ORDER_TRAINING_WO_FLAPA = _config["class_orders"]["training_wo_flapa"]
+
 SUBSET_PALETTES = {
     "training": CUSTOM_PALETTE_6,
     "other_ligands": CUSTOM_PALETTE_9,
     "bacterial": CUSTOM_PALETTE_8,
+    "training_wo_flapa": CUSTOM_PALETTE_6[:len(CLASS_ORDER_TRAINING_WO_FLAPA)],
 }
 
 SUBSET_CLASS_ORDERS = {
     "training": CLASS_ORDER_TRAINING,
     "other_ligands": CLASS_ORDER_OTHER_LIGANDS,
     "bacterial": CLASS_ORDER_BACTERIAL,
+    "training_wo_flapa": CLASS_ORDER_TRAINING_WO_FLAPA,
 }
 
 DESEQ2_CONFIG = _config["deseq2"]

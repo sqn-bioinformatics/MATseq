@@ -26,10 +26,6 @@ class FeatureSelectionAnalyzer:
             output_dir = Path.cwd() / "results" / "feature_analysis"
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
-        self.figures_dir = Path.cwd() / "results" / "figures" / "feature_analysis"
-        self.figures_dir.mkdir(parents=True, exist_ok=True)
-
         self.gene_frequency = None
         self.feature_sets = []
 
