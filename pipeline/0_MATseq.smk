@@ -59,7 +59,7 @@ def compile_benchmarks(benchmark: str, stats: str):
                 reader = csv.reader(g, delimiter="\t")
                 next(reader)  # Headers line
                 writer.writerow([fp.stem] + next(reader))
-# Getting sample names and _R1 and _R2 strings
+
 SAMPLES, _, _, PAIRED = map(set, glob_wildcards(str(Path(SAMPLEDIR) / "{samples}_{tag}_{other}_{paired}.fastq.gz")))
 SAMPLE_RUN_DICTIONARY = {}
 for sample in SAMPLES:
@@ -100,7 +100,6 @@ rule all:
 Load rules 
 
 """
-# # include: "1_download_files.smk"
 include: "1_control_quality_fastqc.smk"
 include: "2_trim_fastp.smk"
 include: "3_align_star.smk"

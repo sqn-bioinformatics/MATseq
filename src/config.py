@@ -78,6 +78,21 @@ def get_featurecounts_dir() -> Path:
     return expand_path(get_config("paths.featurecounts_dir"))
 
 
+def get_work_dir() -> Path:
+    """Get Snakemake working directory."""
+    return expand_path(get_config("snakemake.work_dir"))
+
+
+def get_sample_dir() -> Path:
+    """Get directory containing input samples."""
+    return expand_path(get_config("snakemake.sample_dir"))
+
+
+def get_genome_dir() -> Path:
+    """Get genome reference directory."""
+    return expand_path(get_config("snakemake.genome_dir"))
+
+
 # Load and export configuration as module-level constants for backward compatibility
 _config = _load_config()
 
@@ -95,7 +110,7 @@ SUBSET_PALETTES = {
     "training": CUSTOM_PALETTE_6,
     "other_ligands": CUSTOM_PALETTE_9,
     "bacterial": CUSTOM_PALETTE_8,
-    "training_wo_flapa": CUSTOM_PALETTE_6[:len(CLASS_ORDER_TRAINING_WO_FLAPA)],
+    "training_wo_flapa": CUSTOM_PALETTE_6[: len(CLASS_ORDER_TRAINING_WO_FLAPA)],
 }
 
 SUBSET_CLASS_ORDERS = {
