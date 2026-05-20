@@ -95,17 +95,17 @@ class ModelPredictor:
             proba_df.to_csv(output_path)
             print(f"Saved probabilities to {output_path}")
 
-    def create_probability_heatmaps(self, output_dir: Path, subset: str = "training"):
+    def create_probability_heatmaps(self, output_dir: Path, subset: str = "main_ligands"):
         """Create heatmap visualizations of prediction probabilities.
 
         Args:
             output_dir: Directory to save figures.
-            subset: Key into SUBSET_CLASS_ORDERS ("training", "other_ligands", "bacterial").
+            subset: Key into SUBSET_CLASS_ORDERS ("main_ligands", "additional_ligands", "bacteria_ligands").
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        class_order = SUBSET_CLASS_ORDERS.get(subset, SUBSET_CLASS_ORDERS["training"])
+        class_order = SUBSET_CLASS_ORDERS.get(subset, SUBSET_CLASS_ORDERS["main_ligands"])
 
         for model_name, proba_df in self.probabilities.items():
             proba_df_ordered = proba_df.copy()

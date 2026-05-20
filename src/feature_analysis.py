@@ -5,9 +5,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, List, Union
 from collections import Counter
 from matplotlib_venn import venn2
+from sklearn.model_selection import GridSearchCV
 
 from .feature_engineering import create_feature_pipeline
 from .config import FEATURE_SELECTION_CONFIG
@@ -142,6 +143,71 @@ class FeatureSelectionAnalyzer:
         self.gene_frequency = gene_counts
         print(f"Loaded {len(self.feature_sets)} feature sets")
 
+
+
+class PipelineParamTuner:
+    """Grid search over k_best and max_features pipeline parameters."""
+
+    def __init__(self, output_dir: Path = None):
+        if output_dir is None:
+            output_dir = Path.cwd() / "results" / "feature_analysis"
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.cv_results_ = None
+
+    def run(
+        self,
+        X: pd.DataFrame,
+        y: Union[np.ndarray, pd.Series],
+        k_best_values: List[int],
+        max_features_values: List[int],
+        scoring: str = "balanced_accuracy",
+        cv: int = 5,
+    ) -> pd.DataFrame:
+        param_grid = {
+            "select_k_best__k": k_best_values,
+            "select_forest__max_features": max_features_values,
+        }
+        pipe = create_feature_pipeline(**FEATURE_SELECTION_CONFIG)
+        gs = GridSearchCV(pipe, param_grid, scoring=scoring, cv=cv, n_jobs=-1, refit=False)
+        gs.fit(X, y)
+
+        results = pd.DataFrame(gs.cv_results_)
+        self.cv_results_ = results
+        return results
+
+    def plot(self, output_filename: str = "param_tuning_heatmap.png") -> Path:
+        if self.cv_results_ is None:
+            raise ValueError("Run grid search first")
+
+        pivot = self.cv_results_.pivot(
+            index="param_select_k_best__k",
+            columns="param_select_forest__max_features",
+            values="mean_test_score",
+        )
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        im = ax.imshow(pivot.values, aspect="auto")
+        plt.colorbar(im, ax=ax, label="mean test score")
+
+        ax.set_xticks(range(len(pivot.columns)))
+        ax.set_xticklabels(pivot.columns)
+        ax.set_yticks(range(len(pivot.index)))
+        ax.set_yticklabels(pivot.index)
+        ax.set_xlabel("max_features")
+        ax.set_ylabel("k_best")
+
+        for i in range(len(pivot.index)):
+            for j in range(len(pivot.columns)):
+                ax.text(j, i, f"{pivot.values[i, j]:.3f}", ha="center", va="center", fontsize=8)
+
+        output_path = self.output_dir / output_filename
+        try:
+            fig.savefig(output_path, dpi=150, bbox_inches="tight")
+        finally:
+            plt.close(fig)
+
+        return output_path
 
 
 class VennDiagramGenerator:

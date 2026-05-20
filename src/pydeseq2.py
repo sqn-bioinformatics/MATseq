@@ -14,6 +14,7 @@ from .go_term_analysis import initialize_go, run_go_analysis, merge_go_tables
 from .cache import PipelineCache
 
 
+
 class DataProcessor:
     """Process raw count data and perform DESeq2 analysis."""
 
@@ -70,7 +71,6 @@ class DataProcessor:
                 f"Expected exactly 2 classes for comparison, got {len(self.classes)}: {self.classes}"
             )
 
-        # Filter samples and labels for the classes being compared
         mask = self.sample_labels.isin(self.classes)
         sample_names = self.raw_counts.index[mask]
         labels = self.sample_labels[mask]
@@ -187,9 +187,7 @@ class DataProcessor:
         return result
 
 
-class AnalysisPipeline:
-    """Execute DESeq2 analysis workflow with caching and figure generation."""
-
+class DESeq2:
     def __init__(
         self,
         raw_counts: pd.DataFrame,

@@ -32,19 +32,20 @@ cd MATseq
 # Install dependencies via Poetry
 poetry install
 
-# Running the Pipeline
+# Validate Snakemake pipeline without running
+poetry run python MATseq.py --snakemake dry-run
+
 ## Run Snakemake preprocessing
-poetry run python MATseq.py --run-snakemake
+poetry run python MATseq.py --snakemake run
 
 ## Run Analysis
 poetry run python MATseq.py
 ```
 
 Optional arguments:
+- `--snakemake {dry-run,run}`: Validate (`dry-run`) or execute (`run`) Snakemake preprocessing
 - `--genome-dir PATH`: Genome reference directory for Snakemake
 - `--fastq-dir PATH`: Raw data (zipped FASTQ) directory for Snakemake
-- `--snakemake-dry-run`: Validate Snakemake pipeline without running
-- `--run-snakemake`: Run Snakemake preprocessing before pipeline
 - `--force-recompute`: Skip cache and recompute all steps
 - `--cache-dir PATH`: Directory for cached files (default: results/cache)
 
@@ -54,7 +55,7 @@ Optional arguments:
 
 Snakemake pipeline processes raw FASTQ into MATseq_count_summary.csv. It must be run before the remainder of the pipeline. Snakemake will request a path to the raw data in fastq.gz format. Download the raw data from [NCBI GEO database](https://www.ncbi.nlm.nih.gov/geo/), GEO accession number GSE313994. Provide it with --genome-dir or in the config.json. It will also request a path to a reference genome; we used GRCh38_GCA_000001405.15. Download a reference genome from [NCBI](https://www.ncbi.nlm.nih.gov/datasets/genome/). Provide it with --fastq-dir or in the config.json.
 
-Run with `--run-snakemake` to execute the RNA-seq preprocessing:
+Run with `--snakemake run` to execute the RNA-seq preprocessing:
 1. **Quality Control** - FastQC on raw reads
 2. **Trimming** - Adapter removal with fastp
 3. **Alignment** - STAR alignment to reference genome
@@ -101,7 +102,7 @@ MATseq will attempt to download these files automatically if missing (may be slo
 
 ### Main Pipeline
 
-1. **Data Preprocessing** (`merge_counts`)
+1. **Data Preprocessing** (`prepare_counts`)
    - Merge featureCounts outputs
    - Filter samples by read count threshold (>1M reads)
    - Extract training/test/bacterial subsets with proper labels

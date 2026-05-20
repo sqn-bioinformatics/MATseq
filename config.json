@@ -9,16 +9,15 @@
   },
   "deseq2": {
     "padj_threshold": 0.05,
-    "log2fc_threshold": 2,
-    "baseMean_threshold": 10,
+    "log2fc_threshold": 2.0,
+    "baseMean_threshold": 10.0,
     "n_cpus": 42
   },
   "feature_selection": {
     "k_best": 1000,
     "n_estimators": 250,
     "max_depth": 5,
-    "max_features": 250,
-    "feature_threshold": 0.001
+    "max_features": 250
   },
   "model_training": {
     "random_state": 42,
@@ -29,6 +28,54 @@
   "model_factory": {
     "random_state": 42,
     "calibrate": true
+  },
+  "ligands": {
+    "main_ligands": [
+      "Fla-PA",
+      "PGN",
+      "R848",
+      "Pam3"
+    ],
+    "additional_ligands": [
+      "LTA",
+      "MPLA",
+      "Pam2"
+    ],
+    "bacteria_ligands": [
+      "HK E.coli",
+      "HK S.aureus"
+    ]
+  },
+  "class_order_for_plotting": {
+    "main_ligands": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
+      "PGN",
+      "Fla-PA"
+    ],
+    "additional_ligands": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
+      "PGN",
+      "Fla-PA",
+      "LTA",
+      "MPLA",
+      "Pam2"
+    ],
+    "bacteria_ligands": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
+      "PGN",
+      "Fla-PA",
+      "HK E.coli",
+      "HK S.aureus"
+    ]
   },
   "colors": {
     "palette_6": [
@@ -61,86 +108,15 @@
       "#e377c2"
     ]
   },
-  "class_orders": {
-    "training": [
-      "negative_control",
-      "LPS",
-      "Pam3",
-      "R848",
-      "PGN",
-      "Fla-PA"
-    ],
-    "other_ligands": [
-      "negative_control",
-      "LPS",
-      "Pam3",
-      "R848",
-      "PGN",
-      "Fla-PA",
-      "LTA",
-      "MPLA",
-      "Pam2"
-    ],
-    "bacterial": [
-      "negative_control",
-      "LPS",
-      "Pam3",
-      "R848",
-      "PGN",
-      "Fla-PA",
-      "HK E.coli",
-      "HK S.aureus"
-    ],
-    "training_wo_flapa": [
-      "negative_control",
-      "LPS",
-      "Pam3",
-      "R848",
-      "PGN"
-    ]
-  },
   "subset_palettes": {
-    "training": "palette_6",
-    "other_ligands": "palette_9",
-    "bacterial": "palette_8"
-  },
-  "ligands": {
-    "training": [
-      "Fla-PA",
-      "LPS",
-      "PGN",
-      "R848",
-      "Pam3",
-      "negative_control"
-    ],
-    "additional": [
-      "LTA",
-      "MPLA",
-      "Pam2"
-    ],
-    "bacterial": [
-      "HKSA",
-      "HKEB"
-    ],
-    "bacterial_renamed": [
-      "HK E.coli",
-      "HK S.aureus"
-    ],
-    "training_wo_flapa": [
-      "LPS",
-      "PGN",
-      "R848",
-      "Pam3",
-      "negative_control"
-    ]
+    "main_ligands": "palette_6",
+    "additional_ligands": "palette_9",
+    "bacteria_ligands": "palette_8"
   },
   "snakemake": {
-    "sample_dir": "/home/t.afanasyeva/MATseq/data/raw",
+    "sample_dir": "~/MATseq/data/raw",
     "work_dir": "~/MATseq/results",
     "genome_dir": "/home/t.afanasyeva/reference_genome/GRCh38_GCA_000001405.15",
     "threads": 42
-  },
-  "class_labels": {
-    "IMDM": "negative_control"
   }
 }

@@ -25,6 +25,9 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.base import clone
 import matplotlib.pyplot as plt
 
+from .feature_engineering import create_feature_pipeline
+from .config import FEATURE_SELECTION_CONFIG
+
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", message="Liblinear failed to converge")
 
@@ -374,17 +377,20 @@ class ModelTrainer:
         cv: int = 5,
         eval_name: str = None,
     ) -> pd.DataFrame:
-        """Evaluate all trained models using cross-validation.
+        """Evaluate all trained models using stratified cross-validation.
+
+        Feature selection and SMOTE are fit per fold on the train split only,
+        so test data never leaks into any fitting step.
 
         Args:
-            X: Feature matrix (already feature-selected).
+            X: Raw count matrix (pre-feature-selection).
             y: True labels.
-            eval_dir: Directory to save evaluation results and figures.
+            eval_dir: Directory to save evaluation CSVs and confusion matrix figures.
             cv: Number of cross-validation splits.
-            eval_name: Name prefix for output files (e.g., 'full', 'fs', 'fs_de').
+            eval_name: Prefix for output filenames (e.g., 'training').
 
         Returns:
-            DataFrame with evaluation metrics for all models.
+            DataFrame with mean and std of each metric across folds, per model.
         """
         if eval_dir is not None:
             eval_dir = Path(eval_dir)
@@ -396,7 +402,6 @@ class ModelTrainer:
 
         prefix = f"{eval_name}_" if eval_name else ""
 
-        X_array = X.values if isinstance(X, pd.DataFrame) else X
         y_array = y.values if isinstance(y, pd.Series) else y
 
         if (
@@ -417,15 +422,33 @@ class ModelTrainer:
             fold_scores = []
 
             for fold_idx, (train_idx, test_idx) in enumerate(
-                sss.split(X_array, y_encoded)
+                sss.split(np.arange(len(X)), y_encoded)
             ):
-                X_train_fold = X_array[train_idx]
-                X_test_fold = X_array[test_idx]
+                if isinstance(X, pd.DataFrame):
+                    X_train_fold = X.iloc[train_idx]
+                    X_test_fold = X.iloc[test_idx]
+                else:
+                    X_train_fold = X[train_idx]
+                    X_test_fold = X[test_idx]
+
                 y_train_fold = y_encoded[train_idx]
                 y_test_fold = y_encoded[test_idx]
 
-                smote = ModelFactory.create_smote(
-                    random_state=self.random_state + fold_idx
+                fs_pipe = create_feature_pipeline(
+                    **FEATURE_SELECTION_CONFIG, random_state=self.random_state + fold_idx
+                )
+                X_train_fold = fs_pipe.fit_transform(X_train_fold, y_train_fold)
+                X_test_fold = fs_pipe.transform(X_test_fold)
+
+                if isinstance(X_train_fold, pd.DataFrame):
+                    X_train_fold = X_train_fold.values
+                if isinstance(X_test_fold, pd.DataFrame):
+                    X_test_fold = X_test_fold.values
+
+                smote = SMOTE(
+                    sampling_strategy="not majority",
+                    k_neighbors=self.smote_k_neighbors,
+                    random_state=self.random_state + fold_idx,
                 )
                 X_train_fold, y_train_fold = smote.fit_resample(
                     X_train_fold, y_train_fold

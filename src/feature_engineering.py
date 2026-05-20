@@ -4,13 +4,59 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin, OneToOneFeatureMixin
 from sklearn.pipeline import Pipeline
-from sklearn.feature_selection import SelectKBest, SelectFromModel, chi2
+from sklearn.feature_selection import SelectKBest, SelectFromModel, mutual_info_classif
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import ExtraTreesClassifier
 from feature_engine.selection import DropDuplicateFeatures
 
 
-class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMixin):
+class QCLowerCountRemover(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        values = (
+            X.to_numpy(dtype=float)
+            if isinstance(X, pd.DataFrame)
+            else np.asarray(X, dtype=float)
+        )
+        self.mask_ = values.sum(axis=0) >= 10
+        return self
+
+    def transform(self, X):
+        if X is None:
+            raise ValueError("X cannot be None")
+        X_is_df = isinstance(X, pd.DataFrame)
+
+        if X_is_df:
+            values = X.to_numpy(dtype=float)
+            index = X.index
+            columns = X.columns
+        else:
+            values = np.asarray(X, dtype=float)
+            index = None
+            columns = None
+
+        if values.ndim != 2:
+            raise ValueError(f"Expected 2D array, got shape {values.shape}")
+
+        filtered_values = values[:, self.mask_]
+        if X_is_df:
+            return pd.DataFrame(
+                filtered_values,
+                index=index,
+                columns=columns[self.mask_],
+            )
+
+        return filtered_values
+
+    def get_feature_names_out(self, input_features=None):
+        if input_features is None:
+            raise ValueError(
+                "input_features must be provided for "
+                "QCLowerCountRemover.get_feature_names_out"
+            )
+        return np.asarray(input_features, dtype=object)[self.mask_]
+
+
+class LibraryLengthNormalizer(BaseEstimator, TransformerMixin):
     """Normalize gene counts to library size (reads per million)."""
 
     def fit(self, X, y=None):
@@ -48,22 +94,12 @@ class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMi
 
         return normalized
 
-    def get_feature_names_out(self, input_features=None):
-        """Return output feature names unchanged."""
-        if input_features is None:
-            raise ValueError(
-                "input_features must be provided for "
-                "LibraryLengthNormalizer.get_feature_names_out"
-            )
-        return np.asarray(input_features, dtype=object)
-
 
 def create_feature_pipeline(
     k_best: int = 1000,
     n_estimators: int = 250,
     max_depth: int = 5,
     max_features: int = 250,
-    feature_threshold: float = 0.001,
     random_state: int = 42,
 ) -> Pipeline:
     """Create a feature selection and preprocessing pipeline.
@@ -73,7 +109,6 @@ def create_feature_pipeline(
         n_estimators: Number of trees in ExtraTreesClassifier.
         max_depth: Maximum depth of trees.
         max_features: Maximum number of features after forest selection.
-        feature_threshold: Threshold for feature importance in forest selection.
         random_state: Random state for reproducibility.
 
     Returns:
@@ -87,8 +122,6 @@ def create_feature_pipeline(
         raise ValueError(f"max_depth must be positive, got {max_depth}")
     if max_features <= 0:
         raise ValueError(f"max_features must be positive, got {max_features}")
-    if feature_threshold <= 0:
-        raise ValueError(f"feature_threshold must be positive, got {feature_threshold}")
 
     en = ExtraTreesClassifier(
         n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
@@ -96,14 +129,12 @@ def create_feature_pipeline(
 
     pipe = Pipeline(
         [
-            ("drop_duplicates", DropDuplicateFeatures()),
+            ("drop_low_count_features", QCLowerCountRemover()),
             ("normalise_for_library_size", LibraryLengthNormalizer()),
-            ("select_k_best", SelectKBest(chi2, k=k_best)),
+            ("select_k_best", SelectKBest(mutual_info_classif, k=k_best)),
             (
                 "select_forest",
-                SelectFromModel(
-                    en, threshold=feature_threshold, max_features=max_features
-                ),
+                SelectFromModel(en, max_features=max_features),
             ),
             ("standard_scale", StandardScaler()),
         ]

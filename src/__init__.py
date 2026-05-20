@@ -4,12 +4,15 @@ __version__ = "0.1.0"
 
 # Import commonly used functions and classes
 from .preprocessing import (
-    merge_counts,
-    filter_counts,
+    prepare_counts,
+    load_featurecounts,
+    filter_low_read_samples,
+    label_samples,
     extract_subset,
     normalize_rpm,
-    load_tlr_data,
 )
+
+from .tlr_analysis import load_tlr_data
 
 from .feature_engineering import LibraryLengthNormalizer, create_feature_pipeline
 
@@ -25,25 +28,23 @@ from .config import (
     CUSTOM_PALETTE_6,
     CUSTOM_PALETTE_8,
     CUSTOM_PALETTE_9,
-    CLASS_ORDER_TRAINING,
-    CLASS_ORDER_OTHER_LIGANDS,
-    CLASS_ORDER_BACTERIAL,
+    CLASS_ORDER_MAIN_LIGANDS,
+    CLASS_ORDER_ADDITIONAL_LIGANDS,
+    CLASS_ORDER_BACTERIA_LIGANDS,
     SUBSET_PALETTES,
     SUBSET_CLASS_ORDERS,
     DESEQ2_CONFIG,
     FEATURE_SELECTION_CONFIG,
     MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
-    TRAINING_LIGANDS,
-    TRAINING_LIGANDS_WO_FLAPA,
+    MAIN_LIGANDS,
     ADDITIONAL_LIGANDS,
-    BACTERIAL_LIGANDS,
-    BACTERIAL_LIGANDS_ORIGINAL_NAMES,
+    BACTERIA_LIGANDS,
 )
 
 from .pydeseq2 import (
     DataProcessor as DESeq2DataProcessor,
-    AnalysisPipeline,
+    DESeq2,
 )
 
 from .visualization import (
@@ -67,6 +68,7 @@ from .go_term_analysis import (
 # Feature analysis
 from .feature_analysis import (
     FeatureSelectionAnalyzer,
+    PipelineParamTuner,
     VennDiagramGenerator,
 )
 
@@ -78,23 +80,23 @@ __all__ = [
     "CUSTOM_PALETTE_6",
     "CUSTOM_PALETTE_8",
     "CUSTOM_PALETTE_9",
-    "CLASS_ORDER_TRAINING",
-    "CLASS_ORDER_OTHER_LIGANDS",
-    "CLASS_ORDER_BACTERIAL",
+    "CLASS_ORDER_MAIN_LIGANDS",
+    "CLASS_ORDER_ADDITIONAL_LIGANDS",
+    "CLASS_ORDER_BACTERIA_LIGANDS",
     "SUBSET_PALETTES",
     "SUBSET_CLASS_ORDERS",
     "DESEQ2_CONFIG",
     "FEATURE_SELECTION_CONFIG",
     "MODEL_FACTORY_CONFIG",
     "MODEL_TRAINING_CONFIG",
-    "TRAINING_LIGANDS",
+    "MAIN_LIGANDS",
     "ADDITIONAL_LIGANDS",
-    "BACTERIAL_LIGANDS",
-    "BACTERIAL_LIGANDS_ORIGINAL_NAMES",
-    "TRAINING_LIGANDS_WO_FLAPA",
+    "BACTERIA_LIGANDS",
     # Preprocessing
-    "merge_counts",
-    "filter_counts",
+    "prepare_counts",
+    "load_featurecounts",
+    "filter_low_read_samples",
+    "label_samples",
     "extract_subset",
     "normalize_rpm",
     "load_tlr_data",
@@ -110,7 +112,7 @@ __all__ = [
     "get_confusion_matrix",
     # DESeq2 analysis
     "DESeq2DataProcessor",
-    "AnalysisPipeline",
+    "DESeq2",
     # Visualization
     "plot_gene_expression_by_class",
     "plot_tlr_hek_blue",
@@ -127,6 +129,7 @@ __all__ = [
     "create_fs_de_go_table",
     # Feature analysis
     "FeatureSelectionAnalyzer",
+    "PipelineParamTuner",
     "VennDiagramGenerator",
     # Prediction and model comparison
     "ModelPredictor",
