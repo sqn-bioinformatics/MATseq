@@ -409,8 +409,6 @@ def plot_volcano(
         hue="color",
         hue_order=["no_expression_change", "overexpressed", "underexpressed"],
         palette=["grey", "orange", "purple"],
-        size="baseMean",
-        sizes=(20, 50),
         alpha=0.7,
     )
 
@@ -502,50 +500,52 @@ def plot_heatmap(
 
     lut = dict(zip(set(dds_sigs.obs.condition), "rgb"))
     col_colors = list(dds_sigs.obs.condition.map(lut))
-
     g = sns.clustermap(
         figsize=(8, 10),
         data=grapher,
         cmap="RdYlBu_r",
-        z_score=None,
+        z_score=0,
         dendrogram_ratio=(0.1, 0.1),
         cbar_pos=(0.93, 0.2, 0.03, 0.45),
         cbar_kws=dict(
             location="left",
             orientation="vertical",
             pad=2,
+            label="Row z-score (log1p normed counts)",
         ),
         col_colors=col_colors,
     )
 
-    handles = [Patch(facecolor=lut[name]) for name in lut]
-    plt.legend(
-        handles,
-        lut,
-        bbox_transform=plt.gcf().transFigure,
-        bbox_to_anchor=(1, 1),
-        loc="upper right",
+    handles = [Patch(facecolor=lut[name], label=name) for name in lut]
+
+    g.ax_col_dendrogram.legend(
+        handles=handles,
+        bbox_to_anchor=(1.0, 1.0),
+        loc="upper left",
         fontsize=10,
         fancybox=True,
         frameon=True,
         facecolor="white",
         edgecolor="black",
     )
+
     g.ax_heatmap.set_xticklabels([])
     g.ax_heatmap.tick_params(bottom=False)
     g.ax_heatmap.set(xlabel=None)
+
     reordered_genes = grapher.index[g.dendrogram_row.reordered_ind]
     g.ax_heatmap.set_yticks(np.arange(len(reordered_genes)) + 0.5)
     g.ax_heatmap.set_yticklabels(reordered_genes, fontsize=8)
+
     g.ax_col_dendrogram.set_title(
         f"{analysis_name} Differentially Expressed Genes",
         fontsize=12,
         fontweight="bold",
         pad=2,
     )
-    plt.subplots_adjust(hspace=0.01)
-    g.figure.patch.set_facecolor("white")
 
+    g.figure.subplots_adjust(hspace=0.01, right=0.82)
+    g.figure.patch.set_facecolor("white")
     if output_path is None:
         output_path = Path(__file__).parent.parent / "results" / "figures" / "deseq2"
     output_path.mkdir(parents=True, exist_ok=True)
@@ -664,13 +664,17 @@ def plot_go(
     )
 
     ax.set_yticklabels([textwrap.fill(term, 40) for term in go_terms["term"]])
-    ax.set_xlabel("Gene Ratio", fontsize=12)
+    ax.set_xlabel("Gene Ratio (n_genes in term / n_study genes)", fontsize=12)
     ax.set_ylabel("")
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.grid(True, alpha=0.3, linestyle="-", linewidth=0.5, axis="x")
 
     cbar = fig.colorbar(
-        color_mapper, ax=ax, orientation="vertical", pad=0.01, format=mpl.ticker.LogFormatterSciNotation()
+        color_mapper,
+        ax=ax,
+        orientation="vertical",
+        pad=0.01,
+        format=mpl.ticker.LogFormatterSciNotation(),
     )
     cbar.ax.set_position([0.8, 0.5, 0.2, 0.3])
     cbar.ax.set_title("padj", loc="left", pad=4.0)

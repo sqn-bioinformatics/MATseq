@@ -16,21 +16,19 @@ from src import (
     SUBSET_PALETTES,
     SUBSET_CLASS_ORDERS,
     DESEQ2_CONFIG,
-    FEATURE_SELECTION_CONFIG,
     MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
+    HYPERPARAMETER_GRIDS,
     prepare_counts,
     extract_subset,
     normalize_rpm,
     load_tlr_data,
-    create_feature_pipeline,
     ModelFactory,
     ModelTrainer,
     plot_pca_pandas,
     plot_tlr_hek_blue,
     DESeq2,
     FeatureSelectionAnalyzer,
-    PipelineParamTuner,
     VennDiagramGenerator,
     create_fs_de_go_table,
     ModelPredictor,
@@ -93,6 +91,7 @@ class MATseqPipeline:
             "--config",
             f"SampleDir={fastq_dir}",
             f"GenomeDir={genome_dir}",
+            "--rerun-incomplete",
         ]
         if dry_run:
             cmd.append("--dry-run")
@@ -100,6 +99,7 @@ class MATseqPipeline:
         print(
             f"\n--- RUNNING SNAKEMAKE PREPROCESSING ---\nFASTQ: {fastq_dir}\nGenome: {genome_dir}"
         )
+        subprocess.run(cmd + ["--unlock"], cwd=str(Path.cwd()))
         result = subprocess.run(cmd, cwd=str(Path.cwd()))
         if result.returncode == 0:
             print("Snakemake preprocessing completed successfully")
@@ -127,20 +127,13 @@ class MATseqPipeline:
         X: pd.DataFrame,
         y: pd.Series,
         subset_name: str,
-        file_suffix: str = "",
-        tag: str | None = None,
-        prescaled: bool = False,
     ) -> None:
-        if prescaled:
-            X_scaled = X
-        else:
-            X_rpm = normalize_rpm(X)
-            scaler = StandardScaler().set_output(transform="pandas")
-            X_scaled = scaler.fit_transform(X_rpm)
+        X_rpm = normalize_rpm(X)
+        scaler = StandardScaler().set_output(transform="pandas")
+        X_scaled = scaler.fit_transform(X_rpm)
 
         palette = SUBSET_PALETTES.get(subset_name, CUSTOM_PALETTE_9)
         hue_order = SUBSET_CLASS_ORDERS.get(subset_name)
-        label_base = tag or subset_name
 
         for with_names, label_suffix in [(False, ""), (True, "_labeled")]:
             plot_pca_pandas(
@@ -148,63 +141,47 @@ class MATseqPipeline:
                 labels=y,
                 palette=palette,
                 hue_order=hue_order,
-                name=f"{label_base}{file_suffix}{label_suffix}",
+                name=f"{subset_name}{label_suffix}",
                 with_sample_names=with_names,
-                output_filename=f"{label_base}_pca{file_suffix}{label_suffix}.png",
+                output_filename=f"{subset_name}_pca{label_suffix}.png",
             )
 
-    def _fs_and_train(
+    def _tune_subset(
         self,
         X: pd.DataFrame,
         y: pd.Series,
-        subset_name: str,
-        tag: str | None = None,
-    ) -> tuple[object, pd.DataFrame, ModelTrainer]:
-        cache_key = tag or subset_name
-
-        def _fit_fs():
-            pipe = create_feature_pipeline(
-                **FEATURE_SELECTION_CONFIG,
-                random_state=MODEL_TRAINING_CONFIG["random_state"],
-            ).set_output(transform="pandas")
-            X_selected = pipe.fit_transform(X, y)
-            feature_names = pipe[:-1].get_feature_names_out()
-            return pipe, pd.DataFrame(X_selected, columns=feature_names, index=X.index)
-
-        pipe, X_fs = self.cache.cached_call(
-            _fit_fs,
-            name=f"feature_selection_{cache_key}",
-            force_recompute=self.force_recompute,
-        )
-
-        self._pca_plot(
-            X_fs, y, subset_name, file_suffix="_selected", tag=tag, prescaled=True
-        )
-
-        def _fit_models():
+        eval_name: str,
+        output_subdir: str = "hyperparameter_tuning",
+    ) -> ModelTrainer:
+        def _run():
             models = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
-            trainer = ModelTrainer(X_fs, y, models=models, **MODEL_TRAINING_CONFIG)
-            trainer.train_all_models()
+            trainer = ModelTrainer(X, y, models=models, **MODEL_TRAINING_CONFIG)
+            trainer.tune_nested(
+                X,
+                y,
+                param_grids=HYPERPARAMETER_GRIDS,
+                output_dir=self.results_dir / output_subdir,
+                outer_cv=10,
+                inner_cv=5,
+                eval_name=eval_name,
+            )
             return trainer
 
-        trainer = self.cache.cached_call(
-            _fit_models,
-            name=f"trained_models_{cache_key}",
+        return self.cache.cached_call(
+            _run,
+            name=f"tuned_models_{eval_name}",
             force_recompute=self.force_recompute,
         )
-        return pipe, X_fs, trainer
 
     def _predict(
         self,
         predictor: ModelPredictor,
-        pipe,
         subset_key: str,
         X: pd.DataFrame,
         y: pd.Series,
         output_dir: Path,
     ) -> None:
-        X_fs = pipe.transform(X)
-        predictor.predict_samples(X_fs, sample_names=X.index.to_numpy(), y_test=y)
+        predictor.predict_samples(X, sample_names=X.index.to_numpy(), y_test=y)
         predictor.save_predictions(output_dir / subset_key)
         predictor.create_probability_heatmaps(
             output_dir / subset_key, subset=subset_key
@@ -259,16 +236,6 @@ class MATseqPipeline:
         X_bact, y_bact = subset_xy["bacteria_ligands"]
         deseq2_main = deseq2_pipes["main_ligands"]
 
-        print("\n--- STEP 2b: PIPELINE PARAMETER TUNING ---")
-        tuner = PipelineParamTuner()
-        tuner.run(
-            X_train,
-            y_train,
-            k_best_values=[100, 500, 1000, 2000],
-            max_features_values=[50, 100, 250, 500],
-        )
-        tuner.plot()
-
         print("\n--- STEP 3: VENN OF FS vs DE GENES (training subset) ---")
         de_genes = deseq2_main.get_de_genes()
         fs_analyzer, fs_genes = self._venn_feature_selection(
@@ -285,25 +252,15 @@ class MATseqPipeline:
             geneid_symbol_mapper=geneid_symbol_mapper,
         )
 
-        print("\n--- STEP 4: MODEL TRAINING (main_ligands) ---")
-        pipe, _, trainer = self._fs_and_train(X_train, y_train, "main_ligands")
+        print("\n--- STEP 4: NESTED CV TUNING + DEPLOYMENT REFIT (main_ligands) ---")
+        trainer = self._tune_subset(X_train, y_train, eval_name="main_ligands")
         trainer.save_models(self.results_dir / "models")
 
-        print("\n--- EVALUATING MODELS (per-fold FS via ModelTrainer.evaluate) ---")
-        trainer.evaluate(
-            X_train,
-            y_train,
-            eval_dir=self.results_dir / "model_evaluation",
-            cv=10,
-            eval_name="main_ligands",
-        )
-
         print("\n--- STEP 5: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS ---")
-        # Append training LPS samples as positive control for the held-out ligand sets.
         predictor = ModelPredictor(trainer)
         pred_dir = self.results_dir / "predictions"
-        self._predict(predictor, pipe, "additional_ligands", X_other, y_other, pred_dir)
-        self._predict(predictor, pipe, "bacteria_ligands", X_bact, y_bact, pred_dir)
+        self._predict(predictor, "additional_ligands", X_other, y_other, pred_dir)
+        self._predict(predictor, "bacteria_ligands", X_bact, y_bact, pred_dir)
 
         print("\n--- STEP 6: TLR HEK BLUE VISUALIZATION ---")
         tlr2_df, tlr4_df, flapa_data = load_tlr_data(
@@ -313,31 +270,23 @@ class MATseqPipeline:
             tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png"
         )
 
-        print("\n--- STEP 7: MODEL TRAINING (main_ligands without Fla-PA) ---")
+        print(
+            "\n--- STEP 7: NESTED CV TUNING + DEPLOYMENT REFIT (main_ligands without Fla-PA) ---"
+        )
         flapa_mask = y_train != "Fla-PA"
         X_wo, y_wo = X_train[flapa_mask], y_train[flapa_mask]
-        pipe_wo, _, trainer_wo = self._fs_and_train(
-            X_wo, y_wo, "main_ligands", tag="main_ligands_no_flapa"
+        trainer_wo = self._tune_subset(
+            X_wo,
+            y_wo,
+            eval_name="main_ligands_no_flapa",
+            output_subdir="hyperparameter_tuning_no_flapa",
         )
+        trainer_wo.save_models(self.results_dir / "models" / "no_flapa")
 
         predictor_wo = ModelPredictor(trainer_wo)
         pred_dir_wo = self.results_dir / "predictions" / "main_ligands_no_flapa"
-        self._predict(
-            predictor_wo,
-            pipe_wo,
-            "additional_ligands",
-            X_other,
-            y_other,
-            pred_dir_wo,
-        )
-        self._predict(
-            predictor_wo,
-            pipe_wo,
-            "bacteria_ligands",
-            X_bact,
-            y_bact,
-            pred_dir_wo,
-        )
+        self._predict(predictor_wo, "additional_ligands", X_other, y_other, pred_dir_wo)
+        self._predict(predictor_wo, "bacteria_ligands", X_bact, y_bact, pred_dir_wo)
 
         print("\n" + "=" * 80)
         print("PIPELINE COMPLETED SUCCESSFULLY")
@@ -346,7 +295,6 @@ class MATseqPipeline:
         print(f"Cache saved to: {self.cache.cache_dir.absolute()}")
 
         return {
-            "feature_selection": pipe,
             "feature_analysis": fs_analyzer,
             "models": trainer,
             "predictor": predictor,

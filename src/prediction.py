@@ -131,7 +131,7 @@ class ModelPredictor:
 
             plt.figure(figsize=(12, 8))
             sns.heatmap(
-                proba_df_ordered, cmap="YlGnBu", cbar_kws={"label": "Probability"}
+                proba_df_ordered, cmap="YlGnBu", cbar_kws={"label": "Predicted class probability"}
             )
             plt.title(f"{model_name} - Prediction Probabilities")
             plt.xlabel("Class")

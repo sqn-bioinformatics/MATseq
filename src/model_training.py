@@ -1,5 +1,6 @@
 """Model training, evaluation, and prediction for multiclass classification."""
 
+import json
 import warnings
 import numpy as np
 import pandas as pd
@@ -13,6 +14,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -21,7 +23,11 @@ from sklearn.metrics import (
     roc_auc_score,
     ConfusionMatrixDisplay,
 )
-from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.model_selection import (
+    StratifiedShuffleSplit,
+    StratifiedKFold,
+    GridSearchCV,
+)
 from sklearn.base import clone
 import matplotlib.pyplot as plt
 
@@ -110,12 +116,12 @@ class ModelFactory:
         else:
             models["LinearSVC"] = svc
 
-        # SGD Classifier
         models["SGDClassifier"] = SGDClassifier(
             loss="modified_huber",
             max_iter=1000,
             early_stopping=True,
             n_iter_no_change=20,
+            eta0=0.01,
             random_state=random_state,
             verbose=0,
         )
@@ -335,141 +341,148 @@ class ModelTrainer:
         print(f"All models saved to {output_dir}")
         return output_dir
 
-    def evaluate(
+    def _build_tuning_pipeline(self, model, fold_seed: int) -> ImbPipeline:
+        fs = create_feature_pipeline(
+            **FEATURE_SELECTION_CONFIG, random_state=fold_seed
+        )
+        smote = SMOTE(
+            sampling_strategy=self.smote_sampling_strategy,
+            k_neighbors=self.smote_k_neighbors,
+            random_state=fold_seed,
+        )
+        return ImbPipeline([*fs.steps, ("smote", smote), ("clf", clone(model))])
+
+    def tune_nested(
         self,
-        X: np.ndarray,
-        y: np.ndarray,
-        eval_dir: Path = None,
-        cv: int = 5,
-        eval_name: str = None,
+        X,
+        y,
+        param_grids: Dict[str, Dict],
+        output_dir: Path,
+        outer_cv: int = 10,
+        inner_cv: int = 5,
+        scoring: str = "f1_macro",
+        eval_name: Optional[str] = None,
     ) -> pd.DataFrame:
-        """Evaluate all trained models using stratified cross-validation.
+        """Nested CV tuning + deployment refit.
 
-        Feature selection and SMOTE are fit per fold on the train split only,
-        so test data never leaks into any fitting step.
-
-        Args:
-            X: Raw count matrix (pre-feature-selection).
-            y: True labels.
-            eval_dir: Directory to save evaluation CSVs and confusion matrix figures.
-            cv: Number of StratifiedShuffleSplit repeats (test_size=0.2 each).
-            eval_name: Prefix for output filenames (e.g., 'training').
-
-        Returns:
-            DataFrame with mean and std of each metric across folds, per model.
+        Outer split estimates generalization of the tuning procedure.
+        Inner GridSearchCV (with SMOTE inside via imblearn pipeline) jointly
+        selects FS and model hyperparameters per outer fold. A final refit on
+        the full data populates self.trained_models with deployed pipelines.
         """
-        if eval_dir is not None:
-            eval_dir = Path(eval_dir)
-            eval_dir.mkdir(parents=True, exist_ok=True)
-            fig_dir = eval_dir.parent / "figures" / "model_evaluation"
-            fig_dir.mkdir(parents=True, exist_ok=True)
-        else:
-            fig_dir = None
+        output_dir = Path(output_dir)
+        inner_results_dir = output_dir / "inner_cv_results"
+        inner_results_dir.mkdir(parents=True, exist_ok=True)
+        fig_dir = output_dir.parent / "figures" / "model_evaluation"
+        fig_dir.mkdir(parents=True, exist_ok=True)
 
         prefix = f"{eval_name}_" if eval_name else ""
 
         y_array = y.values if isinstance(y, pd.Series) else y
-
-        if (
-            not hasattr(self.label_encoder, "classes_")
-            or self.label_encoder.classes_ is None
-        ):
-            self.label_encoder.fit(y_array)
+        self.label_encoder.fit(y_array)
         y_encoded = self.label_encoder.transform(y_array)
 
-        all_fold_results = []
-        summary_results = []
-        sss = StratifiedShuffleSplit(
-            n_splits=cv, test_size=0.2, random_state=self.random_state
+        outer = StratifiedShuffleSplit(
+            n_splits=outer_cv, test_size=0.2, random_state=self.random_state
         )
 
-        for model_name, model in self.trained_models.items():
-            print(f"Evaluating {model_name}...")
-            fold_scores = []
+        per_fold_rows = []
 
-            for fold_idx, (train_idx, test_idx) in enumerate(
-                sss.split(np.arange(len(X)), y_encoded)
-            ):
-                if isinstance(X, pd.DataFrame):
-                    X_train_fold = X.iloc[train_idx]
-                    X_test_fold = X.iloc[test_idx]
-                else:
-                    X_train_fold = X[train_idx]
-                    X_test_fold = X[test_idx]
+        for fold_idx, (train_idx, test_idx) in enumerate(
+            outer.split(np.arange(len(X)), y_encoded)
+        ):
+            if isinstance(X, pd.DataFrame):
+                X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
+            else:
+                X_tr, X_te = X[train_idx], X[test_idx]
+            y_tr = y_encoded[train_idx]
+            y_te = y_encoded[test_idx]
+            fold_seed = self.random_state + fold_idx
 
-                y_train_fold = y_encoded[train_idx]
-                y_test_fold = y_encoded[test_idx]
-
-                fs_pipe = create_feature_pipeline(
-                    **FEATURE_SELECTION_CONFIG, random_state=self.random_state + fold_idx
+            for model_name, model in self.models.items():
+                pipe = self._build_tuning_pipeline(model, fold_seed)
+                inner = StratifiedKFold(
+                    n_splits=inner_cv, shuffle=True, random_state=fold_seed
                 )
-                X_train_fold = fs_pipe.fit_transform(X_train_fold, y_train_fold)
-                X_test_fold = fs_pipe.transform(X_test_fold)
-
-                if isinstance(X_train_fold, pd.DataFrame):
-                    X_train_fold = X_train_fold.values
-                if isinstance(X_test_fold, pd.DataFrame):
-                    X_test_fold = X_test_fold.values
-
-                smote = SMOTE(
-                    sampling_strategy="not majority",
-                    k_neighbors=self.smote_k_neighbors,
-                    random_state=self.random_state + fold_idx,
+                gs = GridSearchCV(
+                    pipe,
+                    param_grids[model_name],
+                    cv=inner,
+                    scoring=scoring,
+                    n_jobs=-1,
+                    refit=True,
                 )
-                X_train_fold, y_train_fold = smote.fit_resample(
-                    X_train_fold, y_train_fold
-                )
+                print(f"  Outer fold {fold_idx} — tuning {model_name}...")
+                gs.fit(X_tr, y_tr)
 
-                model_clone = clone(model)
-                model_clone.fit(X_train_fold, y_train_fold)
-                y_pred_encoded = model_clone.predict(X_test_fold)
+                y_pred_enc = gs.best_estimator_.predict(X_te)
+                scores = make_score(y_te, y_pred_enc)
 
-                scores = make_score(y_test_fold, y_pred_encoded)
-                fold_scores.append(scores)
-
-                all_fold_results.append(
+                per_fold_rows.append(
                     {
                         "model": model_name,
-                        "fold": fold_idx,
+                        "outer_fold": fold_idx,
+                        "best_params": json.dumps(gs.best_params_, default=str),
+                        "inner_best_score": gs.best_score_,
                         **scores,
                     }
                 )
 
-                if fig_dir:
-                    y_pred = self.label_encoder.inverse_transform(y_pred_encoded)
-                    y_test = self.label_encoder.inverse_transform(y_test_fold)
-                    self._save_confusion_matrix(
-                        y_pred, y_test, f"{prefix}{model_name}_fold_{fold_idx}", fig_dir
-                    )
+                pd.DataFrame(gs.cv_results_).to_csv(
+                    inner_results_dir / f"{model_name}_fold_{fold_idx}.csv",
+                    index=False,
+                )
 
-            avg_scores = {
-                k: np.mean([s[k] for s in fold_scores]) for k in fold_scores[0].keys()
-            }
-            std_scores = {
-                k: np.std([s[k] for s in fold_scores]) for k in fold_scores[0].keys()
-            }
+                y_pred_dec = self.label_encoder.inverse_transform(y_pred_enc)
+                y_te_dec = self.label_encoder.inverse_transform(y_te)
+                self._save_confusion_matrix(
+                    y_pred_dec,
+                    y_te_dec,
+                    f"{prefix}{model_name}_fold_{fold_idx}",
+                    fig_dir,
+                )
 
-            summary_results.append(
-                {
-                    "model": model_name,
-                    **{f"{k}_mean": v for k, v in avg_scores.items()},
-                    **{f"{k}_std": v for k, v in std_scores.items()},
-                }
+        per_fold_df = pd.DataFrame(per_fold_rows)
+        per_fold_df.to_csv(output_dir / "nested_cv_per_fold.csv", index=False)
+
+        metric_cols = [
+            "accuracy",
+            "precision",
+            "recall",
+            "f1",
+            "roc_auc",
+            "inner_best_score",
+        ]
+        summary = per_fold_df.groupby("model")[metric_cols].agg(["mean", "std"])
+        summary.columns = [f"{m}_{s}" for m, s in summary.columns]
+        summary = summary.reset_index()
+        summary.to_csv(output_dir / "nested_cv_summary.csv", index=False)
+        print(f"Nested CV summary saved: {output_dir / 'nested_cv_summary.csv'}")
+
+        selected_params = {}
+        for model_name, model in self.models.items():
+            pipe = self._build_tuning_pipeline(model, self.random_state)
+            inner = StratifiedKFold(
+                n_splits=inner_cv, shuffle=True, random_state=self.random_state
             )
+            gs = GridSearchCV(
+                pipe,
+                param_grids[model_name],
+                cv=inner,
+                scoring=scoring,
+                n_jobs=-1,
+                refit=True,
+            )
+            print(f"  Final refit — tuning {model_name} on full data...")
+            gs.fit(X, y_encoded)
+            self.trained_models[model_name] = gs.best_estimator_
+            selected_params[model_name] = gs.best_params_
 
-        fold_df = pd.DataFrame(all_fold_results)
-        summary_df = pd.DataFrame(summary_results)
+        with open(output_dir / "selected_params.json", "w") as f:
+            json.dump(selected_params, f, indent=2, default=str)
+        print(f"Selected params saved: {output_dir / 'selected_params.json'}")
 
-        if eval_dir:
-            fold_csv = eval_dir / f"{prefix}model_evaluation_per_fold.csv"
-            fold_df.to_csv(fold_csv, index=False)
-            print(f"CSV saved: {fold_csv}")
-
-            summary_csv = eval_dir / f"{prefix}model_evaluation.csv"
-            summary_df.to_csv(summary_csv, index=False)
-            print(f"CSV saved: {summary_csv}")
-
-        return summary_df
+        return summary
 
     def _save_confusion_matrix(
         self, y_pred, y_test, name: str, output_dir: Path
