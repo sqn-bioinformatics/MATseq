@@ -125,14 +125,16 @@ class DataProcessor:
 
     def make_statistics(
         self,
-        padj_value: float = 0.05,
-        log2foldchange_value: int = 2,
+        padj_threshold: float = 0.05,
+        log2fc_threshold: float = 2.0,
+        baseMean_threshold: float = 10.0,
     ) -> Tuple[AnnData, pd.DataFrame, pd.DataFrame]:
         """Calculate differential expression statistics.
 
         Args:
-            padj_value: Adjusted p-value threshold for significance.
-            log2foldchange_value: Log2 fold-change threshold.
+            padj_threshold: Adjusted p-value threshold for significance.
+            log2fc_threshold: Log2 fold-change threshold.
+            baseMean_threshold: Minimum mean of normalized counts; genes below are dropped.
 
         Returns:
             Tuple of (dds, results_df, significant_genes_df).
@@ -140,8 +142,9 @@ class DataProcessor:
         class_key = "_".join(self.classes)
         cache_name = f"deseq2_{class_key}"
         cache_params = {
-            "padj": padj_value,
-            "log2fc": log2foldchange_value,
+            "padj": padj_threshold,
+            "log2fc": log2fc_threshold,
+            "baseMean": baseMean_threshold,
         }
 
         if self.cache is not None and not self.force_recompute:
@@ -168,15 +171,15 @@ class DataProcessor:
         stat_res.summary()
 
         res = stat_res.results_df
-        res = res[res.baseMean >= 10]
+        res = res[res.baseMean >= baseMean_threshold]
 
         sigs = res[
-            (res.padj < padj_value) & (abs(res.log2FoldChange) > log2foldchange_value)
+            (res.padj < padj_threshold) & (abs(res.log2FoldChange) > log2fc_threshold)
         ]
 
         if sigs.empty:
             print(
-                f"Warning: No significant genes found (padj < {padj_value}, |log2FC| > {log2foldchange_value})"
+                f"Warning: No significant genes found (padj < {padj_threshold}, |log2FC| > {log2fc_threshold})"
             )
 
         result = (dds, res, sigs)
@@ -194,7 +197,8 @@ class DESeq2:
         sample_labels: pd.Series,
         output_dir: Path = None,
         padj_threshold: float = 0.05,
-        log2fc_threshold: int = 2,
+        log2fc_threshold: float = 2.0,
+        baseMean_threshold: float = 10.0,
         n_cpus: int = 42,
         cache: Optional[PipelineCache] = None,
         force_recompute: bool = False,
@@ -222,6 +226,7 @@ class DESeq2:
 
         self.padj_threshold = padj_threshold
         self.log2fc_threshold = log2fc_threshold
+        self.baseMean_threshold = baseMean_threshold
         self.n_cpus = n_cpus
         self.cache = cache
         self.force_recompute = force_recompute
@@ -268,8 +273,9 @@ class DESeq2:
             )
 
             dds, res, sigs = processor.make_statistics(
-                padj_value=self.padj_threshold,
-                log2foldchange_value=self.log2fc_threshold,
+                padj_threshold=self.padj_threshold,
+                log2fc_threshold=self.log2fc_threshold,
+                baseMean_threshold=self.baseMean_threshold,
             )
 
             self.results[ligand_name] = {
@@ -318,14 +324,13 @@ class DESeq2:
         try:
             go_terms_dir = Path.cwd() / "results" / "go_terms"
             go_terms_dir.mkdir(parents=True, exist_ok=True)
-            if self._goeaobj is None:
-                self._goeaobj, self._geneid_symbol_mapper = initialize_go()
+            goeaobj, geneid_symbol_mapper = self.get_go_objects()
             go_df = run_go_analysis(
                 set(sigs.index),
                 ligand_name,
                 output_dir=go_terms_dir,
-                goeaobj=self._goeaobj,
-                geneid_symbol_mapper=self._geneid_symbol_mapper,
+                goeaobj=goeaobj,
+                geneid_symbol_mapper=geneid_symbol_mapper,
             )
             if not go_df.empty:
                 go_fig_dir = Path.cwd() / "results" / "figures" / "go"

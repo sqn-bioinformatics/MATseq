@@ -92,17 +92,14 @@ BACTERIA_LIGANDS = _config["ligands"]["bacteria_ligands"]
 CLASS_ORDER_MAIN_LIGANDS = _config["class_order_for_plotting"]["main_ligands"]
 CLASS_ORDER_ADDITIONAL_LIGANDS = _config["class_order_for_plotting"]["additional_ligands"]
 CLASS_ORDER_BACTERIA_LIGANDS = _config["class_order_for_plotting"]["bacteria_ligands"]
-CLASS_ORDER_MAIN_LIGANDS_WO_FLAPA = [c for c in CLASS_ORDER_MAIN_LIGANDS if c != "Fla-PA"]
 
 SUBSET_PALETTES = {
     subset: _PALETTES[palette_name]
     for subset, palette_name in _config["subset_palettes"].items()
 }
-SUBSET_PALETTES["main_ligands_wo_flapa"] = SUBSET_PALETTES["main_ligands"]
 
 SUBSET_CLASS_ORDERS = {
     "main_ligands": CLASS_ORDER_MAIN_LIGANDS,
-    "main_ligands_wo_flapa": CLASS_ORDER_MAIN_LIGANDS_WO_FLAPA,
     "additional_ligands": CLASS_ORDER_ADDITIONAL_LIGANDS,
     "bacteria_ligands": CLASS_ORDER_BACTERIA_LIGANDS,
 }

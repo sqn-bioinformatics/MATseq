@@ -4,21 +4,18 @@
 import argparse
 import subprocess
 import sys
-import json
 from pathlib import Path
 
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).parent))
-random_state = 138
 
 from src import (
     CUSTOM_PALETTE_9,
     SUBSET_PALETTES,
     SUBSET_CLASS_ORDERS,
     DESEQ2_CONFIG,
-    MAIN_LIGANDS,
     FEATURE_SELECTION_CONFIG,
     MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
@@ -57,18 +54,21 @@ class MATseqPipeline:
         dry_run: bool = False,
     ) -> bool:
         """Run Snakemake preprocessing pipeline to generate featurecounts."""
-        snakemake_dir = Path.cwd() / "pipeline"
-        with (Path.cwd() / "config.json").open() as f:
-            sm_cfg = json.load(f).get("snakemake", {})
+        from src.config import get_sample_dir, get_genome_dir, get_work_dir, get_config
 
-        fastq_dir = fastq_dir or (Path(sm_cfg.get("sample_dir", "")).expanduser() if sm_cfg.get("sample_dir") else None)
-        genome_dir = genome_dir or (Path(sm_cfg.get("genome_dir", "")).expanduser() if sm_cfg.get("genome_dir") else None)
+        snakemake_dir = Path.cwd() / "pipeline"
+        fastq_dir = fastq_dir or get_sample_dir()
+        genome_dir = genome_dir or get_genome_dir()
 
         if not genome_dir or not Path(genome_dir).exists():
-            print(f"Error: genome_dir is required and must exist. Current: '{genome_dir}'")
+            print(
+                f"Error: genome_dir is required and must exist. Current: '{genome_dir}'"
+            )
             return False
         if not fastq_dir or not Path(fastq_dir).exists():
-            print(f"Error: sample_dir is required and must exist. Current: '{fastq_dir}'")
+            print(
+                f"Error: sample_dir is required and must exist. Current: '{fastq_dir}'"
+            )
             return False
 
         snakefile = snakemake_dir / "0_MATseq.smk"
@@ -76,20 +76,30 @@ class MATseqPipeline:
             print(f"Error: Snakemake pipeline not found at {snakefile}")
             return False
 
-        work_dir = Path(sm_cfg.get("work_dir", "~/MATseq/pipeline/results")).expanduser()
-        threads = sm_cfg.get("threads", 42)
+        work_dir = get_work_dir()
+        threads = get_config("snakemake.threads")
 
         cmd = [
-            "poetry", "run", "snakemake", "--use-conda",
-            "--cores", str(threads),
-            "--snakefile", str(snakefile),
-            "--directory", str(work_dir),
-            "--config", f"SampleDir={fastq_dir}", f"GenomeDir={genome_dir}",
+            "poetry",
+            "run",
+            "snakemake",
+            "--use-conda",
+            "--cores",
+            str(threads),
+            "--snakefile",
+            str(snakefile),
+            "--directory",
+            str(work_dir),
+            "--config",
+            f"SampleDir={fastq_dir}",
+            f"GenomeDir={genome_dir}",
         ]
         if dry_run:
             cmd.append("--dry-run")
 
-        print(f"\n--- RUNNING SNAKEMAKE PREPROCESSING ---\nFASTQ: {fastq_dir}\nGenome: {genome_dir}")
+        print(
+            f"\n--- RUNNING SNAKEMAKE PREPROCESSING ---\nFASTQ: {fastq_dir}\nGenome: {genome_dir}"
+        )
         result = subprocess.run(cmd, cwd=str(Path.cwd()))
         if result.returncode == 0:
             print("Snakemake preprocessing completed successfully")
@@ -107,18 +117,30 @@ class MATseqPipeline:
             return analyzer, set().union(*analyzer.feature_sets)
 
         return self.cache.cached_call(
-            _run, name=f"venn_feature_selection_{n_runs}", force_recompute=self.force_recompute
+            _run,
+            name=f"venn_feature_selection_{n_runs}",
+            force_recompute=self.force_recompute,
         )
 
     def _pca_plot(
-        self, X: pd.DataFrame, y: pd.Series, subset_name: str, file_suffix: str = ""
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        subset_name: str,
+        file_suffix: str = "",
+        tag: str | None = None,
+        prescaled: bool = False,
     ) -> None:
-        X_rpm = normalize_rpm(X)
-        scaler = StandardScaler().set_output(transform="pandas")
-        X_scaled = scaler.fit_transform(X_rpm)
+        if prescaled:
+            X_scaled = X
+        else:
+            X_rpm = normalize_rpm(X)
+            scaler = StandardScaler().set_output(transform="pandas")
+            X_scaled = scaler.fit_transform(X_rpm)
 
         palette = SUBSET_PALETTES.get(subset_name, CUSTOM_PALETTE_9)
         hue_order = SUBSET_CLASS_ORDERS.get(subset_name)
+        label_base = tag or subset_name
 
         for with_names, label_suffix in [(False, ""), (True, "_labeled")]:
             plot_pca_pandas(
@@ -126,27 +148,38 @@ class MATseqPipeline:
                 labels=y,
                 palette=palette,
                 hue_order=hue_order,
-                name=f"{subset_name}{file_suffix}{label_suffix}",
+                name=f"{label_base}{file_suffix}{label_suffix}",
                 with_sample_names=with_names,
-                output_filename=f"{subset_name}_pca{file_suffix}{label_suffix}.png",
+                output_filename=f"{label_base}_pca{file_suffix}{label_suffix}.png",
             )
 
     def _fs_and_train(
-        self, X: pd.DataFrame, y: pd.Series, name: str
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        subset_name: str,
+        tag: str | None = None,
     ) -> tuple[object, pd.DataFrame, ModelTrainer]:
+        cache_key = tag or subset_name
+
         def _fit_fs():
             pipe = create_feature_pipeline(
-                **FEATURE_SELECTION_CONFIG, random_state=random_state
+                **FEATURE_SELECTION_CONFIG,
+                random_state=MODEL_TRAINING_CONFIG["random_state"],
             ).set_output(transform="pandas")
             X_selected = pipe.fit_transform(X, y)
             feature_names = pipe[:-1].get_feature_names_out()
             return pipe, pd.DataFrame(X_selected, columns=feature_names, index=X.index)
 
         pipe, X_fs = self.cache.cached_call(
-            _fit_fs, name=f"feature_selection_{name}", force_recompute=self.force_recompute
+            _fit_fs,
+            name=f"feature_selection_{cache_key}",
+            force_recompute=self.force_recompute,
         )
 
-        self._pca_plot(X_fs, y, name, file_suffix="_selected")
+        self._pca_plot(
+            X_fs, y, subset_name, file_suffix="_selected", tag=tag, prescaled=True
+        )
 
         def _fit_models():
             models = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
@@ -155,7 +188,9 @@ class MATseqPipeline:
             return trainer
 
         trainer = self.cache.cached_call(
-            _fit_models, name=f"trained_models_{name}", force_recompute=self.force_recompute
+            _fit_models,
+            name=f"trained_models_{cache_key}",
+            force_recompute=self.force_recompute,
         )
         return pipe, X_fs, trainer
 
@@ -171,7 +206,9 @@ class MATseqPipeline:
         X_fs = pipe.transform(X)
         predictor.predict_samples(X_fs, sample_names=X.index.to_numpy(), y_test=y)
         predictor.save_predictions(output_dir / subset_key)
-        predictor.create_probability_heatmaps(output_dir / subset_key, subset=subset_key)
+        predictor.create_probability_heatmaps(
+            output_dir / subset_key, subset=subset_key
+        )
 
     def run_pipeline(self):
         print("=" * 80)
@@ -207,6 +244,7 @@ class MATseqPipeline:
                 sample_labels=y_sub,
                 padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
                 log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2.0),
+                baseMean_threshold=DESEQ2_CONFIG.get("baseMean_threshold", 10.0),
                 n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
                 cache=self.cache,
                 force_recompute=self.force_recompute,
@@ -223,7 +261,12 @@ class MATseqPipeline:
 
         print("\n--- STEP 2b: PIPELINE PARAMETER TUNING ---")
         tuner = PipelineParamTuner()
-        tuner.run(X_train, y_train, k_best_values=[100, 500, 1000, 2000], max_features_values=[50, 100, 250, 500])
+        tuner.run(
+            X_train,
+            y_train,
+            k_best_values=[100, 500, 1000, 2000],
+            max_features_values=[50, 100, 250, 500],
+        )
         tuner.plot()
 
         print("\n--- STEP 3: VENN OF FS vs DE GENES (training subset) ---")
@@ -257,32 +300,44 @@ class MATseqPipeline:
 
         print("\n--- STEP 5: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS ---")
         # Append training LPS samples as positive control for the held-out ligand sets.
-        lps_mask = y_train == "LPS"
-        X_lps, y_lps = X_train[lps_mask], y_train[lps_mask]
-        X_other_lps = pd.concat([X_other, X_lps])
-        y_other_lps = pd.concat([y_other, y_lps])
-        X_bact_lps = pd.concat([X_bact, X_lps])
-        y_bact_lps = pd.concat([y_bact, y_lps])
-
         predictor = ModelPredictor(trainer)
         pred_dir = self.results_dir / "predictions"
-        self._predict(predictor, pipe, "additional_ligands", X_other_lps, y_other_lps, pred_dir)
-        self._predict(predictor, pipe, "bacteria_ligands", X_bact_lps, y_bact_lps, pred_dir)
+        self._predict(predictor, pipe, "additional_ligands", X_other, y_other, pred_dir)
+        self._predict(predictor, pipe, "bacteria_ligands", X_bact, y_bact, pred_dir)
 
         print("\n--- STEP 6: TLR HEK BLUE VISUALIZATION ---")
         tlr2_df, tlr4_df, flapa_data = load_tlr_data(
             data_dir=Path(__file__).parent / "data" / "supplementary_data"
         )
-        plot_tlr_hek_blue(tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png")
+        plot_tlr_hek_blue(
+            tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png"
+        )
 
         print("\n--- STEP 7: MODEL TRAINING (main_ligands without Fla-PA) ---")
-        X_wo, y_wo = extract_subset(features, labels, "main_ligands_wo_flapa")
-        pipe_wo, _, trainer_wo = self._fs_and_train(X_wo, y_wo, "main_ligands_wo_flapa")
+        flapa_mask = y_train != "Fla-PA"
+        X_wo, y_wo = X_train[flapa_mask], y_train[flapa_mask]
+        pipe_wo, _, trainer_wo = self._fs_and_train(
+            X_wo, y_wo, "main_ligands", tag="main_ligands_no_flapa"
+        )
 
         predictor_wo = ModelPredictor(trainer_wo)
-        pred_dir_wo = self.results_dir / "predictions" / "main_ligands_wo_flapa"
-        self._predict(predictor_wo, pipe_wo, "additional_ligands", X_other_lps, y_other_lps, pred_dir_wo)
-        self._predict(predictor_wo, pipe_wo, "bacteria_ligands", X_bact_lps, y_bact_lps, pred_dir_wo)
+        pred_dir_wo = self.results_dir / "predictions" / "main_ligands_no_flapa"
+        self._predict(
+            predictor_wo,
+            pipe_wo,
+            "additional_ligands",
+            X_other,
+            y_other,
+            pred_dir_wo,
+        )
+        self._predict(
+            predictor_wo,
+            pipe_wo,
+            "bacteria_ligands",
+            X_bact,
+            y_bact,
+            pred_dir_wo,
+        )
 
         print("\n" + "=" * 80)
         print("PIPELINE COMPLETED SUCCESSFULLY")
@@ -304,10 +359,23 @@ def main():
     parser = argparse.ArgumentParser(
         description="MAT-seq analysis pipeline with caching and full analysis"
     )
-    parser.add_argument("--force-recompute", action="store_true", help="Skip cache and recompute all steps")
-    parser.add_argument("--cache-dir", type=Path, default=None, help="Directory for cached files")
-    parser.add_argument("--fastq-dir", type=Path, default=None, help="Override FASTQ input directory")
-    parser.add_argument("--genome-dir", type=Path, default=None, help="Override genome reference directory")
+    parser.add_argument(
+        "--force-recompute",
+        action="store_true",
+        help="Skip cache and recompute all steps",
+    )
+    parser.add_argument(
+        "--cache-dir", type=Path, default=None, help="Directory for cached files"
+    )
+    parser.add_argument(
+        "--fastq-dir", type=Path, default=None, help="Override FASTQ input directory"
+    )
+    parser.add_argument(
+        "--genome-dir",
+        type=Path,
+        default=None,
+        help="Override genome reference directory",
+    )
     parser.add_argument(
         "--snakemake",
         choices=["dry-run", "run"],
@@ -316,7 +384,9 @@ def main():
     )
 
     args = parser.parse_args()
-    pipeline = MATseqPipeline(cache_dir=args.cache_dir, force_recompute=args.force_recompute)
+    pipeline = MATseqPipeline(
+        cache_dir=args.cache_dir, force_recompute=args.force_recompute
+    )
 
     if args.snakemake:
         ok = pipeline.run_snakemake_preprocessing(

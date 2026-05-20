@@ -15,8 +15,7 @@ from .config import (
 _BACTERIA_RAW_TO_DISPLAY = {"E.coli": "HK E.coli", "S.aureus": "HK S.aureus"}
 
 _SUBSET_LIGANDS = {
-    "main_ligands": MAIN_LIGANDS + ["negative_control", "LPS"],
-    "main_ligands_wo_flapa": [l for l in MAIN_LIGANDS if l != "Fla-PA"] + ["negative_control", "LPS"],
+    "main_ligands": MAIN_LIGANDS,
     "additional_ligands": ADDITIONAL_LIGANDS,
     "bacteria_ligands": BACTERIA_LIGANDS,
 }

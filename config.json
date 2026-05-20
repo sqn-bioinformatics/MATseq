@@ -31,17 +31,23 @@
   },
   "ligands": {
     "main_ligands": [
+      "negative_control",
+      "LPS",
       "Fla-PA",
       "PGN",
       "R848",
       "Pam3"
     ],
     "additional_ligands": [
+      "negative_control",
+      "LPS",
       "LTA",
       "MPLA",
       "Pam2"
     ],
     "bacteria_ligands": [
+      "negative_control",
+      "LPS",
       "HK E.coli",
       "HK S.aureus"
     ]

@@ -83,40 +83,6 @@ def make_score(y_test, y_pred) -> dict:
     }
 
 
-def get_confusion_matrix(test_pred, y_test, name: str, output_dir: Path = None) -> None:
-    """Generate and save confusion matrix visualization.
-
-    Args:
-        test_pred: Predicted labels.
-        y_test: True labels.
-        name: Name for the plot title and file.
-        output_dir: Directory to save figure.
-    """
-    fig, ax = plt.subplots(figsize=(8, 8))
-
-    ConfusionMatrixDisplay.from_predictions(
-        y_test,
-        test_pred,
-        ax=ax,
-        xticks_rotation="vertical",
-        colorbar=False,
-        normalize="true",
-        values_format=".0%",
-    )
-
-    ax.set_title(f"Confusion Matrix {name}")
-    plt.tight_layout()
-
-    output_dir = Path(output_dir) if output_dir else Path("results/figures")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    save_path = output_dir / f"Confusion_Matrix_{name}.png"
-    try:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        print(f"Figure saved: {save_path}")
-    finally:
-        plt.close()
-
-
 class ModelFactory:
     """Factory for creating and initializing classifier models."""
 
@@ -386,7 +352,7 @@ class ModelTrainer:
             X: Raw count matrix (pre-feature-selection).
             y: True labels.
             eval_dir: Directory to save evaluation CSVs and confusion matrix figures.
-            cv: Number of cross-validation splits.
+            cv: Number of StratifiedShuffleSplit repeats (test_size=0.2 each).
             eval_name: Prefix for output filenames (e.g., 'training').
 
         Returns:

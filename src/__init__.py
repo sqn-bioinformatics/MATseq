@@ -19,7 +19,6 @@ from .feature_engineering import LibraryLengthNormalizer, create_feature_pipelin
 from .model_training import (
     multiclass_roc_auc_score,
     make_score,
-    get_confusion_matrix,
     ModelFactory,
     ModelTrainer,
 )
@@ -73,7 +72,7 @@ from .feature_analysis import (
 )
 
 # Prediction and model comparison
-from .prediction import ModelPredictor, ModelComparator
+from .prediction import ModelPredictor
 
 __all__ = [
     # Configuration
@@ -109,7 +108,6 @@ __all__ = [
     # Evaluation
     "multiclass_roc_auc_score",
     "make_score",
-    "get_confusion_matrix",
     # DESeq2 analysis
     "DESeq2DataProcessor",
     "DESeq2",
@@ -133,5 +131,4 @@ __all__ = [
     "VennDiagramGenerator",
     # Prediction and model comparison
     "ModelPredictor",
-    "ModelComparator",
 ]
