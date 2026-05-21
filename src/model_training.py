@@ -103,7 +103,6 @@ class ModelFactory:
             class_weight="balanced",
         )
 
-        # XGBoost: class balancing handled via sample_weight at fit time.
         models["XGBoost"] = XGBClassifier(
             objective="multi:softmax",
             max_depth=5,
@@ -201,6 +200,12 @@ class ModelTrainer:
         )
         return SkPipeline([*fs.steps, ("clf", clone(model))])
 
+    @staticmethod
+    def _fit_kwargs(model_name: str, y) -> dict:
+        if model_name == "XGBoost":
+            return {"clf__sample_weight": compute_sample_weight("balanced", y)}
+        return {}
+
     def tune_nested(
         self,
         X,
@@ -255,10 +260,7 @@ class ModelTrainer:
         )
 
         per_fold_rows = []
-        pooled_preds: Dict[str, list] = {name: [] for name in self.models}
-        pooled_truth: Dict[str, list] = {name: [] for name in self.models}
-        pooled_ids: Dict[str, list] = {name: [] for name in self.models}
-        pooled_folds: Dict[str, list] = {name: [] for name in self.models}
+        pooled: Dict[str, list] = {name: [] for name in self.models}
 
         fold_seeds = np.random.SeedSequence(self.random_state).generate_state(outer_cv)
 
@@ -293,13 +295,8 @@ class ModelTrainer:
                     n_jobs=-1,
                     refit=True,
                 )
-                fit_kwargs = {}
-                if model_name == "XGBoost":
-                    fit_kwargs["clf__sample_weight"] = compute_sample_weight(
-                        "balanced", y_tr
-                    )
                 print(f"  Outer fold {fold_idx} — tuning {model_name}...")
-                gs.fit(X_tr, y_tr, **fit_kwargs)
+                gs.fit(X_tr, y_tr, **self._fit_kwargs(model_name, y_tr))
 
                 y_pred_enc = gs.best_estimator_.predict(X_te)
                 scores = make_score(y_te, y_pred_enc)
@@ -319,10 +316,10 @@ class ModelTrainer:
                     index=False,
                 )
 
-                pooled_preds[model_name].extend(y_pred_enc.tolist())
-                pooled_truth[model_name].extend(y_te.tolist())
-                pooled_ids[model_name].extend(ids_te.tolist())
-                pooled_folds[model_name].extend([fold_idx] * len(y_te))
+                pooled[model_name].extend(
+                    {"sample_id": sid, "true_enc": t, "pred_enc": p, "outer_fold": fold_idx}
+                    for sid, t, p in zip(ids_te, y_te.tolist(), y_pred_enc.tolist())
+                )
 
         per_fold_df = pd.DataFrame(per_fold_rows)
         per_fold_df.to_csv(output_dir / "nested_cv_per_fold.csv", index=False)
@@ -340,57 +337,53 @@ class ModelTrainer:
         summary.columns = [f"{m}_{s}" for m, s in summary.columns]
         summary = summary.reset_index()
 
-        oof_rows = []
+        oof_frames = []
         pooled_rows = []
         class_names = list(self.label_encoder.classes_)
         for model_name in self.models:
-            y_true_all = np.array(pooled_truth[model_name])
-            y_pred_all = np.array(pooled_preds[model_name])
-            pooled = make_score(y_true_all, y_pred_all)
-            pooled_rows.append({"model": model_name, **{f"pooled_{k}": v for k, v in pooled.items()}})
+            df = pd.DataFrame(pooled[model_name])
+            y_true_dec = self.decode_predictions(df["true_enc"].to_numpy())
+            y_pred_dec = self.decode_predictions(df["pred_enc"].to_numpy())
 
-            y_true_dec = self.label_encoder.inverse_transform(y_true_all)
-            y_pred_dec = self.label_encoder.inverse_transform(y_pred_all)
+            pooled_scores = make_score(df["true_enc"], df["pred_enc"])
+            pooled_rows.append(
+                {"model": model_name, **{f"pooled_{k}": v for k, v in pooled_scores.items()}}
+            )
 
-            for sid, t, p, f in zip(
-                pooled_ids[model_name], y_true_dec, y_pred_dec, pooled_folds[model_name]
-            ):
-                oof_rows.append(
+            oof_frames.append(
+                pd.DataFrame(
                     {
-                        "sample_id": sid,
-                        "true_label": t,
-                        "pred_label": p,
-                        "outer_fold": f,
+                        "sample_id": df["sample_id"],
+                        "true_label": y_true_dec,
+                        "pred_label": y_pred_dec,
+                        "outer_fold": df["outer_fold"],
                         "model": model_name,
                         "subset": eval_name or "",
                     }
                 )
+            )
 
             report = classification_report(
-                y_true_dec,
-                y_pred_dec,
-                labels=class_names,
-                zero_division=0,
-                output_dict=True,
+                y_true_dec, y_pred_dec, labels=class_names,
+                zero_division=0, output_dict=True,
             )
             pd.DataFrame(report).transpose().to_csv(
                 output_dir / f"{prefix}{model_name}_classification_report.csv"
             )
 
             cm = confusion_matrix(y_true_dec, y_pred_dec, labels=class_names)
+            cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True).clip(min=1)
             pd.DataFrame(cm, index=class_names, columns=class_names).to_csv(
                 fig_dir / f"{prefix}{model_name}_confusion_matrix.csv"
             )
-            cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True).clip(min=1)
             pd.DataFrame(cm_norm, index=class_names, columns=class_names).to_csv(
                 fig_dir / f"{prefix}{model_name}_confusion_matrix_normalized.csv"
             )
-
             self._save_confusion_matrix(
-                y_pred_dec, y_true_dec, f"{prefix}{model_name}", fig_dir
+                cm_norm, class_names, f"{prefix}{model_name}", fig_dir
             )
 
-        pd.DataFrame(oof_rows).to_csv(
+        pd.concat(oof_frames, ignore_index=True).to_csv(
             output_dir / f"{prefix}oof_predictions.csv", index=False
         )
 
@@ -438,37 +431,20 @@ class ModelTrainer:
 
             pipe = self._build_tuning_pipeline(model, self.random_state)
             pipe.set_params(**chosen)
-            fit_kwargs = {}
-            if model_name == "XGBoost":
-                fit_kwargs["clf__sample_weight"] = compute_sample_weight(
-                    "balanced", y_encoded
-                )
             print(f"  Deploying {model_name} with {chosen}...")
-            pipe.fit(X, y_encoded, **fit_kwargs)
+            pipe.fit(X, y_encoded, **self._fit_kwargs(model_name, y_encoded))
             self.trained_models[model_name] = pipe
 
         return selected
 
     def _save_confusion_matrix(
-        self, y_pred, y_test, name: str, output_dir: Path
+        self, cm_norm, class_names, name: str, output_dir: Path
     ) -> None:
-        """Save confusion matrix visualization.
-
-        Args:
-            y_pred: Predicted labels.
-            y_test: True labels.
-            name: Name for the plot.
-            output_dir: Directory to save figure.
-        """
         fig, ax = plt.subplots(figsize=(8, 8))
-
-        ConfusionMatrixDisplay.from_predictions(
-            y_test,
-            y_pred,
+        ConfusionMatrixDisplay(cm_norm, display_labels=class_names).plot(
             ax=ax,
             xticks_rotation="vertical",
             colorbar=False,
-            normalize="true",
             values_format=".0%",
         )
 
