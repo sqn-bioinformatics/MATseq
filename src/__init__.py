@@ -17,7 +17,6 @@ from .tlr_analysis import load_tlr_data
 from .feature_engineering import LibraryLengthNormalizer, create_feature_pipeline
 
 from .model_training import (
-    multiclass_roc_auc_score,
     make_score,
     ModelFactory,
     ModelTrainer,
@@ -108,7 +107,6 @@ __all__ = [
     "ModelFactory",
     "ModelTrainer",
     # Evaluation
-    "multiclass_roc_auc_score",
     "make_score",
     # DESeq2 analysis
     "DESeq2DataProcessor",

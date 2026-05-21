@@ -1,30 +1,30 @@
 """Model training, evaluation, and prediction for multiclass classification."""
 
 import json
-import warnings
 import numpy as np
 import pandas as pd
 import pickle
 from pathlib import Path
-from typing import Dict, Tuple, Optional
-from sklearn.linear_model import SGDClassifier
+from typing import Dict, Optional
 from sklearn.svm import LinearSVC
+from sklearn.linear_model import LogisticRegression
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline as ImbPipeline
+from sklearn.pipeline import Pipeline as SkPipeline
+from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.metrics import (
     accuracy_score,
+    balanced_accuracy_score,
     precision_score,
     recall_score,
     f1_score,
-    roc_auc_score,
+    classification_report,
+    confusion_matrix,
     ConfusionMatrixDisplay,
 )
 from sklearn.model_selection import (
-    StratifiedShuffleSplit,
     StratifiedKFold,
     GridSearchCV,
 )
@@ -33,35 +33,6 @@ import matplotlib.pyplot as plt
 
 from .feature_engineering import create_feature_pipeline
 from .config import FEATURE_SELECTION_CONFIG
-
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", message="Liblinear failed to converge")
-
-
-def multiclass_roc_auc_score(y_test, y_pred, average: str = "macro") -> float:
-    """Calculate averaged AUC per class for multiclass classification.
-
-    Args:
-        y_test: True labels.
-        y_pred: Predicted labels.
-        average: Averaging method for AUC calculation.
-
-    Returns:
-        float: Average ROC AUC score across all classes.
-    """
-    unique_classes = set(y_test)
-    roc_auc_dict = {}
-
-    for tested_class in unique_classes:
-        other_classes = [x for x in unique_classes if x != tested_class]
-
-        binary_y_test = [0 if x in other_classes else 1 for x in y_test]
-        binary_y_pred = [0 if x in other_classes else 1 for x in y_pred]
-
-        roc_auc = roc_auc_score(binary_y_test, binary_y_pred, average=average)
-        roc_auc_dict[tested_class] = roc_auc
-
-    return sum(roc_auc_dict.values()) / len(roc_auc_dict.values())
 
 
 def make_score(y_test, y_pred) -> dict:
@@ -74,18 +45,13 @@ def make_score(y_test, y_pred) -> dict:
     Returns:
         dict: Dictionary of metric names to scores.
     """
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, average="macro", zero_division=np.nan)
-    recall = recall_score(y_test, y_pred, average="macro", zero_division=np.nan)
-    f1 = f1_score(y_test, y_pred, average="macro", zero_division=np.nan)
-    roc_auc = multiclass_roc_auc_score(y_test, y_pred)
-
     return {
-        "accuracy": accuracy,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-        "roc_auc": roc_auc,
+        "accuracy": accuracy_score(y_test, y_pred),
+        "balanced_accuracy": balanced_accuracy_score(y_test, y_pred),
+        "precision": precision_score(y_test, y_pred, average="macro", zero_division=0),
+        "recall": recall_score(y_test, y_pred, average="macro", zero_division=0),
+        "f1": f1_score(y_test, y_pred, average="macro", zero_division=0),
+        "f1_weighted": f1_score(y_test, y_pred, average="weighted", zero_division=0),
     }
 
 
@@ -109,29 +75,35 @@ class ModelFactory:
         models = {}
 
         svc = LinearSVC(
-            max_iter=50000, tol=1e-3, random_state=random_state, dual="auto", verbose=0
+            max_iter=10000,
+            tol=1e-3,
+            random_state=random_state,
+            dual="auto",
+            verbose=0,
+            class_weight="balanced",
         )
         if calibrate:
-            models["LinearSVC"] = CalibratedClassifierCV(svc, cv=5)
+            models["LinearSVC"] = CalibratedClassifierCV(svc, cv=3)
         else:
             models["LinearSVC"] = svc
 
-        models["SGDClassifier"] = SGDClassifier(
-            loss="modified_huber",
-            max_iter=1000,
-            early_stopping=True,
-            n_iter_no_change=20,
-            eta0=0.01,
+        models["LogisticRegression"] = LogisticRegression(
+            penalty="l2",
+            class_weight="balanced",
+            solver="liblinear",
+            max_iter=10000,
             random_state=random_state,
-            verbose=0,
         )
 
-        # Random Forest
         models["RandomForest"] = RandomForestClassifier(
-            max_depth=5, n_estimators=500, random_state=random_state, n_jobs=-1
+            max_depth=5,
+            n_estimators=500,
+            random_state=random_state,
+            n_jobs=-1,
+            class_weight="balanced",
         )
 
-        # XGBoost
+        # XGBoost: class balancing handled via sample_weight at fit time.
         models["XGBoost"] = XGBClassifier(
             objective="multi:softmax",
             max_depth=5,
@@ -142,28 +114,6 @@ class ModelFactory:
 
         return models
 
-    @staticmethod
-    def create_smote(
-        sampling_strategy: str = "not majority",
-        k_neighbors: int = 1,
-        random_state: int = 42,
-    ) -> SMOTE:
-        """Create SMOTE oversampler for class imbalance.
-
-        Args:
-            sampling_strategy: Oversampling strategy ('not majority').
-            k_neighbors: Number of nearest neighbors for SMOTE.
-            random_state: Random state for reproducibility.
-
-        Returns:
-            SMOTE instance configured for oversampling.
-        """
-        return SMOTE(
-            sampling_strategy=sampling_strategy,
-            k_neighbors=k_neighbors,
-            random_state=random_state,
-        )
-
 
 class ModelTrainer:
     """Trainer for multiclass classification models."""
@@ -173,10 +123,7 @@ class ModelTrainer:
         X: np.ndarray,
         y: np.ndarray,
         models: Optional[Dict] = None,
-        apply_smote: bool = True,
         random_state: int = 42,
-        smote_sampling_strategy: str = "not majority",
-        smote_k_neighbors: int = 1,
     ) -> None:
         """Initialize trainer with data and models.
 
@@ -184,10 +131,7 @@ class ModelTrainer:
             X: Feature matrix (samples x features).
             y: Target labels as 1D array or string labels.
             models: Dictionary of model names to instances. If None, creates default set.
-            apply_smote: Whether to apply SMOTE oversampling.
             random_state: Random state for reproducibility.
-            smote_sampling_strategy: SMOTE sampling strategy ('not majority' or 'all').
-            smote_k_neighbors: Number of neighbors for SMOTE.
         """
         if not isinstance(X, (np.ndarray, pd.DataFrame)):
             raise TypeError(f"X must be ndarray or DataFrame, got {type(X)}")
@@ -201,8 +145,6 @@ class ModelTrainer:
             raise ValueError(f"y must be 1D, got shape {y.shape}")
         if len(X) != len(y):
             raise ValueError(f"X and y must have same length: {len(X)} vs {len(y)}")
-        if not isinstance(apply_smote, bool):
-            raise TypeError(f"apply_smote must be bool, got {type(apply_smote)}")
         if not isinstance(random_state, int):
             raise TypeError(f"random_state must be int, got {type(random_state)}")
 
@@ -213,97 +155,9 @@ class ModelTrainer:
             if models is not None
             else ModelFactory.create_models(random_state=random_state)
         )
-        self.apply_smote = apply_smote
         self.random_state = random_state
-        self.smote_sampling_strategy = smote_sampling_strategy
-        self.smote_k_neighbors = smote_k_neighbors
         self.label_encoder = LabelEncoder()
         self.trained_models = {}
-        self.X_train = None
-        self.y_train = None
-
-    def prepare_data(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Prepare data: encode labels and optionally apply SMOTE.
-
-        Returns:
-            Tuple of (X_resampled, y_resampled_encoded) or (X, y_encoded) if no SMOTE.
-        """
-        y_encoded = self.label_encoder.fit_transform(self.y)
-
-        if self.apply_smote:
-            smote = ModelFactory.create_smote(
-                sampling_strategy=self.smote_sampling_strategy,
-                k_neighbors=self.smote_k_neighbors,
-                random_state=self.random_state,
-            )
-            X_resampled, y_resampled = smote.fit_resample(self.X, y_encoded)
-            self.X_train = X_resampled
-            self.y_train = y_resampled
-            return X_resampled, y_resampled
-        else:
-            self.X_train = self.X.values if isinstance(self.X, pd.DataFrame) else self.X
-            self.y_train = y_encoded
-            return self.X_train, y_encoded
-
-    def train_all_models(self) -> Dict:
-        """Train all models on prepared data.
-
-        Returns:
-            Dictionary of model names to trained model instances.
-        """
-        X_train, y_train = self.prepare_data()
-
-        for name, model in self.models.items():
-            print(f"Training {name}...")
-            model.fit(X_train, y_train)
-            self.trained_models[name] = model
-
-        return self.trained_models
-
-    def predict(self, X_test: np.ndarray, model_name: str) -> np.ndarray:
-        """Predict using a trained model.
-
-        Args:
-            X_test: Test feature matrix as numpy.ndarray.
-            model_name: Name of the model to use for prediction.
-
-        Returns:
-            Predicted labels (encoded).
-        """
-        if not isinstance(X_test, np.ndarray):
-            raise TypeError(f"X_test must be ndarray, got {type(X_test)}")
-        if model_name not in self.trained_models:
-            raise ValueError(f"Model '{model_name}' not trained. Train models first.")
-        return self.trained_models[model_name].predict(X_test)
-
-    def predict_proba(self, X_test: np.ndarray, model_name: str) -> np.ndarray:
-        """Get prediction probabilities using a trained model.
-
-        Args:
-            X_test: Test feature matrix as numpy.ndarray.
-            model_name: Name of the model to use.
-
-        Returns:
-            Probability matrix (n_samples x n_classes).
-        """
-        if not isinstance(X_test, np.ndarray):
-            raise TypeError(f"X_test must be ndarray, got {type(X_test)}")
-        if model_name not in self.trained_models:
-            raise ValueError(f"Model '{model_name}' not trained. Train models first.")
-
-        model = self.trained_models[model_name]
-        if not hasattr(model, "predict_proba"):
-            raise ValueError(f"Model '{model_name}' does not support predict_proba.")
-
-        return model.predict_proba(X_test)
-
-    def get_label_encoder(self) -> LabelEncoder:
-        """Get the label encoder used during training.
-
-        Returns:
-            LabelEncoder instance with fitted classes.
-        """
-        return self.label_encoder
 
     def decode_predictions(self, y_pred_encoded: np.ndarray) -> np.ndarray:
         """Convert encoded predictions back to original labels.
@@ -341,16 +195,11 @@ class ModelTrainer:
         print(f"All models saved to {output_dir}")
         return output_dir
 
-    def _build_tuning_pipeline(self, model, fold_seed: int) -> ImbPipeline:
+    def _build_tuning_pipeline(self, model, fold_seed: int) -> SkPipeline:
         fs = create_feature_pipeline(
             **FEATURE_SELECTION_CONFIG, random_state=fold_seed
         )
-        smote = SMOTE(
-            sampling_strategy=self.smote_sampling_strategy,
-            k_neighbors=self.smote_k_neighbors,
-            random_state=fold_seed,
-        )
-        return ImbPipeline([*fs.steps, ("smote", smote), ("clf", clone(model))])
+        return SkPipeline([*fs.steps, ("clf", clone(model))])
 
     def tune_nested(
         self,
@@ -358,17 +207,26 @@ class ModelTrainer:
         y,
         param_grids: Dict[str, Dict],
         output_dir: Path,
-        outer_cv: int = 10,
-        inner_cv: int = 5,
+        outer_cv: int = 5,
+        inner_cv: int = 3,
         scoring: str = "f1_macro",
         eval_name: Optional[str] = None,
     ) -> pd.DataFrame:
         """Nested CV tuning + deployment refit.
 
-        Outer split estimates generalization of the tuning procedure.
-        Inner GridSearchCV (with SMOTE inside via imblearn pipeline) jointly
-        selects FS and model hyperparameters per outer fold. A final refit on
-        the full data populates self.trained_models with deployed pipelines.
+        Leakage boundary: every step that learns from X or y (library-size
+        normalization, log1p, feature selection, scaling, class-weight
+        derivation, calibration) lives inside the sklearn Pipeline and is
+        refit per outer fold. No selection or filtering on labels happens
+        outside outer CV.
+
+        Outer split estimates generalization of the tuning procedure. Inner
+        GridSearchCV jointly selects FS and model hyperparameters per outer
+        fold using f1_macro. Final deployment params are selected by majority
+        vote across outer folds (tie-break: mean inner f1_macro, then pooled
+        outer f1_macro); pipeline is refit on the full data.
+
+        X and y are method arguments — not instance state.
         """
         output_dir = Path(output_dir)
         inner_results_dir = output_dir / "inner_cv_results"
@@ -382,11 +240,27 @@ class ModelTrainer:
         self.label_encoder.fit(y_array)
         y_encoded = self.label_encoder.transform(y_array)
 
-        outer = StratifiedShuffleSplit(
-            n_splits=outer_cv, test_size=0.2, random_state=self.random_state
+        min_class_count = np.bincount(y_encoded).min()
+        if outer_cv > min_class_count:
+            raise ValueError(
+                f"outer_cv={outer_cv} exceeds smallest class count={min_class_count}"
+            )
+
+        sample_ids = (
+            X.index.to_numpy() if isinstance(X, pd.DataFrame) else np.arange(len(X))
+        )
+
+        outer = StratifiedKFold(
+            n_splits=outer_cv, shuffle=True, random_state=self.random_state
         )
 
         per_fold_rows = []
+        pooled_preds: Dict[str, list] = {name: [] for name in self.models}
+        pooled_truth: Dict[str, list] = {name: [] for name in self.models}
+        pooled_ids: Dict[str, list] = {name: [] for name in self.models}
+        pooled_folds: Dict[str, list] = {name: [] for name in self.models}
+
+        fold_seeds = np.random.SeedSequence(self.random_state).generate_state(outer_cv)
 
         for fold_idx, (train_idx, test_idx) in enumerate(
             outer.split(np.arange(len(X)), y_encoded)
@@ -397,7 +271,14 @@ class ModelTrainer:
                 X_tr, X_te = X[train_idx], X[test_idx]
             y_tr = y_encoded[train_idx]
             y_te = y_encoded[test_idx]
-            fold_seed = self.random_state + fold_idx
+            fold_seed = int(fold_seeds[fold_idx])
+            ids_te = sample_ids[test_idx]
+
+            min_train_class_count = np.bincount(y_tr).min()
+            if inner_cv > min_train_class_count:
+                raise ValueError(
+                    f"inner_cv={inner_cv} exceeds smallest training class count={min_train_class_count} in outer fold {fold_idx}"
+                )
 
             for model_name, model in self.models.items():
                 pipe = self._build_tuning_pipeline(model, fold_seed)
@@ -412,8 +293,13 @@ class ModelTrainer:
                     n_jobs=-1,
                     refit=True,
                 )
+                fit_kwargs = {}
+                if model_name == "XGBoost":
+                    fit_kwargs["clf__sample_weight"] = compute_sample_weight(
+                        "balanced", y_tr
+                    )
                 print(f"  Outer fold {fold_idx} — tuning {model_name}...")
-                gs.fit(X_tr, y_tr)
+                gs.fit(X_tr, y_tr, **fit_kwargs)
 
                 y_pred_enc = gs.best_estimator_.predict(X_te)
                 scores = make_score(y_te, y_pred_enc)
@@ -433,56 +319,135 @@ class ModelTrainer:
                     index=False,
                 )
 
-                y_pred_dec = self.label_encoder.inverse_transform(y_pred_enc)
-                y_te_dec = self.label_encoder.inverse_transform(y_te)
-                self._save_confusion_matrix(
-                    y_pred_dec,
-                    y_te_dec,
-                    f"{prefix}{model_name}_fold_{fold_idx}",
-                    fig_dir,
-                )
+                pooled_preds[model_name].extend(y_pred_enc.tolist())
+                pooled_truth[model_name].extend(y_te.tolist())
+                pooled_ids[model_name].extend(ids_te.tolist())
+                pooled_folds[model_name].extend([fold_idx] * len(y_te))
 
         per_fold_df = pd.DataFrame(per_fold_rows)
         per_fold_df.to_csv(output_dir / "nested_cv_per_fold.csv", index=False)
 
         metric_cols = [
             "accuracy",
+            "balanced_accuracy",
             "precision",
             "recall",
             "f1",
-            "roc_auc",
+            "f1_weighted",
             "inner_best_score",
         ]
         summary = per_fold_df.groupby("model")[metric_cols].agg(["mean", "std"])
         summary.columns = [f"{m}_{s}" for m, s in summary.columns]
         summary = summary.reset_index()
+
+        oof_rows = []
+        pooled_rows = []
+        class_names = list(self.label_encoder.classes_)
+        for model_name in self.models:
+            y_true_all = np.array(pooled_truth[model_name])
+            y_pred_all = np.array(pooled_preds[model_name])
+            pooled = make_score(y_true_all, y_pred_all)
+            pooled_rows.append({"model": model_name, **{f"pooled_{k}": v for k, v in pooled.items()}})
+
+            y_true_dec = self.label_encoder.inverse_transform(y_true_all)
+            y_pred_dec = self.label_encoder.inverse_transform(y_pred_all)
+
+            for sid, t, p, f in zip(
+                pooled_ids[model_name], y_true_dec, y_pred_dec, pooled_folds[model_name]
+            ):
+                oof_rows.append(
+                    {
+                        "sample_id": sid,
+                        "true_label": t,
+                        "pred_label": p,
+                        "outer_fold": f,
+                        "model": model_name,
+                        "subset": eval_name or "",
+                    }
+                )
+
+            report = classification_report(
+                y_true_dec,
+                y_pred_dec,
+                labels=class_names,
+                zero_division=0,
+                output_dict=True,
+            )
+            pd.DataFrame(report).transpose().to_csv(
+                output_dir / f"{prefix}{model_name}_classification_report.csv"
+            )
+
+            cm = confusion_matrix(y_true_dec, y_pred_dec, labels=class_names)
+            pd.DataFrame(cm, index=class_names, columns=class_names).to_csv(
+                fig_dir / f"{prefix}{model_name}_confusion_matrix.csv"
+            )
+            cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True).clip(min=1)
+            pd.DataFrame(cm_norm, index=class_names, columns=class_names).to_csv(
+                fig_dir / f"{prefix}{model_name}_confusion_matrix_normalized.csv"
+            )
+
+            self._save_confusion_matrix(
+                y_pred_dec, y_true_dec, f"{prefix}{model_name}", fig_dir
+            )
+
+        pd.DataFrame(oof_rows).to_csv(
+            output_dir / f"{prefix}oof_predictions.csv", index=False
+        )
+
+        pooled_df = pd.DataFrame(pooled_rows)
+        summary = summary.merge(pooled_df, on="model")
         summary.to_csv(output_dir / "nested_cv_summary.csv", index=False)
         print(f"Nested CV summary saved: {output_dir / 'nested_cv_summary.csv'}")
 
-        selected_params = {}
-        for model_name, model in self.models.items():
-            pipe = self._build_tuning_pipeline(model, self.random_state)
-            inner = StratifiedKFold(
-                n_splits=inner_cv, shuffle=True, random_state=self.random_state
-            )
-            gs = GridSearchCV(
-                pipe,
-                param_grids[model_name],
-                cv=inner,
-                scoring=scoring,
-                n_jobs=-1,
-                refit=True,
-            )
-            print(f"  Final refit — tuning {model_name} on full data...")
-            gs.fit(X, y_encoded)
-            self.trained_models[model_name] = gs.best_estimator_
-            selected_params[model_name] = gs.best_params_
-
+        selected_params = self._select_and_refit(
+            X, y_encoded, per_fold_df
+        )
         with open(output_dir / "selected_params.json", "w") as f:
             json.dump(selected_params, f, indent=2, default=str)
         print(f"Selected params saved: {output_dir / 'selected_params.json'}")
 
         return summary
+
+    def _select_and_refit(
+        self, X, y_encoded, per_fold_df: pd.DataFrame
+    ) -> Dict[str, dict]:
+        """Select deployment params by majority vote across outer folds; tie-break by mean inner f1_macro, then mean outer f1; refit on full data."""
+        selected = {}
+        for model_name, model in self.models.items():
+            rows = per_fold_df[per_fold_df["model"] == model_name]
+            ranking = (
+                rows.groupby("best_params")
+                .agg(
+                    count=("inner_best_score", "size"),
+                    mean_inner=("inner_best_score", "mean"),
+                    mean_f1=("f1", "mean"),
+                )
+                .sort_values(
+                    ["count", "mean_inner", "mean_f1"], ascending=False
+                )
+            )
+            chosen_json = ranking.index[0]
+            chosen = json.loads(chosen_json)
+            selected[model_name] = {
+                "chosen_params": chosen,
+                "selection_rule": "majority_vote_then_mean_inner_f1_then_outer_f1",
+                "outer_fold_params": [
+                    json.loads(p) for p in rows["best_params"].tolist()
+                ],
+            }
+
+            pipe = self._build_tuning_pipeline(model, self.random_state)
+            pipe.set_params(**chosen)
+            fit_kwargs = {}
+            if model_name == "XGBoost":
+                fit_kwargs["clf__sample_weight"] = compute_sample_weight(
+                    "balanced", y_encoded
+                )
+            print(f"  Deploying {model_name} with {chosen}...")
+            pipe.fit(X, y_encoded, **fit_kwargs)
+            self.trained_models[model_name] = pipe
+
+        return selected
 
     def _save_confusion_matrix(
         self, y_pred, y_test, name: str, output_dir: Path

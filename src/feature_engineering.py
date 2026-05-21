@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin, OneToOneFeatureMixin
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import SelectKBest, SelectFromModel, mutual_info_classif
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, FunctionTransformer
 from sklearn.ensemble import ExtraTreesClassifier
 from feature_engine.selection import DropDuplicateFeatures
 
@@ -131,6 +131,10 @@ def create_feature_pipeline(
         [
             ("drop_low_count_features", QCLowerCountRemover()),
             ("normalise_for_library_size", LibraryLengthNormalizer()),
+            (
+                "log1p",
+                FunctionTransformer(np.log1p, feature_names_out="one-to-one"),
+            ),
             ("select_k_best", SelectKBest(mutual_info_classif, k=k_best)),
             (
                 "select_forest",

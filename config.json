@@ -20,10 +20,7 @@
     "max_features": 250
   },
   "model_training": {
-    "random_state": 42,
-    "apply_smote": true,
-    "smote_sampling_strategy": "not majority",
-    "smote_k_neighbors": 1
+    "random_state": 42
   },
   "model_factory": {
     "random_state": 42,
@@ -121,28 +118,27 @@
   },
   "hyperparameter_grids": {
     "LinearSVC": {
-      "select_k_best__k": [500, 1000, 2000],
-      "select_forest__max_features": [100, 250, 500],
-      "clf__estimator__C": [0.01, 0.1, 1, 10]
+      "select_k_best__k": [100, 500, 2000],
+      "select_forest__max_features": [100, 250],
+      "clf__estimator__C": [0.1, 1, 10]
     },
-    "SGDClassifier": {
-      "select_k_best__k": [500, 1000, 2000],
-      "select_forest__max_features": [100, 250, 500],
-      "clf__alpha": [1e-5, 1e-4, 1e-3],
-      "clf__learning_rate": ["optimal", "adaptive"]
+    "LogisticRegression": {
+      "select_k_best__k": [100, 500, 2000],
+      "select_forest__max_features": [100, 250],
+      "clf__C": [0.01, 0.1, 1, 10]
     },
     "RandomForest": {
-      "select_k_best__k": [500, 1000, 2000],
-      "select_forest__max_features": [100, 250, 500],
-      "clf__n_estimators": [200, 500, 1000],
-      "clf__max_depth": [3, 5, 8, null]
+      "select_k_best__k": [100, 500, 2000],
+      "select_forest__max_features": [100, 250],
+      "clf__n_estimators": [200, 500],
+      "clf__max_depth": [5, null]
     },
     "XGBoost": {
-      "select_k_best__k": [500, 1000, 2000],
-      "select_forest__max_features": [100, 250, 500],
-      "clf__n_estimators": [200, 500, 1000],
-      "clf__max_depth": [3, 5, 8],
-      "clf__learning_rate": [0.01, 0.05, 0.1]
+      "select_k_best__k": [100, 500, 2000],
+      "select_forest__max_features": [100, 250],
+      "clf__n_estimators": [200, 500],
+      "clf__max_depth": [3, 5],
+      "clf__learning_rate": [0.05, 0.1]
     }
   },
   "snakemake": {

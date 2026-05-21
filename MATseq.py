@@ -161,8 +161,8 @@ class MATseqPipeline:
                 y,
                 param_grids=HYPERPARAMETER_GRIDS,
                 output_dir=self.results_dir / output_subdir,
-                outer_cv=10,
-                inner_cv=5,
+                outer_cv=5,
+                inner_cv=3,
                 eval_name=eval_name,
             )
             return trainer
