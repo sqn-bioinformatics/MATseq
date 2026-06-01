@@ -16,10 +16,13 @@ from src import (
     SUBSET_PALETTES,
     SUBSET_CLASS_ORDERS,
     DESEQ2_CONFIG,
+    FEATURE_SELECTION_CONFIG,
     MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
     HYPERPARAMETER_GRIDS,
+    LIGAND_ALIASES,
     prepare_counts,
+    write_count_summary,
     extract_subset,
     normalize_rpm,
     load_tlr_data,
@@ -122,6 +125,12 @@ class MATseqPipeline:
             _run,
             name=f"venn_feature_selection_{n_runs}",
             force_recompute=self.force_recompute,
+            key_inputs={
+                "feature_selection": FEATURE_SELECTION_CONFIG,
+                "n_runs": n_runs,
+                "n_samples": int(len(X)),
+                "labels": sorted(set(y.tolist())),
+            },
         )
 
     def _pca_plot(
@@ -173,6 +182,15 @@ class MATseqPipeline:
             _run,
             name=f"tuned_models_{eval_name}",
             force_recompute=self.force_recompute,
+            key_inputs={
+                "eval_name": eval_name,
+                "hyperparameter_grids": HYPERPARAMETER_GRIDS,
+                "feature_selection": FEATURE_SELECTION_CONFIG,
+                "model_factory": MODEL_FACTORY_CONFIG,
+                "model_training": MODEL_TRAINING_CONFIG,
+                "labels": sorted(set(y.tolist())),
+                "n_samples": int(len(X)),
+            },
         )
 
     def _predict(
@@ -196,8 +214,12 @@ class MATseqPipeline:
 
         print("\n--- STEP 1: DATA PREPROCESSING ---")
         features, labels = self.cache.cached_call(
-            prepare_counts, name="prepare_counts", force_recompute=self.force_recompute
+            prepare_counts,
+            name="prepare_counts",
+            force_recompute=self.force_recompute,
+            key_inputs={"ligand_aliases": LIGAND_ALIASES},
         )
+        write_count_summary(features, labels, self.results_dir / "counts")
         print(f"Count df shape: {features.shape}")
 
         print("\n--- STEP 2: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ---")

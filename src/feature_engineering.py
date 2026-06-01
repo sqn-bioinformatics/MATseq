@@ -50,8 +50,10 @@ class QCLowerCountRemover(BaseEstimator, TransformerMixin):
     def get_feature_names_out(self, input_features=None):
         if input_features is None:
             raise ValueError(
-                "input_features must be provided for "
-                "QCLowerCountRemover.get_feature_names_out"
+                "QCLowerCountRemover.get_feature_names_out requires "
+                "input_features. This usually means the pipeline was fit on a "
+                "numpy array with no column names; refit on a pandas DataFrame "
+                "(or pass input_features explicitly) so feature names propagate."
             )
         return np.asarray(input_features, dtype=object)[self.mask_]
 
@@ -114,15 +116,6 @@ def create_feature_pipeline(
     Returns:
         Pipeline: Sklearn pipeline for feature engineering.
     """
-    if k_best <= 0:
-        raise ValueError(f"k_best must be positive, got {k_best}")
-    if n_estimators <= 0:
-        raise ValueError(f"n_estimators must be positive, got {n_estimators}")
-    if max_depth <= 0:
-        raise ValueError(f"max_depth must be positive, got {max_depth}")
-    if max_features <= 0:
-        raise ValueError(f"max_features must be positive, got {max_features}")
-
     en = ExtraTreesClassifier(
         n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
     )
