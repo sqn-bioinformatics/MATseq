@@ -7,12 +7,11 @@ import pandas as pd
 
 from .config import (
     get_featurecounts_dir,
+    LIGAND_ALIASES,
     MAIN_LIGANDS,
     ADDITIONAL_LIGANDS,
     BACTERIA_LIGANDS,
 )
-
-_BACTERIA_RAW_TO_DISPLAY = {"E.coli": "HK E.coli", "S.aureus": "HK S.aureus"}
 
 _SUBSET_LIGANDS = {
     "main_ligands": MAIN_LIGANDS,
@@ -57,7 +56,7 @@ def filter_low_read_samples(
 def label_samples(counts: pd.DataFrame) -> pd.Series:
     """Derive labels from sample names; the third underscore-separated token is the ligand."""
     labels = [
-        _BACTERIA_RAW_TO_DISPLAY.get(name.split("_")[2], name.split("_")[2])
+        LIGAND_ALIASES.get(name.split("_")[2], name.split("_")[2])
         for name in counts.index
     ]
     return pd.Series(labels, index=counts.index, name="label")
@@ -65,21 +64,24 @@ def label_samples(counts: pd.DataFrame) -> pd.Series:
 
 def prepare_counts(
     featurecounts_dir: str | Path | None = None,
-    output_path: str | Path | None = None,
     min_reads: float = 1_000_000.0,
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """Load featureCounts, filter low-read samples, derive labels, persist summary."""
+    """Load featureCounts, filter low-read samples, derive labels."""
     counts = load_featurecounts(featurecounts_dir)
     counts = filter_low_read_samples(counts, min_reads=min_reads)
     labels = label_samples(counts)
-
-    output_dir = (
-        Path(output_path) if output_path else Path(__file__).parent.parent / "results" / "counts"
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
-    counts.assign(label=labels).to_csv(output_dir / "MATseq_count_summary.csv")
-
     return counts, labels
+
+
+def write_count_summary(
+    counts: pd.DataFrame, labels: pd.Series, output_dir: str | Path
+) -> Path:
+    """Write a (samples × genes + label) summary CSV."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "MATseq_count_summary.csv"
+    counts.assign(label=labels).to_csv(path)
+    return path
 
 
 def extract_subset(

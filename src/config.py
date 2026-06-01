@@ -85,6 +85,8 @@ _PALETTES = {
     "palette_9": CUSTOM_PALETTE_9,
 }
 
+LIGAND_ALIASES = _config.get("ligand_aliases", {})
+
 MAIN_LIGANDS = _config["ligands"]["main_ligands"]
 ADDITIONAL_LIGANDS = _config["ligands"]["additional_ligands"]
 BACTERIA_LIGANDS = _config["ligands"]["bacteria_ligands"]

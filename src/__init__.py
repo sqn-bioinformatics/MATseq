@@ -5,6 +5,7 @@ __version__ = "0.1.0"
 # Import commonly used functions and classes
 from .preprocessing import (
     prepare_counts,
+    write_count_summary,
     load_featurecounts,
     filter_low_read_samples,
     label_samples,
@@ -12,7 +13,7 @@ from .preprocessing import (
     normalize_rpm,
 )
 
-from .tlr_analysis import load_tlr_data
+from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 
 from .feature_engineering import LibraryLengthNormalizer, create_feature_pipeline
 
@@ -36,6 +37,7 @@ from .config import (
     MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
     HYPERPARAMETER_GRIDS,
+    LIGAND_ALIASES,
     MAIN_LIGANDS,
     ADDITIONAL_LIGANDS,
     BACTERIA_LIGANDS,
@@ -48,7 +50,6 @@ from .pydeseq2 import (
 
 from .visualization import (
     plot_gene_expression_by_class,
-    plot_tlr_hek_blue,
     plot_pca_pandas,
     plot_volcano,
     plot_heatmap,
@@ -89,11 +90,13 @@ __all__ = [
     "MODEL_FACTORY_CONFIG",
     "MODEL_TRAINING_CONFIG",
     "HYPERPARAMETER_GRIDS",
+    "LIGAND_ALIASES",
     "MAIN_LIGANDS",
     "ADDITIONAL_LIGANDS",
     "BACTERIA_LIGANDS",
     # Preprocessing
     "prepare_counts",
+    "write_count_summary",
     "load_featurecounts",
     "filter_low_read_samples",
     "label_samples",

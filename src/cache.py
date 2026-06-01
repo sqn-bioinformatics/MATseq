@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 
+CACHE_VERSION = 2
+
+
 class PipelineCache:
     """Manage caching of intermediate results for reproducibility and speed."""
 
@@ -57,14 +60,12 @@ class PipelineCache:
         Returns:
             Hash-based cache key.
         """
-        key_str = name
-        if params:
-            # Create deterministic hash of parameters
-            params_json = json.dumps(params, sort_keys=True)
-            param_hash = hashlib.md5(params_json.encode()).hexdigest()[:8]
-            key_str = f"{name}_{param_hash}"
-
-        return key_str
+        if not params:
+            return name
+        payload = {"v": CACHE_VERSION, "params": params}
+        params_json = json.dumps(payload, sort_keys=True, default=str)
+        param_hash = hashlib.md5(params_json.encode()).hexdigest()[:8]
+        return f"{name}_{param_hash}"
 
     def _get_cache_path(self, cache_key: str) -> Path:
         """Get file path for cache key.
@@ -165,6 +166,7 @@ class PipelineCache:
         params: dict = None,
         *args,
         force_recompute: bool = False,
+        key_inputs: Optional[dict] = None,
         **kwargs,
     ) -> Any:
         """Call a function with caching.
@@ -174,21 +176,28 @@ class PipelineCache:
             name: Cache name for this computation.
             params: Parameters dictionary for cache key.
             force_recompute: Skip cache and recompute.
+            key_inputs: Extra inputs folded into the cache key (e.g. config
+                snapshots, subset name, random state) that aren't passed as
+                func arguments but still affect the result.
             *args: Positional arguments for func.
             **kwargs: Keyword arguments for func.
 
         Returns:
             Result of function call (from cache or fresh computation).
         """
+        full_params = dict(params or {})
+        if key_inputs:
+            full_params["_key_inputs"] = key_inputs
+
         if not force_recompute:
-            cached_result = self.get(name, params)
+            cached_result = self.get(name, full_params)
             if cached_result is not None:
                 print(f"Loading {name} from cache...")
                 return cached_result
 
         print(f"Computing {name}...")
         result = func(*args, **kwargs)
-        self.set(name, result, params, description=f"Result of {func.__name__}")
+        self.set(name, result, full_params, description=f"Result of {func.__name__}")
 
         return result
 

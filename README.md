@@ -136,6 +136,8 @@ MATseq will attempt to download these files automatically if missing (may be slo
    - Generate probability heatmaps and predictions
 
 7. **TLR Reporter Visualization** (`tlr_hek_blue`)
+   - Loading and plotting handled in `src/tlr_analysis.py`
+   (`load_tlr_data`, `plot_tlr_hek_blue`, `plot_tlr_panel`)
 
 8. **Extended Training** (`training_wo_flapa`)
    - Retrain models on dataset without Fla-Pa samples
