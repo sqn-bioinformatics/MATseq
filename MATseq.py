@@ -182,23 +182,12 @@ class MATseqPipeline:
         X: pd.DataFrame,
         y: pd.Series,
         output_dir: Path,
+        subset: str = None,
     ) -> None:
+        out_dir = output_dir / subset_key
         predictor.predict_samples(X, sample_names=X.index.to_numpy(), y_test=y)
-        predictor.save_predictions(output_dir / subset_key)
-        predictor.create_probability_heatmaps(
-            output_dir / subset_key, subset=subset_key
-        )
-
-    def _validate(
-        self,
-        predictor: ModelPredictor,
-        X: pd.DataFrame,
-        y: pd.Series,
-        output_dir: Path,
-    ) -> None:
-        predictor.predict_samples(X, sample_names=X.index.to_numpy(), y_test=y)
-        predictor.save_predictions(output_dir)
-        predictor.create_probability_heatmaps(output_dir, subset="main_ligands")
+        predictor.save_predictions(out_dir)
+        predictor.create_probability_heatmaps(out_dir, subset=subset or subset_key)
 
     def run_pipeline(self):
         print("=" * 80)
@@ -291,10 +280,15 @@ class MATseqPipeline:
             test_counts, test_labels = prepare_counts(featurecounts_dir=test_fc)
             Xv, yv = extract_subset(test_counts, test_labels, "main_ligands")
             val_dir = self.results_dir / "validation" / get_test_name()
-            self._validate(ModelPredictor(trainer), Xv, yv, val_dir / "main_ligands")
+            self._predict(ModelPredictor(trainer), "main_ligands", Xv, yv, val_dir)
             wo = yv != "Fla-PA"
-            self._validate(
-                ModelPredictor(trainer_wo), Xv[wo], yv[wo], val_dir / "no_flapa"
+            self._predict(
+                ModelPredictor(trainer_wo),
+                "no_flapa",
+                Xv[wo],
+                yv[wo],
+                val_dir,
+                subset="main_ligands",
             )
 
         print("\n--- STEP 6: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS ---")
@@ -371,20 +365,20 @@ def main():
         from src.config import get_test_sample_dir, get_test_work_dir
 
         dry_run = args.snakemake == "dry-run"
-        ok = pipeline.run_snakemake_preprocessing(
-            fastq_dir=args.fastq_dir,
-            genome_dir=args.genome_dir,
-            dry_run=dry_run,
-        )
-        if not ok:
-            return None
-        ok = pipeline.run_snakemake_preprocessing(
-            fastq_dir=get_test_sample_dir(),
-            work_dir=get_test_work_dir(),
-            genome_dir=args.genome_dir,
-            dry_run=dry_run,
-        )
-        if not ok or dry_run:
+        batches = [
+            (args.fastq_dir, None),
+            (get_test_sample_dir(), get_test_work_dir()),
+        ]
+        for fastq_dir, work_dir in batches:
+            ok = pipeline.run_snakemake_preprocessing(
+                fastq_dir=fastq_dir,
+                work_dir=work_dir,
+                genome_dir=args.genome_dir,
+                dry_run=dry_run,
+            )
+            if not ok:
+                return None
+        if dry_run:
             return None
 
     return pipeline.run_pipeline()

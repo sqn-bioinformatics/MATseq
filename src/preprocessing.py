@@ -7,12 +7,11 @@ import pandas as pd
 
 from .config import (
     get_featurecounts_dir,
+    LIGAND_ALIASES,
     MAIN_LIGANDS,
     ADDITIONAL_LIGANDS,
     BACTERIA_LIGANDS,
 )
-
-_BACTERIA_RAW_TO_DISPLAY = {"E.coli": "HK E.coli", "S.aureus": "HK S.aureus"}
 
 _SUBSET_LIGANDS = {
     "main_ligands": MAIN_LIGANDS,
@@ -57,7 +56,7 @@ def filter_low_read_samples(
 def label_samples(counts: pd.DataFrame) -> pd.Series:
     """Derive labels from sample names; the third underscore-separated token is the ligand."""
     labels = [
-        _BACTERIA_RAW_TO_DISPLAY.get(name.split("_")[2], name.split("_")[2])
+        LIGAND_ALIASES.get(name.split("_")[2], name.split("_")[2])
         for name in counts.index
     ]
     return pd.Series(labels, index=counts.index, name="label")
