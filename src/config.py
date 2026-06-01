@@ -73,6 +73,18 @@ def get_genome_dir() -> Path:
     return expand_path(get_config("snakemake.genome_dir"))
 
 
+def get_test_sample_dir() -> Path:
+    return expand_path(get_config("test.sample_dir"))
+
+
+def get_test_work_dir() -> Path:
+    return expand_path(get_config("test.work_dir"))
+
+
+def get_test_name() -> str:
+    return get_config("test.name")
+
+
 _config = _load_config()
 
 CUSTOM_PALETTE_6 = _config["colors"]["palette_6"]

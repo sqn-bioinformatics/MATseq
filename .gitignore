@@ -49,11 +49,8 @@ example.docx
 env/
 venv/
 
-#ignore data files (except requiring manual download)
-/data/go_terms_support/*.obo
-/data/go_terms_support/*.gz
-/data/go_terms_support/gene2go
-/data/raw/
+#ignore data files
+/data/*
 
 #ignore markdown files
 *.md

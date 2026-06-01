@@ -26,6 +26,11 @@
     "random_state": 42,
     "calibrate": true
   },
+  "ligand_aliases": {
+    "E.coli": "HK E.coli",
+    "S.aureus": "HK S.aureus",
+    "IMDM": "negative_control"
+  },
   "ligands": {
     "main_ligands": [
       "negative_control",
@@ -146,5 +151,10 @@
     "work_dir": "~/MATseq/results",
     "genome_dir": "/home/t.afanasyeva/reference_genome/GRCh38_GCA_000001405.15",
     "threads": 42
+  },
+  "test": {
+    "name": "7086",
+    "sample_dir": "~/MATseq/data/raw_7086_test",
+    "work_dir": "~/MATseq/results/test_7086"
   }
 }
