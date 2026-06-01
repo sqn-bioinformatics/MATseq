@@ -13,9 +13,9 @@ from glob import glob
 sys.path.append(str(Path(__file__).parent.parent.parent.parent))
 from src.config import get_work_dir, get_sample_dir, get_genome_dir
 
-WORKDIR = get_work_dir()
-SAMPLEDIR = get_sample_dir()
-GENOMEDIR = get_genome_dir()
+WORKDIR = Path(config.get("WorkDir") or get_work_dir())
+SAMPLEDIR = Path(config.get("SampleDir") or get_sample_dir())
+GENOMEDIR = Path(config.get("GenomeDir") or get_genome_dir())
 
 if not Path(SAMPLEDIR).exists():
     raise FileNotFoundError(
