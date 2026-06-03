@@ -52,6 +52,7 @@ class MATseqPipeline:
         self,
         fastq_dir: Path = None,
         genome_dir: Path = None,
+        work_dir: Path = None,
         dry_run: bool = False,
     ) -> bool:
         """Run Snakemake preprocessing pipeline to generate featurecounts."""
@@ -60,6 +61,7 @@ class MATseqPipeline:
         snakemake_dir = Path.cwd() / "pipeline"
         fastq_dir = fastq_dir or get_sample_dir()
         genome_dir = genome_dir or get_genome_dir()
+        work_dir = work_dir or get_work_dir()
 
         if not genome_dir or not Path(genome_dir).exists():
             print(
@@ -77,7 +79,6 @@ class MATseqPipeline:
             print(f"Error: Snakemake pipeline not found at {snakefile}")
             return False
 
-        work_dir = get_work_dir()
         threads = get_config("snakemake.threads")
 
         cmd = [
@@ -94,6 +95,7 @@ class MATseqPipeline:
             "--config",
             f"SampleDir={fastq_dir}",
             f"GenomeDir={genome_dir}",
+            f"WorkDir={work_dir}",
             "--rerun-incomplete",
         ]
         if dry_run:
@@ -198,12 +200,12 @@ class MATseqPipeline:
         X: pd.DataFrame,
         y: pd.Series,
         output_dir: Path,
+        subset: str = None,
     ) -> None:
+        out_dir = output_dir / subset_key
         predictor.predict_samples(X, sample_names=X.index.to_numpy(), y_test=y)
-        predictor.save_predictions(output_dir / subset_key)
-        predictor.create_probability_heatmaps(
-            output_dir / subset_key, subset=subset_key
-        )
+        predictor.save_predictions(out_dir)
+        predictor.create_probability_heatmaps(out_dir, subset=subset or subset_key)
 
     def run_pipeline(self):
         print("=" * 80)
@@ -274,27 +276,14 @@ class MATseqPipeline:
             geneid_symbol_mapper=geneid_symbol_mapper,
         )
 
-        print("\n--- STEP 4: NESTED CV TUNING + DEPLOYMENT REFIT (main_ligands) ---")
+        from src.config import get_test_work_dir, get_test_name
+
+        print(
+            "\n--- STEP 4: NESTED CV TUNING + DEPLOYMENT REFIT (main_ligands, with and without Fla-PA) ---"
+        )
         trainer = self._tune_subset(X_train, y_train, eval_name="main_ligands")
         trainer.save_models(self.results_dir / "models")
 
-        print("\n--- STEP 5: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS ---")
-        predictor = ModelPredictor(trainer)
-        pred_dir = self.results_dir / "predictions"
-        self._predict(predictor, "additional_ligands", X_other, y_other, pred_dir)
-        self._predict(predictor, "bacteria_ligands", X_bact, y_bact, pred_dir)
-
-        print("\n--- STEP 6: TLR HEK BLUE VISUALIZATION ---")
-        tlr2_df, tlr4_df, flapa_data = load_tlr_data(
-            data_dir=Path(__file__).parent / "data" / "supplementary_data"
-        )
-        plot_tlr_hek_blue(
-            tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png"
-        )
-
-        print(
-            "\n--- STEP 7: NESTED CV TUNING + DEPLOYMENT REFIT (main_ligands without Fla-PA) ---"
-        )
         flapa_mask = y_train != "Fla-PA"
         X_wo, y_wo = X_train[flapa_mask], y_train[flapa_mask]
         trainer_wo = self._tune_subset(
@@ -305,6 +294,42 @@ class MATseqPipeline:
         )
         trainer_wo.save_models(self.results_dir / "models" / "no_flapa")
 
+        print("\n--- STEP 5: MODEL VALIDATION ON EXTERNAL TEST BATCH ---")
+        test_fc = get_test_work_dir() / "featurecounts"
+        if not test_fc.is_dir() or not any(test_fc.glob("*.txt")):
+            print(f"  Skipping validation: no featurecounts at {test_fc}")
+        else:
+            test_counts, test_labels = prepare_counts(featurecounts_dir=test_fc)
+            Xv, yv = extract_subset(test_counts, test_labels, "main_ligands")
+            val_dir = self.results_dir / "validation" / get_test_name()
+            self._predict(ModelPredictor(trainer), "main_ligands", Xv, yv, val_dir)
+            wo = yv != "Fla-PA"
+            self._predict(
+                ModelPredictor(trainer_wo),
+                "no_flapa",
+                Xv[wo],
+                yv[wo],
+                val_dir,
+                subset="main_ligands",
+            )
+
+        print("\n--- STEP 6: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS ---")
+        predictor = ModelPredictor(trainer)
+        pred_dir = self.results_dir / "predictions"
+        self._predict(predictor, "additional_ligands", X_other, y_other, pred_dir)
+        self._predict(predictor, "bacteria_ligands", X_bact, y_bact, pred_dir)
+
+        print("\n--- STEP 7: TLR HEK BLUE VISUALIZATION ---")
+        tlr2_df, tlr4_df, flapa_data = load_tlr_data(
+            data_dir=Path(__file__).parent / "data" / "supplementary_data"
+        )
+        plot_tlr_hek_blue(
+            tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png"
+        )
+
+        print(
+            "\n--- STEP 8: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS (without Fla-PA) ---"
+        )
         predictor_wo = ModelPredictor(trainer_wo)
         pred_dir_wo = self.results_dir / "predictions" / "main_ligands_no_flapa"
         self._predict(predictor_wo, "additional_ligands", X_other, y_other, pred_dir_wo)
@@ -359,12 +384,23 @@ def main():
     )
 
     if args.snakemake:
-        ok = pipeline.run_snakemake_preprocessing(
-            fastq_dir=args.fastq_dir,
-            genome_dir=args.genome_dir,
-            dry_run=args.snakemake == "dry-run",
-        )
-        if not ok or args.snakemake == "dry-run":
+        from src.config import get_test_sample_dir, get_test_work_dir
+
+        dry_run = args.snakemake == "dry-run"
+        batches = [
+            (args.fastq_dir, None),
+            (get_test_sample_dir(), get_test_work_dir()),
+        ]
+        for fastq_dir, work_dir in batches:
+            ok = pipeline.run_snakemake_preprocessing(
+                fastq_dir=fastq_dir,
+                work_dir=work_dir,
+                genome_dir=args.genome_dir,
+                dry_run=dry_run,
+            )
+            if not ok:
+                return None
+        if dry_run:
             return None
 
     return pipeline.run_pipeline()
