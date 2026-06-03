@@ -10,8 +10,8 @@ rule fastp:
         R1 = str(Path(WORKDIR) / "sm_fastqs/{sample}_R1.fastq.gz"),
         R2 = str(Path(WORKDIR) / "sm_fastqs/{sample}_R2.fastq.gz")
     output:
-        R1_tp = "sm_fastp/reads/{sample}_R1_trimmed.fastq",
-        R2_tp = "sm_fastp/reads/{sample}_R2_trimmed.fastq",
+        R1_tp = "sm_fastp/reads/{sample}_R1_trimmed.fastq.gz",
+        R2_tp = "sm_fastp/reads/{sample}_R2_trimmed.fastq.gz",
         json = "sm_fastp/report/{sample}.json",
         html = "sm_fastp/report/{sample}.html",
     benchmark: "sm_benchmarks/fastp_{sample}.txt"

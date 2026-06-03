@@ -31,8 +31,8 @@ rule star_index:
     
 checkpoint star_alignment:
     input:
-        R1="sm_fastp/reads/{sample}_R1_trimmed.fastq",
-        R2="sm_fastp/reads/{sample}_R2_trimmed.fastq",
+        R1="sm_fastp/reads/{sample}_R1_trimmed.fastq.gz",
+        R2="sm_fastp/reads/{sample}_R2_trimmed.fastq.gz",
         annotation=glob(config["GenomeDir"]+"/*.gtf")
     output:
         bam = "sm_star/{sample}_Aligned.out.bam",
@@ -50,6 +50,7 @@ checkpoint star_alignment:
         --outFileNamePrefix sm_star/{wildcards.sample}_ \
         --genomeDir {params.genome_dir} \
         --readFilesIn {input.R1} {input.R2} \
+        --readFilesCommand zcat \
         --sjdbGTFfile {input.annotation} \
         --sjdbOverhang {params.overhang} \
         --outSAMtype BAM Unsorted"

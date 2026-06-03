@@ -92,20 +92,22 @@ MATseq will attempt to download these files automatically if missing (may be slo
 - `deseq2.n_cpus`: Number of CPUs for parallel processing
 
 **Feature selection:**
-- `feature_selection.k_best`: Number of top features to select
-- `feature_selection.n_estimators`: Random forest estimators
-- `feature_selection.random_state`: Reproducibility seed
+- `feature_selection.k_best`: Number of top genes kept by mutual-information selection
+- `feature_selection.n_estimators`: Trees in the ExtraTrees selector
+- `feature_selection.max_depth`: Maximum depth of the ExtraTrees selector
+- `feature_selection.max_features`: Maximum genes kept by the ExtraTrees selector
 
 **Model training:**
-- `model_training.apply_smote`: Enable SMOTE oversampling (used in this paper)
-- `model_training.smote_k_neighbors`: SMOTE k-neighbors parameter
+- `model_training.random_state`: Reproducibility seed for training and CV splits
+- `model_factory.calibrate`: Probability-calibrate the LinearSVC (CalibratedClassifierCV)
+- `hyperparameter_grids`: Per-model search grids used by the nested cross-validation
 
 ### Main Pipeline
 
 1. **Data Preprocessing** (`prepare_counts`)
    - Merge featureCounts outputs
    - Filter samples by read count threshold (>1M reads)
-   - Extract training/test/bacterial subsets with proper labels
+   - Extract main, additional, and bacteria ligand subsets with labels
    - Generate PCA plots for each subset
 
 2. **DESeq2 Differential Expression** (`deseq2_training`)
@@ -121,10 +123,10 @@ MATseq will attempt to download these files automatically if missing (may be slo
    - Run GO enrichment on DE ∩ FS and FS \ DE gene sets
 
 4. **Model Training** (`model_training`)
-   - Train classification models (LinearSVC, SGDClassifier, RandomForest, XGBoost)
-   - Apply SMOTE for class balancing
-   - Evaluate on full gene set, feature-selected genes, and FS ∪ DE genes (3 evaluations)
-   - Generate per-fold confusion matrices and summary metrics
+   - Nested cross-validation (5 outer, 3 inner folds) tuning LinearSVC, LogisticRegression, RandomForest, and XGBoost
+   - Balance classes with class/sample weights (no SMOTE)
+   - Select deployment hyperparameters by majority vote and refit on the full panel
+   - Write per-fold and pooled out-of-fold metrics, confusion matrices, and `selected_params.json`
 
 5. **Additional Ligand and Bacterial Analysis** (`deseq2_other_ligands`, `deseq2_bacterial`)
    - DESeq2 analysis on additional ligands (LTA, MPLA, Pam2)

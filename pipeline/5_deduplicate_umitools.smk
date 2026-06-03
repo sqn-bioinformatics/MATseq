@@ -16,7 +16,7 @@ rule umitools_deduplication:
     shell: "umi_tools dedup \
     --paired \
     --method=directional \
-    --output-stats= sm_umitools/{wildcards.sample_id} \
+    --output-stats=sm_umitools/{wildcards.sample_id} \
     --umi-separator=':' \
     --chimeric-pairs=discard \
     --unpaired-reads=discard \

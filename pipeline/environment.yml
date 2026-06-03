@@ -16,17 +16,17 @@ channels:
   - defaults
   
 dependencies:
-  - python
+  - python=3.12
   - pip
-  - snakemake
-  - bowtie2
-  - tbb
-  - fastqc
-  - fastp
-  - star
-  - samtools
-  - umi_tools
-  - subread
+  - snakemake=9.22.0
+  - bowtie2=2.5.5
+  - tbb=2023.0.0
+  - fastqc=0.12.1
+  - fastp=0.23.4
+  - star=2.7.11b
+  - samtools=1.23.1
+  - umi_tools=1.1.6
+  - subread=2.1.1
   - pip:
     - openpyxl
     - pandas
