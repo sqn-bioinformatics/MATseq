@@ -7,10 +7,11 @@
 from glob import glob
 
 def get_bam_files(wildcards):
-    STAR_FILES = glob(str(Path(WORKDIR) / "sm_star/*.bam"))
+    STAR_FILES = glob(str(Path(WORKDIR) / "sm_star/*_Aligned.out.bam"))
     outfiles= []
     for file in STAR_FILES:
-        if wildcards.sample_id not in file:
+        sample = Path(file).name.split("_Aligned")[0]
+        if sample.split("_", 1)[1] != wildcards.sample_id:
             continue
         else:
             outfiles.append(file)

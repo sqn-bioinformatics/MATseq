@@ -63,7 +63,7 @@ def compile_benchmarks(benchmark: str, stats: str):
 SAMPLES, _, _, PAIRED = map(set, glob_wildcards(str(Path(SAMPLEDIR) / "{samples}_{tag}_{other}_{paired}.fastq.gz")))
 SAMPLE_RUN_DICTIONARY = {}
 for sample in SAMPLES:
-    sample_id = sample.split("_")[1]
+    sample_id = sample.split("_", 1)[1]
     run = sample.split("_")[0]
     SAMPLE_RUN_DICTIONARY.setdefault(sample_id, []).append(run)
 
