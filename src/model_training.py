@@ -83,7 +83,7 @@ class ModelFactory:
             class_weight="balanced",
         )
         if calibrate:
-            models["LinearSVC"] = CalibratedClassifierCV(svc, cv=3)
+            models["LinearSVC"] = CalibratedClassifierCV(svc, cv=2)
         else:
             models["LinearSVC"] = svc
 

@@ -7,7 +7,17 @@ from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import SelectKBest, SelectFromModel, mutual_info_classif
 from sklearn.preprocessing import StandardScaler, FunctionTransformer
 from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.utils.validation import (
+    _check_feature_names,
+    _check_feature_names_in,
+    _check_n_features,
+)
 from feature_engine.selection import DropDuplicateFeatures
+
+
+def _record_input(estimator, X):
+    _check_n_features(estimator, X, reset=True)
+    _check_feature_names(estimator, X, reset=True)
 
 
 class QCLowerCountRemover(BaseEstimator, TransformerMixin):
@@ -18,6 +28,7 @@ class QCLowerCountRemover(BaseEstimator, TransformerMixin):
             else np.asarray(X, dtype=float)
         )
         self.mask_ = values.sum(axis=0) >= 10
+        _record_input(self, X)
         return self
 
     def transform(self, X):
@@ -48,20 +59,15 @@ class QCLowerCountRemover(BaseEstimator, TransformerMixin):
         return filtered_values
 
     def get_feature_names_out(self, input_features=None):
-        if input_features is None:
-            raise ValueError(
-                "QCLowerCountRemover.get_feature_names_out requires "
-                "input_features. This usually means the pipeline was fit on a "
-                "numpy array with no column names; refit on a pandas DataFrame "
-                "(or pass input_features explicitly) so feature names propagate."
-            )
+        input_features = _check_feature_names_in(self, input_features)
         return np.asarray(input_features, dtype=object)[self.mask_]
 
 
-class LibraryLengthNormalizer(BaseEstimator, TransformerMixin):
+class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMixin):
     """Normalize gene counts to library size (reads per million)."""
 
     def fit(self, X, y=None):
+        _record_input(self, X)
         return self
 
     def transform(self, X):

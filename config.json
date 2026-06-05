@@ -29,6 +29,8 @@
   "ligand_aliases": {
     "E.coli": "HK E.coli",
     "S.aureus": "HK S.aureus",
+    "HKEB": "HK E.coli",
+    "HKSA": "HK S.aureus",
     "IMDM": "negative_control"
   },
   "ligands": {
@@ -123,23 +125,23 @@
   },
   "hyperparameter_grids": {
     "LinearSVC": {
-      "select_k_best__k": [100, 500, 2000],
+      "select_k_best__k": [250, 500, 2000],
       "select_forest__max_features": [100, 250],
       "clf__estimator__C": [0.1, 1, 10]
     },
     "LogisticRegression": {
-      "select_k_best__k": [100, 500, 2000],
+      "select_k_best__k": [250, 500, 2000],
       "select_forest__max_features": [100, 250],
       "clf__C": [0.01, 0.1, 1, 10]
     },
     "RandomForest": {
-      "select_k_best__k": [100, 500, 2000],
+      "select_k_best__k": [250, 500, 2000],
       "select_forest__max_features": [100, 250],
       "clf__n_estimators": [200, 500],
       "clf__max_depth": [5, null]
     },
     "XGBoost": {
-      "select_k_best__k": [100, 500, 2000],
+      "select_k_best__k": [250, 500, 2000],
       "select_forest__max_features": [100, 250],
       "clf__n_estimators": [200, 500],
       "clf__max_depth": [3, 5],

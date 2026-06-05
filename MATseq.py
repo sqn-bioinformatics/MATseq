@@ -2,10 +2,18 @@
 """MAT-seq pipeline orchestration script."""
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+# The installed XGBoost is a CUDA build that initialises a GPU context even for
+# CPU training; under GridSearchCV(n_jobs=-1) the parallel workers exhaust the
+# single GPU and a sticky CUDA error then fails every DMatrix build. Hide the
+# GPU before xgboost is imported so it stays CPU-only.
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 
@@ -25,6 +33,7 @@ from src import (
     write_count_summary,
     extract_subset,
     normalize_rpm,
+    create_feature_pipeline,
     load_tlr_data,
     ModelFactory,
     ModelTrainer,
@@ -138,10 +147,15 @@ class MATseqPipeline:
         X: pd.DataFrame,
         y: pd.Series,
         subset_name: str,
+        fs=None,
+        suffix: str = "",
     ) -> None:
-        X_rpm = normalize_rpm(X)
-        scaler = StandardScaler().set_output(transform="pandas")
-        X_scaled = scaler.fit_transform(X_rpm)
+        if fs is None:
+            X_rpm = normalize_rpm(X)
+            scaler = StandardScaler().set_output(transform="pandas")
+            X_scaled = scaler.fit_transform(np.log1p(X_rpm))
+        else:
+            X_scaled = fs.transform(X)
 
         palette = SUBSET_PALETTES.get(subset_name, CUSTOM_PALETTE_9)
         hue_order = SUBSET_CLASS_ORDERS.get(subset_name)
@@ -152,9 +166,9 @@ class MATseqPipeline:
                 labels=y,
                 palette=palette,
                 hue_order=hue_order,
-                name=f"{subset_name}{label_suffix}",
+                name=f"{subset_name}{suffix}{label_suffix}",
                 with_sample_names=with_names,
-                output_filename=f"{subset_name}_pca{label_suffix}.png",
+                output_filename=f"{subset_name}{suffix}_pca{label_suffix}.png",
             )
 
     def _tune_subset(
@@ -234,11 +248,16 @@ class MATseqPipeline:
 
             if subset == "main_ligands":
                 X_pca, y_pca = X_sub, y_sub
+                fs_pca = create_feature_pipeline(
+                    **FEATURE_SELECTION_CONFIG
+                ).set_output(transform="pandas")
+                fs_pca.fit(X_sub, y_sub)
             else:
                 X_main, y_main = subset_xy["main_ligands"]
                 X_pca = pd.concat([X_sub, X_main])
                 y_pca = pd.concat([y_sub, y_main])
             self._pca_plot(X_pca, y_pca, subset)
+            self._pca_plot(X_pca, y_pca, subset, fs=fs_pca, suffix="_selected")
 
             deseq2 = DESeq2(
                 raw_counts=X_sub,

@@ -8,10 +8,19 @@ from pathlib import Path
 from typing import Dict, List, Union
 from collections import Counter
 from matplotlib_venn import venn2
+from joblib import Parallel, delayed
 from sklearn.model_selection import GridSearchCV
 
 from .feature_engineering import create_feature_pipeline
 from .config import FEATURE_SELECTION_CONFIG
+
+
+def _run_one_selection(X, y, random_state):
+    pipe = create_feature_pipeline(
+        **FEATURE_SELECTION_CONFIG, random_state=int(random_state)
+    ).set_output(transform="pandas")
+    pipe.fit_transform(X, y)
+    return pipe[:-1].get_feature_names_out()
 
 
 class FeatureSelectionAnalyzer:
@@ -56,19 +65,14 @@ class FeatureSelectionAnalyzer:
         rng = np.random.default_rng(125)
         random_states = rng.integers(0, 500000, size=n_runs)
 
+        print(f"Running feature selection {n_runs} times...")
+        results = Parallel(n_jobs=-1, verbose=10, return_as="generator")(
+            delayed(_run_one_selection)(X, y, rs) for rs in random_states
+        )
+
         self.feature_sets = []
         gene_counts = Counter()
-
-        print(f"Running feature selection {n_runs} times...")
-        for i, random_state in enumerate(random_states):
-            if (i + 1) % 100 == 0:
-                print(f"  Completed {i + 1}/{n_runs} runs...")
-
-            pipe = create_feature_pipeline(
-                **FEATURE_SELECTION_CONFIG, random_state=random_state
-            ).set_output(transform="pandas")
-            pipe.fit_transform(X, y)
-            selected_genes = pipe[:-1].get_feature_names_out()
+        for selected_genes in results:
             self.feature_sets.append(selected_genes)
             gene_counts.update(selected_genes)
 

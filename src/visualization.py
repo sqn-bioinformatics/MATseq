@@ -379,6 +379,10 @@ def plot_heatmap(
         col_colors=col_colors,
     )
 
+    vmin, vmax = g.ax_heatmap.collections[0].get_clim()
+    g.ax_cbar.set_yticks([vmin, 0, vmax])
+    g.ax_cbar.set_yticklabels([f"{vmin:.1f}", "0", f"{vmax:.1f}"])
+
     handles = [Patch(facecolor=lut[name], label=name) for name in lut]
 
     g.ax_col_dendrogram.legend(

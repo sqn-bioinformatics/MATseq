@@ -104,79 +104,81 @@ MATseq will attempt to download these files automatically if missing (may be slo
 
 ### Main Pipeline
 
+The pipeline runs as eight steps in `MATseq.py` (`run_pipeline`). Intermediate
+results (counts, DESeq2 contrasts, feature-selection runs, tuned models) are
+cached under `results/cache`; rerun with `--force-recompute` to ignore the cache.
+
 1. **Data Preprocessing** (`prepare_counts`)
-   - Merge featureCounts outputs
-   - Filter samples by read count threshold (>1M reads)
-   - Extract main, additional, and bacteria ligand subsets with labels
-   - Generate PCA plots for each subset
+   - Merge featureCounts outputs into a samples × genes matrix
+   - Filter samples by read-count threshold (>1M reads)
+   - Derive ligand labels from sample names (with `ligand_aliases`)
+   - Write `counts/MATseq_count_summary.csv`
 
-2. **DESeq2 Differential Expression** (`deseq2_training`)
-   - Differential expression analysis on training data
-   - Identify significant genes (padj < 0.05, |log2FC| > 2)
-   - Generate volcano plots and heatmaps per ligand
-   - Run GO enrichment per ligand; merge into single GO table
+2. **DESeq2 Differential Expression** (per subset: main, additional, bacteria)
+   - PCA plot per subset (RPM → log1p → standardised), labelled and unlabelled
+   - Each ligand vs negative control; significant genes (padj < 0.05, |log2FC| > 2, baseMean ≥ 10)
+   - Volcano plots and clustered heatmaps per ligand
+   - GO enrichment per ligand, merged into `GO_merged_results.csv`
 
-3. **Feature Selection Analysis** (`venn_diagram`)
-   - Run feature selection 1000x with different random seeds
-   - Compare feature-selected genes vs DESeq2 differentially expressed genes
-   - Generate Venn diagrams and gene frequency tables
-   - Run GO enrichment on DE ∩ FS and FS \ DE gene sets
+3. **Feature-selection vs DE Venn** (training subset)
+   - Run the selection pipeline 1000× with different seeds (parallelised across cores)
+   - Compare the union of selected genes against the DESeq2 DE genes (Venn diagram)
+   - Gene-frequency table; GO enrichment on DE ∩ FS and FS \ DE gene sets
 
-4. **Model Training** (`model_training`)
-   - Nested cross-validation (5 outer, 3 inner folds) tuning LinearSVC, LogisticRegression, RandomForest, and XGBoost
-   - Balance classes with class/sample weights (no SMOTE)
-   - Select deployment hyperparameters by majority vote and refit on the full panel
-   - Write per-fold and pooled out-of-fold metrics, confusion matrices, and `selected_params.json`
+4. **Nested CV tuning + deployment refit** (main panel, with and without Fla-PA)
+   - Nested stratified CV (5 outer, 3 inner) tuning LinearSVC, LogisticRegression, RandomForest, XGBoost
+   - Inner `GridSearchCV` jointly tunes feature-selection and classifier hyperparameters on macro F1
+   - Class imbalance handled with balanced class/sample weights (no SMOTE)
+   - Deployment hyperparameters chosen by majority vote across outer folds, then refit on the full panel
+   - Writes per-fold and pooled out-of-fold metrics, confusion matrices, and `selected_params.json`
+   - A second model set is trained on the main panel excluding Fla-PA
 
-5. **Additional Ligand and Bacterial Analysis** (`deseq2_other_ligands`, `deseq2_bacterial`)
-   - DESeq2 analysis on additional ligands (LTA, MPLA, Pam2)
-   - DESeq2 analysis on bacterial samples (HK E.coli, HK S.aureus)
-   - Generate visualization outputs
+5. **Model validation on external test batch**
+   - Apply the deployed models to an independent sequencing batch (`test.work_dir/featurecounts`)
+   - Predictions, probabilities and probability heatmaps, with and without Fla-PA
+   - Skipped automatically if no external featureCounts are present
 
-6. **Prediction on New Data** (`predict_other_ligands`, `predict_bacterial`)
-   - Apply trained models to additional ligands and bacterial samples
-   - Generate probability heatmaps and predictions
+6. **Prediction on additional and bacterial ligands**
+   - Apply the deployed main-panel models to held-out ligands (LTA, MPLA, Pam2) and heat-killed bacteria
+   - Generate predictions, probabilities and probability heatmaps
 
-7. **TLR Reporter Visualization** (`tlr_hek_blue`)
-   - Loading and plotting handled in `src/tlr_analysis.py`
-   (`load_tlr_data`, `plot_tlr_hek_blue`, `plot_tlr_panel`)
+7. **TLR Reporter Visualization** (`src/tlr_analysis.py`)
+   - HEK-Blue TLR2 (Pam3) and TLR4 (LPS) dose-response with Fla-PA reference
 
-8. **Extended Training** (`training_wo_flapa`)
-   - Retrain models on dataset without Fla-Pa samples
+8. **Prediction without Fla-PA**
+   - Apply the no-Fla-PA models to the additional and bacterial ligands
 
 
 ## Output Structure
 
 ```
 results/
-├── cache/                             
+├── cache/                                  # Cached intermediates + manifest.json
 ├── counts/
 │   └── MATseq_count_summary.csv
-├── subsets/
-│   ├── training_data_with_labels.csv
-│   ├── other_ligands_data_with_labels.csv
-│   ├── bacterial_data_with_labels.csv
-│   └── training_wo_flapa_data_with_labels.csv
 ├── differential_gene_expression/
 │   └── {ligand}_deseq2_results.csv
 ├── go_terms/
-│   ├── {ligand}_go_terms.csv           # Per-ligand GO enrichment
-│   ├── GO_merged_results.csv           # All per-ligand terms merged
-│   ├── de_intersect_fs_go_terms.csv    # GO for DE ∩ FS gene set
-│   └── fs_only_go_terms.csv            # GO for FS \ DE gene set
+│   ├── {ligand}_go_terms.csv               # Per-ligand GO enrichment
+│   ├── GO_merged_results.csv               # All per-ligand terms merged
+│   ├── de_intersect_fs_go_terms.csv        # GO for DE ∩ FS gene set
+│   └── fs_only_go_terms.csv                # GO for FS \ DE gene set
 ├── feature_analysis/
-│   ├── gene_frequency_table.csv        # Gene selection frequency across 1000 runs
-│   └── list_of_gene_name_set_1000      # Pickle: all 1000 feature sets
-├── models/
+│   └── gene_frequency_table.csv            # Gene selection frequency across 1000 runs
+├── models/                                 # Deployed main-panel models
 │   ├── label_encoder.pkl
-│   └── {model_name}.pkl
-├── model_evaluation/
-│   ├── full_model_evaluation.csv           # Metrics on all genes
-│   ├── full_model_evaluation_per_fold.csv
-│   ├── fs_model_evaluation.csv             # Metrics on feature-selected genes
-│   ├── fs_model_evaluation_per_fold.csv
-│   ├── fs_de_model_evaluation.csv          # Metrics on FS ∪ DE genes
-│   └── fs_de_model_evaluation_per_fold.csv
+│   ├── {model}.pkl
+│   └── no_flapa/                           # Models trained without Fla-PA
+│       ├── label_encoder.pkl
+│       └── {model}.pkl
+├── hyperparameter_tuning/                  # Nested CV outputs (main panel)
+│   ├── nested_cv_per_fold.csv
+│   ├── nested_cv_summary.csv
+│   ├── {prefix}oof_predictions.csv         # Pooled out-of-fold predictions
+│   ├── {prefix}{model}_classification_report.csv
+│   ├── selected_params.json                # Deployment hyperparameters
+│   └── inner_cv_results/{model}_fold_{n}.csv
+├── hyperparameter_tuning_no_flapa/         # Same, for the no-Fla-PA models
 ├── figures/
 │   ├── deseq2/
 │   │   ├── {ligand}_volcano.png
@@ -187,27 +189,30 @@ results/
 │   │   └── fs_only_go.png
 │   ├── pca/
 │   │   ├── {subset}_pca.png
-│   │   ├── {subset}_pca_labeled.png
-│   │   ├── {subset}_pca_selected.png
-│   │   └── {subset}_pca_selected_labeled.png
+│   │   └── {subset}_pca_labeled.png
 │   ├── venn/
 │   │   └── venn_de_vs_fs.png
 │   ├── model_evaluation/
-│   │   └── Confusion_Matrix_{prefix}{model}_fold_{n}.png
+│   │   ├── {prefix}{model}_confusion_matrix.csv
+│   │   ├── {prefix}{model}_confusion_matrix_normalized.csv
+│   │   └── Confusion_Matrix_{prefix}{model}.png
 │   └── supplementary/
 │       └── tlr_hek_blue.png
+├── validation/{test_name}/                 # External test batch (e.g. 7086)
+│   ├── main_ligands/
+│   │   ├── {model}_predictions.csv
+│   │   ├── {model}_probabilities.csv
+│   │   └── {model}_probabilities_heatmap.png
+│   └── no_flapa/
 └── predictions/
-    ├── other_ligands/
+    ├── additional_ligands/
     │   ├── {model}_predictions.csv
     │   ├── {model}_probabilities.csv
     │   └── {model}_probabilities_heatmap.png
-    ├── bacterial/
-    │   ├── {model}_predictions.csv
-    │   ├── {model}_probabilities.csv
-    │   └── {model}_probabilities_heatmap.png
-    └── training_wo_flapa/
-        ├── other_ligands/
-        └── bacterial/
+    ├── bacteria_ligands/
+    └── main_ligands_no_flapa/              # No-Fla-PA model predictions
+        ├── additional_ligands/
+        └── bacteria_ligands/
 ```
 
 ## Project Structure
