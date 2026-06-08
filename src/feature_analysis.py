@@ -3,24 +3,169 @@
 import pickle
 import pandas as pd
 import numpy as np
+from functools import partial
 import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Dict, List, Union
 from collections import Counter
-from matplotlib_venn import venn2
+from matplotlib_venn import venn2, venn3
 from joblib import Parallel, delayed
 from sklearn.model_selection import GridSearchCV
+from sklearn.feature_selection import SelectKBest, mutual_info_classif
+from sklearn.ensemble import ExtraTreesClassifier
 
-from .feature_engineering import create_feature_pipeline
+from .feature_engineering import (
+    create_feature_pipeline,
+    create_preprocessing_pipeline,
+    create_selection_pipeline,
+)
 from .config import FEATURE_SELECTION_CONFIG
 
 
-def _run_one_selection(X, y, random_state):
-    pipe = create_feature_pipeline(
+def _run_one_selection(X_pre, y, random_state):
+    sel = create_selection_pipeline(
         **FEATURE_SELECTION_CONFIG, random_state=int(random_state)
     ).set_output(transform="pandas")
-    pipe.fit_transform(X, y)
-    return pipe[:-1].get_feature_names_out()
+    sel.fit(X_pre, y)
+    return sel.get_feature_names_out()
+
+
+def _elbow_index(scores) -> int:
+    y = np.asarray(scores, dtype=float)
+    x = np.arange(len(y), dtype=float)
+    xn = (x - x.min()) / (np.ptp(x) or 1)
+    yn = (y - y.min()) / (np.ptp(y) or 1)
+    num = np.abs(
+        (yn[-1] - yn[0]) * xn
+        - (xn[-1] - xn[0]) * yn
+        + xn[-1] * yn[0]
+        - yn[-1] * xn[0]
+    )
+    return int(np.argmax(num)) + 1
+
+
+def feature_count_analysis(
+    X: pd.DataFrame,
+    y: Union[np.ndarray, pd.Series],
+    k_best: int,
+    candidate_counts: List[int],
+    n_runs: int = 200,
+    n_estimators: int = 250,
+    max_depth: int = 5,
+    random_state: int = 42,
+) -> Dict:
+    """Model-independent analysis of how many features to select.
+
+    Combines an intrinsic-signal elbow (sorted mutual-information /
+    ExtraTrees-importance curves) with a selection-stability curve (mean pairwise
+    Jaccard of reseeded top-N selections). Both are derived from one reseeded
+    ExtraTrees pass on the SelectKBest(k_best) matrix; no classifier performance
+    is used. Returns tidy DataFrames and the suggested counts; writes nothing.
+    """
+    pre = create_preprocessing_pipeline(
+        drop_low_count=True, scale=False
+    ).set_output(transform="pandas")
+    X_pre = pre.fit_transform(X, y)
+
+    mi = np.mean(
+        [
+            mutual_info_classif(X_pre, y, random_state=random_state + i)
+            for i in range(3)
+        ],
+        axis=0,
+    )
+    mi_series = pd.Series(mi, index=X_pre.columns).sort_values(ascending=False)
+    mi_elbow = _elbow_index(mi_series.to_numpy())
+
+    k = min(k_best, X_pre.shape[1])
+    X_k = (
+        SelectKBest(partial(mutual_info_classif, random_state=random_state), k=k)
+        .set_output(transform="pandas")
+        .fit_transform(X_pre, y)
+    )
+    k_features = list(X_k.columns)
+
+    rankings = []
+    importance_sum = np.zeros(X_k.shape[1])
+    for i in range(n_runs):
+        et = ExtraTreesClassifier(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            random_state=random_state + i,
+        )
+        et.fit(X_k, y)
+        imp = et.feature_importances_
+        importance_sum += imp
+        order = np.argsort(imp)[::-1]
+        rankings.append([k_features[j] for j in order])
+
+    mean_imp = pd.Series(importance_sum / n_runs, index=k_features).sort_values(
+        ascending=False
+    )
+    importance_elbow = _elbow_index(mean_imp.to_numpy())
+
+    counts = [c for c in candidate_counts if c <= len(k_features)]
+    jaccard, core_50, core_75, core_90 = [], [], [], []
+    for n in counts:
+        topn = [set(r[:n]) for r in rankings]
+        pair_jac = [
+            len(a & b) / len(a | b)
+            for i, a in enumerate(topn)
+            for b in topn[i + 1 :]
+            if a | b
+        ]
+        jaccard.append(float(np.mean(pair_jac)) if pair_jac else 0.0)
+        freq = Counter()
+        for s in topn:
+            freq.update(s)
+        core_50.append(sum(1 for v in freq.values() if v / n_runs >= 0.50))
+        core_75.append(sum(1 for v in freq.values() if v / n_runs >= 0.75))
+        core_90.append(sum(1 for v in freq.values() if v / n_runs >= 0.90))
+
+    stable_count = counts[_elbow_index(jaccard) - 1] if counts else None
+
+    ref = min(importance_elbow, len(k_features))
+    ref_freq = Counter()
+    for r in rankings:
+        ref_freq.update(r[:ref])
+    core_df = (
+        pd.Series({g: c / n_runs for g, c in ref_freq.items()})
+        .sort_values(ascending=False)
+        .rename_axis("gene")
+        .reset_index(name="selection_frequency")
+    )
+
+    scores_df = pd.DataFrame(
+        {"rank": np.arange(1, len(mi_series) + 1), "mi_sorted": mi_series.to_numpy()}
+    ).merge(
+        pd.DataFrame(
+            {
+                "rank": np.arange(1, len(mean_imp) + 1),
+                "importance_sorted": mean_imp.to_numpy(),
+            }
+        ),
+        on="rank",
+        how="left",
+    )
+
+    stability_df = pd.DataFrame(
+        {
+            "n_features": counts,
+            "mean_jaccard": jaccard,
+            "core_50pct": core_50,
+            "core_75pct": core_75,
+            "core_90pct": core_90,
+        }
+    )
+
+    return {
+        "mi_elbow": mi_elbow,
+        "importance_elbow": importance_elbow,
+        "stable_count": stable_count,
+        "scores": scores_df,
+        "stability": stability_df,
+        "core": core_df,
+    }
 
 
 class FeatureSelectionAnalyzer:
@@ -65,9 +210,14 @@ class FeatureSelectionAnalyzer:
         rng = np.random.default_rng(125)
         random_states = rng.integers(0, 500000, size=n_runs)
 
+        pre = create_preprocessing_pipeline(
+            drop_low_count=True, scale=False
+        ).set_output(transform="pandas")
+        X_pre = pre.fit_transform(X, y)
+
         print(f"Running feature selection {n_runs} times...")
         results = Parallel(n_jobs=-1, verbose=10, return_as="generator")(
-            delayed(_run_one_selection)(X, y, rs) for rs in random_states
+            delayed(_run_one_selection)(X_pre, y, rs) for rs in random_states
         )
 
         self.feature_sets = []
@@ -250,6 +400,38 @@ class VennDiagramGenerator:
             [de_genes, fs_genes],
             set_labels=("Differentially Expressed Genes", "Feature Selection Genes"),
         )
+        output_path = self.output_dir / output_filename
+        try:
+            plt.savefig(output_path, dpi=300, bbox_inches="tight")
+            print(f"Saved Venn diagram to {output_path}")
+        finally:
+            plt.close()
+
+        return output_path
+
+    def plot_venn3(
+        self,
+        sets: List[set],
+        set_labels: tuple,
+        output_filename: str,
+        title: str = None,
+    ) -> Path:
+        """Create a 3-way Venn diagram comparing three gene sets.
+
+        Args:
+            sets: List of three gene sets.
+            set_labels: Labels for the three sets.
+            output_filename: Name for output file.
+            title: Optional figure title.
+
+        Returns:
+            Path to saved figure.
+        """
+        plt.figure(figsize=(8, 8))
+
+        venn3(sets, set_labels=set_labels)
+        if title:
+            plt.title(title)
         output_path = self.output_dir / output_filename
         try:
             plt.savefig(output_path, dpi=300, bbox_inches="tight")

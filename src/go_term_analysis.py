@@ -5,6 +5,7 @@ import shutil
 import pandas as pd
 from pathlib import Path
 from collections import namedtuple
+from functools import lru_cache
 from typing import Dict, Any, List
 
 
@@ -87,6 +88,7 @@ def initialize_go(data_dir: Path = None) -> tuple:
     """Initialize GO enrichment analysis objects.
 
     Loads GO ontology, gene associations, and creates enrichment study object.
+    Memoized per data_dir so the ~42k-term ontology loads once per process.
 
     Args:
         data_dir: Directory containing GO data files.
@@ -94,10 +96,12 @@ def initialize_go(data_dir: Path = None) -> tuple:
     Returns:
         Tuple of (goeaobj, geneid_symbol_mapper) for GO enrichment analysis.
     """
-    print("Initializing GO terms...")
+    return _initialize_go_cached(data_dir or _get_data_dir())
 
-    if data_dir is None:
-        data_dir = _get_data_dir()
+
+@lru_cache(maxsize=None)
+def _initialize_go_cached(data_dir: Path) -> tuple:
+    print("Initializing GO terms...")
 
     gene2go_file = data_dir / "gene2go"
     gene2go_gz = data_dir / "gene2go.gz"

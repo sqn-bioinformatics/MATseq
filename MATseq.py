@@ -13,9 +13,7 @@ from pathlib import Path
 # GPU before xgboost is imported so it stays CPU-only.
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -32,8 +30,8 @@ from src import (
     prepare_counts,
     write_count_summary,
     extract_subset,
-    normalize_rpm,
     create_feature_pipeline,
+    create_preprocessing_pipeline,
     load_tlr_data,
     ModelFactory,
     ModelTrainer,
@@ -42,6 +40,7 @@ from src import (
     DESeq2,
     FeatureSelectionAnalyzer,
     VennDiagramGenerator,
+    feature_count_analysis,
     create_fs_de_go_table,
     ModelPredictor,
 )
@@ -151,9 +150,10 @@ class MATseqPipeline:
         suffix: str = "",
     ) -> None:
         if fs is None:
-            X_rpm = normalize_rpm(X)
-            scaler = StandardScaler().set_output(transform="pandas")
-            X_scaled = scaler.fit_transform(np.log1p(X_rpm))
+            pre = create_preprocessing_pipeline(
+                drop_low_count=False, scale=True
+            ).set_output(transform="pandas")
+            X_scaled = pre.fit_transform(X)
         else:
             X_scaled = fs.transform(X)
 
@@ -219,7 +219,85 @@ class MATseqPipeline:
         out_dir = output_dir / subset_key
         predictor.predict_samples(X, sample_names=X.index.to_numpy(), y_test=y)
         predictor.save_predictions(out_dir)
+        predictor.evaluate(out_dir)
         predictor.create_probability_heatmaps(out_dir, subset=subset or subset_key)
+
+    def tune_feature_count(self):
+        import matplotlib.pyplot as plt
+
+        print("\n--- FEATURE-COUNT TUNING (main_ligands) ---")
+        features, labels = self.cache.cached_call(
+            prepare_counts,
+            name="prepare_counts",
+            force_recompute=self.force_recompute,
+            key_inputs={"ligand_aliases": LIGAND_ALIASES},
+        )
+        X, y = extract_subset(features, labels, "main_ligands")
+
+        result = feature_count_analysis(
+            X,
+            y,
+            k_best=FEATURE_SELECTION_CONFIG["k_best"],
+            candidate_counts=[50, 100, 150, 200, 250, 300, 400, 500],
+            n_estimators=FEATURE_SELECTION_CONFIG["n_estimators"],
+            max_depth=FEATURE_SELECTION_CONFIG["max_depth"],
+        )
+
+        out_dir = self.results_dir / "feature_selection"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        result["scores"].to_csv(out_dir / "feature_count_scores.csv", index=False)
+        result["stability"].to_csv(
+            out_dir / "feature_count_stability.csv", index=False
+        )
+        result["core"].to_csv(out_dir / "feature_count_core_genes.csv", index=False)
+
+        mi_elbow = result["mi_elbow"]
+        imp_elbow = result["importance_elbow"]
+        stable_count = result["stable_count"]
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        scores = result["scores"]
+        ax1.plot(scores["rank"], scores["mi_sorted"], label="mutual information")
+        imp = scores.dropna(subset=["importance_sorted"])
+        ax1.plot(
+            imp["rank"], imp["importance_sorted"], label="ExtraTrees importance"
+        )
+        ax1.axvline(mi_elbow, color="C0", ls="--", label=f"MI elbow ({mi_elbow})")
+        ax1.axvline(
+            imp_elbow, color="C1", ls="--", label=f"importance elbow ({imp_elbow})"
+        )
+        ax1.set_xlabel("gene rank")
+        ax1.set_ylabel("sorted score")
+        ax1.set_title("Intrinsic signal elbow")
+        ax1.legend()
+
+        stab = result["stability"]
+        ax2.plot(stab["n_features"], stab["mean_jaccard"], marker="o")
+        if stable_count is not None:
+            ax2.axvline(
+                stable_count,
+                color="C2",
+                ls="--",
+                label=f"stable count ({stable_count})",
+            )
+            ax2.legend()
+        ax2.set_xlabel("n_features")
+        ax2.set_ylabel("mean pairwise Jaccard")
+        ax2.set_title("Selection stability")
+
+        fig_dir = self.results_dir / "figures" / "feature_selection"
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        fig.savefig(
+            fig_dir / "feature_count_analysis.png", dpi=150, bbox_inches="tight"
+        )
+        plt.close(fig)
+
+        print(f"MI elbow: {mi_elbow}")
+        print(f"ExtraTrees-importance elbow: {imp_elbow}")
+        print(f"Selection-stability count: {stable_count}")
+        print(f"Wrote scores/stability CSVs to {out_dir}")
+        print(f"Wrote figure to {fig_dir / 'feature_count_analysis.png'}")
+        return result
 
     def run_pipeline(self):
         print("=" * 80)
@@ -268,6 +346,7 @@ class MATseqPipeline:
                 n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
                 cache=self.cache,
                 force_recompute=self.force_recompute,
+                name=subset,
             )
             deseq2.run_analysis(
                 SUBSET_CLASS_ORDERS[subset], negative_control="negative_control"
@@ -278,6 +357,28 @@ class MATseqPipeline:
         X_other, y_other = subset_xy["additional_ligands"]
         X_bact, y_bact = subset_xy["bacteria_ligands"]
         deseq2_main = deseq2_pipes["main_ligands"]
+
+        print("\n--- STEP 2b: VENN OF DE GENES ACROSS SUBSETS ---")
+        de_sets = {s: deseq2_pipes[s].get_de_genes() for s in subset_names}
+        for s, genes in de_sets.items():
+            print(f"  {s}: {len(genes)} DE genes")
+        shared = set.intersection(*de_sets.values())
+        print(f"  shared across all three subsets: {len(shared)}")
+        de_dir = self.results_dir / "differential_gene_expression"
+        de_dir.mkdir(parents=True, exist_ok=True)
+        for s, genes in de_sets.items():
+            pd.Series(sorted(genes), name="gene").to_csv(
+                de_dir / f"de_genes_{s}.csv", index=False
+            )
+        pd.Series(sorted(shared), name="gene").to_csv(
+            de_dir / "de_genes_shared_all_subsets.csv", index=False
+        )
+        VennDiagramGenerator().plot_venn3(
+            [de_sets[s] for s in subset_names],
+            set_labels=tuple(subset_names),
+            output_filename="venn_de_across_subsets.png",
+            title="DE genes across ligand subsets",
+        )
 
         print("\n--- STEP 3: VENN OF FS vs DE GENES (training subset) ---")
         de_genes = deseq2_main.get_de_genes()
@@ -396,11 +497,19 @@ def main():
         default=None,
         help="Run Snakemake preprocessing: 'dry-run' to validate, 'run' to execute",
     )
+    parser.add_argument(
+        "--tune-features",
+        action="store_true",
+        help="Run model-independent feature-count analysis and exit",
+    )
 
     args = parser.parse_args()
     pipeline = MATseqPipeline(
         cache_dir=args.cache_dir, force_recompute=args.force_recompute
     )
+
+    if args.tune_features:
+        return pipeline.tune_feature_count()
 
     if args.snakemake:
         from src.config import get_test_sample_dir, get_test_work_dir

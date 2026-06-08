@@ -15,7 +15,12 @@ from .preprocessing import (
 
 from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 
-from .feature_engineering import LibraryLengthNormalizer, create_feature_pipeline
+from .feature_engineering import (
+    LibraryLengthNormalizer,
+    create_feature_pipeline,
+    create_preprocessing_pipeline,
+    create_selection_pipeline,
+)
 
 from .model_training import (
     make_score,
@@ -70,6 +75,7 @@ from .feature_analysis import (
     FeatureSelectionAnalyzer,
     PipelineParamTuner,
     VennDiagramGenerator,
+    feature_count_analysis,
 )
 
 # Prediction and model comparison
@@ -106,6 +112,8 @@ __all__ = [
     # Feature engineering
     "LibraryLengthNormalizer",
     "create_feature_pipeline",
+    "create_preprocessing_pipeline",
+    "create_selection_pipeline",
     # Model training
     "ModelFactory",
     "ModelTrainer",
@@ -132,6 +140,7 @@ __all__ = [
     "FeatureSelectionAnalyzer",
     "PipelineParamTuner",
     "VennDiagramGenerator",
+    "feature_count_analysis",
     # Prediction and model comparison
     "ModelPredictor",
 ]

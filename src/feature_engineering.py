@@ -1,5 +1,7 @@
 """Feature engineering and transformation pipeline for RNA-seq data."""
 
+from functools import partial
+
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin, OneToOneFeatureMixin
@@ -103,6 +105,40 @@ class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMi
         return normalized
 
 
+def create_preprocessing_pipeline(
+    drop_low_count: bool = True, scale: bool = False
+) -> Pipeline:
+    steps = []
+    if drop_low_count:
+        steps.append(("drop_low_count_features", QCLowerCountRemover()))
+    steps += [
+        ("normalise_for_library_size", LibraryLengthNormalizer()),
+        ("log1p", FunctionTransformer(np.log1p, feature_names_out="one-to-one")),
+    ]
+    if scale:
+        steps.append(("standard_scale", StandardScaler()))
+    return Pipeline(steps)
+
+
+def create_selection_pipeline(
+    k_best: int = 1000,
+    n_estimators: int = 250,
+    max_depth: int = 5,
+    max_features: int = 250,
+    random_state: int = 42,
+) -> Pipeline:
+    en = ExtraTreesClassifier(
+        n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
+    )
+    score_func = partial(mutual_info_classif, random_state=random_state)
+    return Pipeline(
+        [
+            ("select_k_best", SelectKBest(score_func, k=k_best)),
+            ("select_forest", SelectFromModel(en, max_features=max_features)),
+        ]
+    )
+
+
 def create_feature_pipeline(
     k_best: int = 1000,
     n_estimators: int = 250,
@@ -122,24 +158,12 @@ def create_feature_pipeline(
     Returns:
         Pipeline: Sklearn pipeline for feature engineering.
     """
-    en = ExtraTreesClassifier(
-        n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
-    )
-
-    pipe = Pipeline(
+    return Pipeline(
         [
-            ("drop_low_count_features", QCLowerCountRemover()),
-            ("normalise_for_library_size", LibraryLengthNormalizer()),
-            (
-                "log1p",
-                FunctionTransformer(np.log1p, feature_names_out="one-to-one"),
-            ),
-            ("select_k_best", SelectKBest(mutual_info_classif, k=k_best)),
-            (
-                "select_forest",
-                SelectFromModel(en, max_features=max_features),
-            ),
+            *create_preprocessing_pipeline(drop_low_count=True, scale=False).steps,
+            *create_selection_pipeline(
+                k_best, n_estimators, max_depth, max_features, random_state
+            ).steps,
             ("standard_scale", StandardScaler()),
         ]
     )
-    return pipe

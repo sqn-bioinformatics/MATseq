@@ -7,6 +7,8 @@ from typing import Dict, Optional
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from sklearn.metrics import classification_report, confusion_matrix
+
 from .model_training import ModelTrainer, ModelFactory, make_score
 from .config import SUBSET_CLASS_ORDERS
 
@@ -94,6 +96,56 @@ class ModelPredictor:
             output_path = output_dir / f"{model_name}_probabilities.csv"
             proba_df.to_csv(output_path)
             print(f"Saved probabilities to {output_path}")
+
+    def evaluate(self, output_dir: Path) -> pd.DataFrame:
+        """Score predictions against true labels, identically to nested-CV training.
+
+        Reuses make_score (accuracy, balanced accuracy, macro precision/recall/f1,
+        weighted f1) and writes a per-model classification report and confusion
+        matrices, mirroring ModelTrainer.tune_nested.
+
+        Args:
+            output_dir: Directory to save score files.
+
+        Returns:
+            DataFrame with one row of metrics per model.
+        """
+        if self.true_labels is None:
+            raise ValueError("true labels required; call predict_samples with y_test")
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        y_true = np.asarray(self.true_labels)
+
+        rows = []
+        for model_name, pred_df in self.predictions.items():
+            y_pred = pred_df["prediction"].to_numpy()
+            rows.append({"model": model_name, **make_score(y_true, y_pred)})
+
+            labels = sorted(set(y_true) | set(y_pred))
+            report = classification_report(
+                y_true, y_pred, labels=labels, zero_division=0, output_dict=True
+            )
+            pd.DataFrame(report).transpose().to_csv(
+                output_dir / f"{model_name}_classification_report.csv"
+            )
+
+            cm = confusion_matrix(y_true, y_pred, labels=labels)
+            cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True).clip(min=1)
+            pd.DataFrame(cm, index=labels, columns=labels).to_csv(
+                output_dir / f"{model_name}_confusion_matrix.csv"
+            )
+            pd.DataFrame(cm_norm, index=labels, columns=labels).to_csv(
+                output_dir / f"{model_name}_confusion_matrix_normalized.csv"
+            )
+            self.trainer._save_confusion_matrix(
+                cm_norm, labels, model_name, output_dir
+            )
+
+        summary = pd.DataFrame(rows)
+        summary.to_csv(output_dir / "test_scores_summary.csv", index=False)
+        print(f"Saved scores to {output_dir / 'test_scores_summary.csv'}")
+        return summary
 
     def create_probability_heatmaps(self, output_dir: Path, subset: str = "main_ligands"):
         """Create heatmap visualizations of prediction probabilities.

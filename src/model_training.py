@@ -1,13 +1,16 @@
 """Model training, evaluation, and prediction for multiclass classification."""
 
 import json
+import shutil
+import tempfile
 import numpy as np
 import pandas as pd
 import pickle
 from pathlib import Path
 from typing import Dict, Optional
+from joblib import Memory
 from sklearn.svm import LinearSVC
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
@@ -86,6 +89,15 @@ class ModelFactory:
             models["LinearSVC"] = CalibratedClassifierCV(svc, cv=2)
         else:
             models["LinearSVC"] = svc
+
+        models["SGDClassifier"] = SGDClassifier(
+            loss="modified_huber",
+            early_stopping=False,
+            max_iter=1000,
+            tol=1e-3,
+            class_weight="balanced",
+            random_state=random_state,
+        )
 
         models["LogisticRegression"] = LogisticRegression(
             penalty="l2",
@@ -198,7 +210,11 @@ class ModelTrainer:
         fs = create_feature_pipeline(
             **FEATURE_SELECTION_CONFIG, random_state=fold_seed
         )
-        return SkPipeline([*fs.steps, ("clf", clone(model))])
+        # The FS steps are identical across all clf hyperparameter combos in a
+        # fold; caching them means SelectKBest/ExtraTrees run once per fold, not
+        # once per grid point.
+        memory = getattr(self, "_memory", None)
+        return SkPipeline([*fs.steps, ("clf", clone(model))], memory=memory)
 
     @staticmethod
     def _fit_kwargs(model_name: str, y) -> dict:
@@ -238,6 +254,9 @@ class ModelTrainer:
         inner_results_dir.mkdir(parents=True, exist_ok=True)
         fig_dir = output_dir.parent / "figures" / "model_evaluation"
         fig_dir.mkdir(parents=True, exist_ok=True)
+
+        memory_dir = tempfile.mkdtemp(prefix="matseq_fs_cache_")
+        self._memory = Memory(location=memory_dir, verbose=0)
 
         prefix = f"{eval_name}_" if eval_name else ""
 
@@ -398,6 +417,9 @@ class ModelTrainer:
         with open(output_dir / "selected_params.json", "w") as f:
             json.dump(selected_params, f, indent=2, default=str)
         print(f"Selected params saved: {output_dir / 'selected_params.json'}")
+
+        self._memory = None
+        shutil.rmtree(memory_dir, ignore_errors=True)
 
         return summary
 

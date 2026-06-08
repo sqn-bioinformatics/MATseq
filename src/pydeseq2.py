@@ -10,7 +10,11 @@ from pydeseq2.ds import DeseqStats
 from pydeseq2.default_inference import DefaultInference
 
 from .visualization import plot_volcano, plot_heatmap, plot_go
-from .go_term_analysis import initialize_go, run_go_analysis, merge_go_tables
+from .go_term_analysis import (
+    initialize_go,
+    generate_go_table,
+    merge_go_tables,
+)
 from .cache import PipelineCache
 
 
@@ -26,6 +30,7 @@ class DataProcessor:
         n_cpus: int,
         cache: Optional[PipelineCache] = None,
         force_recompute: bool = False,
+        name: str = None,
     ):
         """Initialize data processor.
 
@@ -56,6 +61,7 @@ class DataProcessor:
         self.n_cpus = n_cpus
         self.cache = cache
         self.force_recompute = force_recompute
+        self.name = name
 
     def prepare_metadata(self) -> pd.DataFrame:
         """Prepare metadata for DESeq2 analysis.
@@ -142,6 +148,7 @@ class DataProcessor:
         class_key = "_".join(self.classes)
         cache_name = f"deseq2_{class_key}"
         cache_params = {
+            "subset": self.name,
             "padj": padj_threshold,
             "log2fc": log2fc_threshold,
             "baseMean": baseMean_threshold,
@@ -202,6 +209,7 @@ class DESeq2:
         n_cpus: int = 42,
         cache: Optional[PipelineCache] = None,
         force_recompute: bool = False,
+        name: str = None,
     ):
         """Initialize analysis pipeline.
 
@@ -230,14 +238,26 @@ class DESeq2:
         self.n_cpus = n_cpus
         self.cache = cache
         self.force_recompute = force_recompute
+        self.name = name
 
+        results = Path.cwd() / "results"
         if output_dir is None:
-            output_dir = Path.cwd() / "results" / "differential_gene_expression"
+            output_dir = results / "differential_gene_expression"
+            if name:
+                output_dir = output_dir / name
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        self.figures_dir = Path.cwd() / "results" / "figures" / "deseq2"
+        self.figures_dir = results / "figures" / "deseq2"
+        self.go_terms_dir = results / "go_terms"
+        self.go_fig_dir = results / "figures" / "go"
+        if name:
+            self.figures_dir = self.figures_dir / name
+            self.go_terms_dir = self.go_terms_dir / name
+            self.go_fig_dir = self.go_fig_dir / name
         self.figures_dir.mkdir(parents=True, exist_ok=True)
+        self.go_terms_dir.mkdir(parents=True, exist_ok=True)
+        self.go_fig_dir.mkdir(parents=True, exist_ok=True)
 
         self.results = {}
         self.de_genes = set()
@@ -256,7 +276,10 @@ class DESeq2:
         Returns:
             Dictionary with results for each ligand.
         """
-        filtered_list = [c for c in class_list if c != negative_control]
+        present = set(self.sample_labels.unique())
+        filtered_list = [
+            c for c in class_list if c != negative_control and c in present
+        ]
         pairs = [[my_class, negative_control] for my_class in filtered_list]
 
         for class_pair in pairs:
@@ -270,6 +293,7 @@ class DESeq2:
                 n_cpus=self.n_cpus,
                 cache=self.cache,
                 force_recompute=self.force_recompute,
+                name=self.name,
             )
 
             dds, res, sigs = processor.make_statistics(
@@ -296,14 +320,13 @@ class DESeq2:
             if not sigs.empty:
                 self._generate_figures(ligand_name, dds, res, sigs)
 
-        go_terms_dir = Path.cwd() / "results" / "go_terms"
         go_files = [
-            go_terms_dir / f"{ligand}_go_terms.csv"
+            self.go_terms_dir / f"{ligand}_go_terms.csv"
             for ligand in filtered_list
-            if (go_terms_dir / f"{ligand}_go_terms.csv").exists()
+            if (self.go_terms_dir / f"{ligand}_go_terms.csv").exists()
         ]
         if go_files:
-            merge_go_tables(go_files, output_dir=go_terms_dir)
+            merge_go_tables(go_files, output_dir=self.go_terms_dir)
 
         return self.results
 
@@ -322,22 +345,13 @@ class DESeq2:
         plot_heatmap(dds, sigs, ligand_name, output_path=self.figures_dir)
 
         try:
-            go_terms_dir = Path.cwd() / "results" / "go_terms"
-            go_terms_dir.mkdir(parents=True, exist_ok=True)
-            goeaobj, geneid_symbol_mapper = self.get_go_objects()
-            go_df = run_go_analysis(
-                set(sigs.index),
-                ligand_name,
-                output_dir=go_terms_dir,
-                goeaobj=goeaobj,
-                geneid_symbol_mapper=geneid_symbol_mapper,
-            )
+            go_df = self._go_table(ligand_name, set(sigs.index))
+            go_df.to_csv(self.go_terms_dir / f"{ligand_name}_go_terms.csv")
             if not go_df.empty:
-                go_fig_dir = Path.cwd() / "results" / "figures" / "go"
                 plot_go(
                     go_df,
                     title=f"{ligand_name} Top 20 Significant GO Terms",
-                    output_path=go_fig_dir,
+                    output_path=self.go_fig_dir,
                     output_filename=f"{ligand_name}_go.png",
                 )
         except Exception as e:
@@ -348,6 +362,18 @@ class DESeq2:
         if self._goeaobj is None:
             self._goeaobj, self._geneid_symbol_mapper = initialize_go()
         return self._goeaobj, self._geneid_symbol_mapper
+
+    def _go_table(self, ligand_name: str, genes: set) -> pd.DataFrame:
+        params = {"genes": sorted(str(g) for g in genes)}
+        df = None
+        if self.cache is not None and not self.force_recompute:
+            df = self.cache.get("go_table", params)
+        if df is None:
+            goeaobj, mapper = self.get_go_objects()
+            df = generate_go_table(set(genes), goeaobj, mapper)
+            if self.cache is not None:
+                self.cache.set("go_table", df, params, f"GO {ligand_name}")
+        return df
 
     def get_de_genes(self):
         """Return set of all differentially expressed genes."""

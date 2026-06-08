@@ -124,12 +124,9 @@ MODEL_FACTORY_CONFIG = _config["model_factory"]
 MODEL_TRAINING_CONFIG = _config["model_training"]
 HYPERPARAMETER_GRIDS = _config["hyperparameter_grids"]
 
-for _name, _grid in HYPERPARAMETER_GRIDS.items():
-    _k = _grid.get("select_k_best__k", [])
-    _mf = _grid.get("select_forest__max_features", [])
-    if _k and _mf and min(_k) < max(_mf):
-        raise ValueError(
-            f"{_name} grid infeasible: select_k_best__k min ({min(_k)}) < "
-            f"select_forest__max_features max ({max(_mf)}); SelectFromModel "
-            f"requires k >= max_features."
-        )
+if FEATURE_SELECTION_CONFIG["k_best"] < FEATURE_SELECTION_CONFIG["max_features"]:
+    raise ValueError(
+        f"feature_selection infeasible: k_best ({FEATURE_SELECTION_CONFIG['k_best']}) "
+        f"< max_features ({FEATURE_SELECTION_CONFIG['max_features']}); SelectFromModel "
+        f"requires k_best >= max_features."
+    )

@@ -352,7 +352,7 @@ def plot_heatmap(
     if num_top_sig != "all":
         sigs = sigs.sort_values("padj")[:num_top_sig]
 
-    dds_sigs = dds[:, sigs.index]
+    dds_sigs = dds[:, sigs.index].copy()
     dds_sigs.layers["log1p"] = np.log1p(dds_sigs.layers["normed_counts"])
 
     grapher = pd.DataFrame(
