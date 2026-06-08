@@ -116,7 +116,7 @@ cached under `results/cache`; rerun with `--force-recompute` to ignore the cache
 
 2. **DESeq2 Differential Expression** (per subset: main, additional, bacteria)
    - PCA plot per subset (RPM → log1p → standardised), labelled and unlabelled
-   - Each ligand vs negative control; significant genes (padj < 0.05, |log2FC| > 2, baseMean ≥ 10)
+   - Each ligand vs negative control; significant genes (padj < 0.05, |log2FC| > 2)
    - Volcano plots and clustered heatmaps per ligand
    - GO enrichment per ligand, merged into `GO_merged_results.csv`
 
@@ -136,6 +136,8 @@ cached under `results/cache`; rerun with `--force-recompute` to ignore the cache
 5. **Model validation on external test batch**
    - Apply the deployed models to an independent sequencing batch (`test.work_dir/featurecounts`)
    - Predictions, probabilities and probability heatmaps, with and without Fla-PA
+   - PCA before and after the 200-gene selection (reusing the main-panel palette and class order)
+   - DESeq2 of each ligand vs negative control on the external batch
    - Skipped automatically if no external featureCounts are present
 
 6. **Prediction on additional and bacterial ligands**
@@ -236,7 +238,6 @@ MATseq/
 │   ├── config.py              
 │   ├── preprocessing.py       
 │   ├── feature_engineering.py 
-│   ├── feature_analysis.py    
 │   ├── model_training.py      
 │   ├── prediction.py          
 │   ├── pydeseq2.py           

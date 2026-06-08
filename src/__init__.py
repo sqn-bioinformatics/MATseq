@@ -20,6 +20,10 @@ from .feature_engineering import (
     create_feature_pipeline,
     create_preprocessing_pipeline,
     create_selection_pipeline,
+    FeatureSelectionAnalyzer,
+    PipelineParamTuner,
+    VennDiagramGenerator,
+    feature_count_analysis,
 )
 
 from .model_training import (
@@ -69,14 +73,6 @@ from .go_term_analysis import (
     run_go_analysis,
     merge_go_tables,
     create_fs_de_go_table,
-)
-
-# Feature analysis
-from .feature_analysis import (
-    FeatureSelectionAnalyzer,
-    PipelineParamTuner,
-    VennDiagramGenerator,
-    feature_count_analysis,
 )
 
 # Prediction and model comparison

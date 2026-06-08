@@ -376,6 +376,21 @@ class MATseqPipeline:
         else:
             test_counts, test_labels = prepare_counts(featurecounts_dir=test_fc)
             Xv, yv = extract_subset(test_counts, test_labels, "main_ligands")
+            deseq2_ext = DESeq2(
+                raw_counts=Xv,
+                sample_labels=yv,
+                padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
+                log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2.0),
+                n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
+                cache=self.cache,
+                force_recompute=self.force_recompute,
+                name="main_external_test",
+            )
+            deseq2_ext.run_analysis(
+                SUBSET_CLASS_ORDERS["main_ligands"],
+                negative_control="negative_control",
+            )
+            
             val_dir = self.results_dir / "validation" / get_test_name()
             self._predict(
                 ModelPredictor(trainer),
@@ -401,20 +416,7 @@ class MATseqPipeline:
                 Xv, yv, "main_ligands", fs=fs_pca, suffix="_external_test_selected"
             )
 
-            deseq2_ext = DESeq2(
-                raw_counts=Xv,
-                sample_labels=yv,
-                padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
-                log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2.0),
-                n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
-                cache=self.cache,
-                force_recompute=self.force_recompute,
-                name="main_external_test",
-            )
-            deseq2_ext.run_analysis(
-                SUBSET_CLASS_ORDERS["main_ligands"],
-                negative_control="negative_control",
-            )
+
 
         print("\n--- STEP 6: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS ---")
         predictor = ModelPredictor(trainer)
