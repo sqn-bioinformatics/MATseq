@@ -46,7 +46,6 @@ from .config import (
     MAIN_LIGANDS,
     ADDITIONAL_LIGANDS,
     BACTERIA_LIGANDS,
-    MAIN_EXTERNAL_TEST,
 )
 
 from .pydeseq2 import (
@@ -56,6 +55,7 @@ from .pydeseq2 import (
 
 from .visualization import (
     plot_gene_expression_by_class,
+    plot_feature_count_analysis,
     plot_pca_pandas,
     plot_volcano,
     plot_heatmap,
@@ -101,7 +101,6 @@ __all__ = [
     "MAIN_LIGANDS",
     "ADDITIONAL_LIGANDS",
     "BACTERIA_LIGANDS",
-    "MAIN_EXTERNAL_TEST",
     # Preprocessing
     "prepare_counts",
     "write_count_summary",
@@ -126,6 +125,7 @@ __all__ = [
     "DESeq2",
     # Visualization
     "plot_gene_expression_by_class",
+    "plot_feature_count_analysis",
     "plot_tlr_hek_blue",
     "plot_pca_pandas",
     "plot_volcano",

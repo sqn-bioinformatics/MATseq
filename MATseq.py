@@ -29,6 +29,7 @@ from src import (
     ModelFactory,
     ModelTrainer,
     plot_pca_pandas,
+    plot_feature_count_analysis,
     plot_tlr_hek_blue,
     DESeq2,
     FeatureSelectionAnalyzer,
@@ -207,16 +208,17 @@ class MATseqPipeline:
         y: pd.Series,
         output_dir: Path,
         subset: str = None,
+        all_controls: bool = False,
     ) -> None:
         out_dir = output_dir / subset_key
         predictor.predict_samples(X, sample_names=X.index.to_numpy(), y_test=y)
         predictor.save_predictions(out_dir)
         predictor.evaluate(out_dir)
-        predictor.create_probability_heatmaps(out_dir, subset=subset or subset_key)
+        predictor.create_probability_heatmaps(
+            out_dir, subset=subset or subset_key, all_controls=all_controls
+        )
 
     def tune_feature_count(self):
-        import matplotlib.pyplot as plt
-
         print("\n--- FEATURE-COUNT TUNING (main_ligands) ---")
         features, labels = self.cache.cached_call(
             prepare_counts,
@@ -243,52 +245,14 @@ class MATseqPipeline:
         )
         result["core"].to_csv(out_dir / "feature_count_core_genes.csv", index=False)
 
-        mi_elbow = result["mi_elbow"]
-        imp_elbow = result["importance_elbow"]
-        stable_count = result["stable_count"]
-
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-        scores = result["scores"]
-        ax1.plot(scores["rank"], scores["mi_sorted"], label="mutual information")
-        imp = scores.dropna(subset=["importance_sorted"])
-        ax1.plot(
-            imp["rank"], imp["importance_sorted"], label="ExtraTrees importance"
-        )
-        ax1.axvline(mi_elbow, color="C0", ls="--", label=f"MI elbow ({mi_elbow})")
-        ax1.axvline(
-            imp_elbow, color="C1", ls="--", label=f"importance elbow ({imp_elbow})"
-        )
-        ax1.set_xlabel("gene rank")
-        ax1.set_ylabel("sorted score")
-        ax1.set_title("Intrinsic signal elbow")
-        ax1.legend()
-
-        stab = result["stability"]
-        ax2.plot(stab["n_features"], stab["mean_jaccard"], marker="o")
-        if stable_count is not None:
-            ax2.axvline(
-                stable_count,
-                color="C2",
-                ls="--",
-                label=f"stable count ({stable_count})",
-            )
-            ax2.legend()
-        ax2.set_xlabel("n_features")
-        ax2.set_ylabel("mean pairwise Jaccard")
-        ax2.set_title("Selection stability")
-
         fig_dir = self.results_dir / "figures" / "feature_selection"
-        fig_dir.mkdir(parents=True, exist_ok=True)
-        fig.savefig(
-            fig_dir / "feature_count_analysis.png", dpi=150, bbox_inches="tight"
-        )
-        plt.close(fig)
+        fig_path = plot_feature_count_analysis(result, output_path=fig_dir)
 
-        print(f"MI elbow: {mi_elbow}")
-        print(f"ExtraTrees-importance elbow: {imp_elbow}")
-        print(f"Selection-stability count: {stable_count}")
+        print(f"MI elbow: {result['mi_elbow']}")
+        print(f"ExtraTrees-importance elbow: {result['importance_elbow']}")
+        print(f"Selection-stability count: {result['stable_count']}")
         print(f"Wrote scores/stability CSVs to {out_dir}")
-        print(f"Wrote figure to {fig_dir / 'feature_count_analysis.png'}")
+        print(f"Wrote figure to {fig_path}")
         return result
 
     def run_pipeline(self):
@@ -413,7 +377,14 @@ class MATseqPipeline:
             test_counts, test_labels = prepare_counts(featurecounts_dir=test_fc)
             Xv, yv = extract_subset(test_counts, test_labels, "main_ligands")
             val_dir = self.results_dir / "validation" / get_test_name()
-            self._predict(ModelPredictor(trainer), "main_ligands", Xv, yv, val_dir)
+            self._predict(
+                ModelPredictor(trainer),
+                "main_ligands",
+                Xv,
+                yv,
+                val_dir,
+                all_controls=True,
+            )
             wo = yv != "Fla-PA"
             self._predict(
                 ModelPredictor(trainer_wo),
@@ -422,19 +393,17 @@ class MATseqPipeline:
                 yv[wo],
                 val_dir,
                 subset="main_ligands",
+                all_controls=True,
             )
 
-            Xext, yext = extract_subset(
-                test_counts, test_labels, "main_external_test"
-            )
-            self._pca_plot(Xext, yext, "main_external_test")
+            self._pca_plot(Xv, yv, "main_ligands", suffix="_external_test")
             self._pca_plot(
-                Xext, yext, "main_external_test", fs=fs_pca, suffix="_selected"
+                Xv, yv, "main_ligands", fs=fs_pca, suffix="_external_test_selected"
             )
 
             deseq2_ext = DESeq2(
-                raw_counts=Xext,
-                sample_labels=yext,
+                raw_counts=Xv,
+                sample_labels=yv,
                 padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
                 log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2.0),
                 n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
@@ -443,7 +412,7 @@ class MATseqPipeline:
                 name="main_external_test",
             )
             deseq2_ext.run_analysis(
-                SUBSET_CLASS_ORDERS["main_external_test"],
+                SUBSET_CLASS_ORDERS["main_ligands"],
                 negative_control="negative_control",
             )
 

@@ -17,6 +17,63 @@ from .preprocessing import normalize_rpm
 from .config import CUSTOM_PALETTE_6
 
 
+def plot_feature_count_analysis(
+    result: dict,
+    output_path: Path = None,
+    output_filename: str = None,
+) -> Path:
+    """Plot intrinsic-signal elbow and selection-stability curves from feature_count_analysis."""
+    mi_elbow = result["mi_elbow"]
+    imp_elbow = result["importance_elbow"]
+    stable_count = result["stable_count"]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    scores = result["scores"]
+    ax1.plot(scores["rank"], scores["mi_sorted"], label="mutual information")
+    imp = scores.dropna(subset=["importance_sorted"])
+    ax1.plot(imp["rank"], imp["importance_sorted"], label="ExtraTrees importance")
+    ax1.axvline(mi_elbow, color="C0", ls="--", label=f"MI elbow ({mi_elbow})")
+    ax1.axvline(
+        imp_elbow, color="C1", ls="--", label=f"importance elbow ({imp_elbow})"
+    )
+    ax1.set_xlabel("gene rank")
+    ax1.set_ylabel("sorted score")
+    ax1.set_title("Intrinsic signal elbow")
+    ax1.legend()
+
+    stab = result["stability"]
+    ax2.plot(stab["n_features"], stab["mean_jaccard"], marker="o")
+    if stable_count is not None:
+        ax2.axvline(
+            stable_count,
+            color="C2",
+            ls="--",
+            label=f"stable count ({stable_count})",
+        )
+        ax2.legend()
+    ax2.set_xlabel("n_features")
+    ax2.set_ylabel("mean pairwise Jaccard")
+    ax2.set_title("Selection stability")
+
+    if output_path is None:
+        output_path = (
+            Path(__file__).parent.parent / "results" / "figures" / "feature_selection"
+        )
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    if output_filename is None:
+        output_filename = "feature_count_analysis.png"
+
+    save_path = output_path / output_filename
+    try:
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Figure saved: {save_path}")
+    finally:
+        plt.close(fig)
+
+    return save_path
+
+
 def plot_gene_expression_by_class(
     data: pd.DataFrame,
     gene: str = "IL6",
@@ -190,9 +247,8 @@ def plot_pca_pandas(
                 for i in range(len(X_reduced))
             ]
             adjust_text(texts, arrowprops=dict(arrowstyle="->", color="black"))
-            ax.legend(bbox_to_anchor=(1, 1.0), ncol=1, fontsize=12)
-        else:
-            ax.get_legend().remove()
+
+        ax.legend(bbox_to_anchor=(1, 1.0), ncol=1, fontsize=12)
 
         for spine in ["top", "right"]:
             ax.spines[spine].set_visible(False)

@@ -147,12 +147,15 @@ class ModelPredictor:
         print(f"Saved scores to {output_dir / 'test_scores_summary.csv'}")
         return summary
 
-    def create_probability_heatmaps(self, output_dir: Path, subset: str = "main_ligands"):
+    def create_probability_heatmaps(
+        self, output_dir: Path, subset: str = "main_ligands", all_controls: bool = False
+    ):
         """Create heatmap visualizations of prediction probabilities.
 
         Args:
             output_dir: Directory to save figures.
             subset: Key into SUBSET_CLASS_ORDERS ("main_ligands", "additional_ligands", "bacteria_ligands").
+            all_controls: If True, plot every negative_control and LPS sample instead of one each.
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -169,8 +172,12 @@ class ModelPredictor:
                 rng = np.random.default_rng(42)
                 nc_idx = self.true_labels[self.true_labels == "negative_control"].index
                 lps_idx = self.true_labels[self.true_labels == "LPS"].index
-                rand_nc = list(rng.choice(nc_idx, size=1, replace=False))
-                rand_lps = list(rng.choice(lps_idx, size=1, replace=False))
+                if all_controls:
+                    rand_nc = list(nc_idx)
+                    rand_lps = list(lps_idx)
+                else:
+                    rand_nc = list(rng.choice(nc_idx, size=1, replace=False))
+                    rand_lps = list(rng.choice(lps_idx, size=1, replace=False))
                 remaining = [
                     i
                     for cls in class_order
