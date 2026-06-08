@@ -102,10 +102,12 @@ LIGAND_ALIASES = _config.get("ligand_aliases", {})
 MAIN_LIGANDS = _config["ligands"]["main_ligands"]
 ADDITIONAL_LIGANDS = _config["ligands"]["additional_ligands"]
 BACTERIA_LIGANDS = _config["ligands"]["bacteria_ligands"]
+MAIN_EXTERNAL_TEST = _config["ligands"]["main_external_test"]
 
 CLASS_ORDER_MAIN_LIGANDS = _config["class_order_for_plotting"]["main_ligands"]
 CLASS_ORDER_ADDITIONAL_LIGANDS = _config["class_order_for_plotting"]["additional_ligands"]
 CLASS_ORDER_BACTERIA_LIGANDS = _config["class_order_for_plotting"]["bacteria_ligands"]
+CLASS_ORDER_MAIN_EXTERNAL_TEST = _config["class_order_for_plotting"]["main_external_test"]
 
 SUBSET_PALETTES = {
     subset: _PALETTES[palette_name]
@@ -116,6 +118,7 @@ SUBSET_CLASS_ORDERS = {
     "main_ligands": CLASS_ORDER_MAIN_LIGANDS,
     "additional_ligands": CLASS_ORDER_ADDITIONAL_LIGANDS,
     "bacteria_ligands": CLASS_ORDER_BACTERIA_LIGANDS,
+    "main_external_test": CLASS_ORDER_MAIN_EXTERNAL_TEST,
 }
 
 DESEQ2_CONFIG = _config["deseq2"]

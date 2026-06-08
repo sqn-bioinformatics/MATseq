@@ -54,6 +54,14 @@
       "LPS",
       "HK E.coli",
       "HK S.aureus"
+    ],
+    "main_external_test": [
+      "negative_control",
+      "LPS",
+      "Fla-PA",
+      "PGN",
+      "R848",
+      "Pam3"
     ]
   },
   "class_order_for_plotting": {
@@ -85,6 +93,14 @@
       "Fla-PA",
       "HK E.coli",
       "HK S.aureus"
+    ],
+    "main_external_test": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
+      "PGN",
+      "Fla-PA"
     ]
   },
   "colors": {
@@ -121,7 +137,8 @@
   "subset_palettes": {
     "main_ligands": "palette_6",
     "additional_ligands": "palette_9",
-    "bacteria_ligands": "palette_8"
+    "bacteria_ligands": "palette_8",
+    "main_external_test": "palette_6"
   },
   "hyperparameter_grids": {
     "LinearSVC": {

@@ -46,6 +46,7 @@ from .config import (
     MAIN_LIGANDS,
     ADDITIONAL_LIGANDS,
     BACTERIA_LIGANDS,
+    MAIN_EXTERNAL_TEST,
 )
 
 from .pydeseq2 import (
@@ -100,6 +101,7 @@ __all__ = [
     "MAIN_LIGANDS",
     "ADDITIONAL_LIGANDS",
     "BACTERIA_LIGANDS",
+    "MAIN_EXTERNAL_TEST",
     # Preprocessing
     "prepare_counts",
     "write_count_summary",

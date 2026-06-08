@@ -6,13 +6,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-
-# The installed XGBoost is a CUDA build that initialises a GPU context even for
-# CPU training; under GridSearchCV(n_jobs=-1) the parallel workers exhaust the
-# single GPU and a sticky CUDA error then fails every DMatrix build. Hide the
-# GPU before xgboost is imported so it stays CPU-only.
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -90,7 +83,6 @@ class MATseqPipeline:
         threads = get_config("snakemake.threads")
 
         cmd = [
-            "poetry",
             "run",
             "snakemake",
             "--use-conda",
@@ -342,7 +334,6 @@ class MATseqPipeline:
                 sample_labels=y_sub,
                 padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
                 log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2.0),
-                baseMean_threshold=DESEQ2_CONFIG.get("baseMean_threshold", 10.0),
                 n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
                 cache=self.cache,
                 force_recompute=self.force_recompute,
@@ -431,6 +422,29 @@ class MATseqPipeline:
                 yv[wo],
                 val_dir,
                 subset="main_ligands",
+            )
+
+            Xext, yext = extract_subset(
+                test_counts, test_labels, "main_external_test"
+            )
+            self._pca_plot(Xext, yext, "main_external_test")
+            self._pca_plot(
+                Xext, yext, "main_external_test", fs=fs_pca, suffix="_selected"
+            )
+
+            deseq2_ext = DESeq2(
+                raw_counts=Xext,
+                sample_labels=yext,
+                padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
+                log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2.0),
+                n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
+                cache=self.cache,
+                force_recompute=self.force_recompute,
+                name="main_external_test",
+            )
+            deseq2_ext.run_analysis(
+                SUBSET_CLASS_ORDERS["main_external_test"],
+                negative_control="negative_control",
             )
 
         print("\n--- STEP 6: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS ---")

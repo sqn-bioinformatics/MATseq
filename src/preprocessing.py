@@ -11,12 +11,14 @@ from .config import (
     MAIN_LIGANDS,
     ADDITIONAL_LIGANDS,
     BACTERIA_LIGANDS,
+    MAIN_EXTERNAL_TEST,
 )
 
 _SUBSET_LIGANDS = {
     "main_ligands": MAIN_LIGANDS,
     "additional_ligands": ADDITIONAL_LIGANDS,
     "bacteria_ligands": BACTERIA_LIGANDS,
+    "main_external_test": MAIN_EXTERNAL_TEST,
 }
 
 

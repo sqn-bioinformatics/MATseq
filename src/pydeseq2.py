@@ -133,14 +133,12 @@ class DataProcessor:
         self,
         padj_threshold: float = 0.05,
         log2fc_threshold: float = 2.0,
-        baseMean_threshold: float = 10.0,
     ) -> Tuple[AnnData, pd.DataFrame, pd.DataFrame]:
         """Calculate differential expression statistics.
 
         Args:
             padj_threshold: Adjusted p-value threshold for significance.
             log2fc_threshold: Log2 fold-change threshold.
-            baseMean_threshold: Minimum mean of normalized counts; genes below are dropped.
 
         Returns:
             Tuple of (dds, results_df, significant_genes_df).
@@ -150,8 +148,7 @@ class DataProcessor:
         cache_params = {
             "subset": self.name,
             "padj": padj_threshold,
-            "log2fc": log2fc_threshold,
-            "baseMean": baseMean_threshold,
+            "log2fc": log2fc_threshold
         }
 
         if self.cache is not None and not self.force_recompute:
@@ -167,19 +164,14 @@ class DataProcessor:
         contrast = ["condition", tested_level, ref_level]
 
         print(f"DESeq2 contrast: {tested_level} vs {ref_level}")
-
         stat_res = DeseqStats(
             dds,
             contrast=contrast,
             inference=DefaultInference(self.n_cpus),
             quiet=True,
         )
-
         stat_res.summary()
-
         res = stat_res.results_df
-        res = res[res.baseMean >= baseMean_threshold]
-
         sigs = res[
             (res.padj < padj_threshold) & (abs(res.log2FoldChange) > log2fc_threshold)
         ]
@@ -205,7 +197,6 @@ class DESeq2:
         output_dir: Path = None,
         padj_threshold: float = 0.05,
         log2fc_threshold: float = 2.0,
-        baseMean_threshold: float = 10.0,
         n_cpus: int = 42,
         cache: Optional[PipelineCache] = None,
         force_recompute: bool = False,
@@ -234,7 +225,6 @@ class DESeq2:
 
         self.padj_threshold = padj_threshold
         self.log2fc_threshold = log2fc_threshold
-        self.baseMean_threshold = baseMean_threshold
         self.n_cpus = n_cpus
         self.cache = cache
         self.force_recompute = force_recompute
@@ -299,7 +289,6 @@ class DESeq2:
             dds, res, sigs = processor.make_statistics(
                 padj_threshold=self.padj_threshold,
                 log2fc_threshold=self.log2fc_threshold,
-                baseMean_threshold=self.baseMean_threshold,
             )
 
             self.results[ligand_name] = {
