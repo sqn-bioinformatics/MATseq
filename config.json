@@ -13,10 +13,10 @@
     "n_cpus": 42
   },
   "feature_selection": {
-    "k_best": 1000,
+    "k_best": 4063,
     "n_estimators": 250,
     "max_depth": 5,
-    "max_features": 200
+    "max_features": 100
   },
   "model_training": {
     "random_state": 42

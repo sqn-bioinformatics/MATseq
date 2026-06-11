@@ -34,7 +34,7 @@ from sklearn.model_selection import (
 from sklearn.base import clone
 import matplotlib.pyplot as plt
 
-from .feature_engineering import create_feature_pipeline
+from .feature_engineering import FeatureSelector
 from .config import FEATURE_SELECTION_CONFIG
 
 
@@ -207,7 +207,7 @@ class ModelTrainer:
         return output_dir
 
     def _build_tuning_pipeline(self, model, fold_seed: int) -> SkPipeline:
-        fs = create_feature_pipeline(
+        fs = FeatureSelector.feature_pipeline(
             **FEATURE_SELECTION_CONFIG, random_state=fold_seed
         )
         # The FS steps are identical across all clf hyperparameter combos in a

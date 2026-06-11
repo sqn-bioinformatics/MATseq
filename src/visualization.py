@@ -22,7 +22,7 @@ def plot_feature_count_analysis(
     output_path: Path = None,
     output_filename: str = None,
 ) -> Path:
-    """Plot intrinsic-signal elbow and selection-stability curves from feature_count_analysis."""
+    """Plot intrinsic-signal elbow and selection-stability curves from FeatureSelector.count_analysis."""
     mi_elbow = result["mi_elbow"]
     imp_elbow = result["importance_elbow"]
     stable_count = result["stable_count"]
@@ -181,6 +181,7 @@ def plot_pca_pandas(
     output_filename: str = None,
     palette: list = CUSTOM_PALETTE_6,
     hue_order: list = None,
+    equal_aspect: bool = False,
 ) -> Path:
     """Create PCA visualization for pandas DataFrame data.
 
@@ -192,6 +193,7 @@ def plot_pca_pandas(
         output_filename: Output file name.
         palette: Color palette.
         hue_order: Order of classes for legend.
+        equal_aspect: If True, equal x/y scaling (no axis stretching).
 
     Returns:
         Path to saved figure.
@@ -254,6 +256,9 @@ def plot_pca_pandas(
             ax.spines[spine].set_visible(False)
         for spine in ["left", "bottom"]:
             ax.spines[spine].set_linewidth(1.5)
+
+        if equal_aspect:
+            ax.set_aspect("equal", adjustable="box")
 
         plt.tight_layout()
 

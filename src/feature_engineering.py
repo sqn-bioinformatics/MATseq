@@ -1,5 +1,3 @@
-"""Feature engineering and transformation pipeline for RNA-seq data."""
-
 import pickle
 from functools import partial
 from pathlib import Path
@@ -17,14 +15,21 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.feature_selection import SelectKBest, SelectFromModel, mutual_info_classif
 from sklearn.preprocessing import StandardScaler, FunctionTransformer
 from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.metrics import (
+    silhouette_score,
+    adjusted_rand_score,
+    adjusted_mutual_info_score,
+)
 from sklearn.utils.validation import (
     _check_feature_names,
     _check_feature_names_in,
     _check_n_features,
 )
-from feature_engine.selection import DropDuplicateFeatures
 
 from .config import FEATURE_SELECTION_CONFIG
+from .preprocessing import normalize_rpm
 
 
 def _record_input(estimator, X):
@@ -86,101 +91,19 @@ class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMi
         """Normalize counts to library size (RPM)."""
         if X is None:
             raise ValueError("X cannot be None")
-
-        X_is_df = isinstance(X, pd.DataFrame)
-
-        if X_is_df:
-            values = X.to_numpy(dtype=float)
-            index = X.index
-            columns = X.columns
-        else:
-            values = np.asarray(X, dtype=float)
-            index = None
-            columns = None
-
-        if values.ndim != 2:
-            raise ValueError(f"Expected 2D array, got shape {values.shape}")
-
-        totals = values.sum(axis=1, keepdims=True)
-        totals[totals == 0.0] = 1.0
-        normalized = (values / totals) * 1_000_000.0
-
-        if X_is_df:
-            return pd.DataFrame(
-                normalized,
-                index=index,
-                columns=columns,
-            )
-
-        return normalized
+        return normalize_rpm(X)
 
 
-def create_preprocessing_pipeline(
-    drop_low_count: bool = True, scale: bool = False
-) -> Pipeline:
-    steps = []
-    if drop_low_count:
-        steps.append(("drop_low_count_features", QCLowerCountRemover()))
-    steps += [
-        ("normalise_for_library_size", LibraryLengthNormalizer()),
-        ("log1p", FunctionTransformer(np.log1p, feature_names_out="one-to-one")),
-    ]
-    if scale:
-        steps.append(("standard_scale", StandardScaler()))
-    return Pipeline(steps)
-
-
-def create_selection_pipeline(
-    k_best: int = 1000,
-    n_estimators: int = 250,
-    max_depth: int = 5,
-    max_features: int = 250,
-    random_state: int = 42,
-) -> Pipeline:
-    en = ExtraTreesClassifier(
-        n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
-    )
-    score_func = partial(mutual_info_classif, random_state=random_state)
-    return Pipeline(
-        [
-            ("select_k_best", SelectKBest(score_func, k=k_best)),
-            ("select_forest", SelectFromModel(en, max_features=max_features)),
-        ]
-    )
-
-
-def create_feature_pipeline(
-    k_best: int = 1000,
-    n_estimators: int = 250,
-    max_depth: int = 5,
-    max_features: int = 250,
-    random_state: int = 42,
-) -> Pipeline:
-    """Create a feature selection and preprocessing pipeline.
-
-    Args:
-        k_best: Number of top features to select with chi2.
-        n_estimators: Number of trees in ExtraTreesClassifier.
-        max_depth: Maximum depth of trees.
-        max_features: Maximum number of features after forest selection.
-        random_state: Random state for reproducibility.
-
-    Returns:
-        Pipeline: Sklearn pipeline for feature engineering.
-    """
-    return Pipeline(
-        [
-            *create_preprocessing_pipeline(drop_low_count=True, scale=False).steps,
-            *create_selection_pipeline(
-                k_best, n_estimators, max_depth, max_features, random_state
-            ).steps,
-            ("standard_scale", StandardScaler()),
-        ]
-    )
+def _prepare_output_dir(output_dir: Path = None) -> Path:
+    if output_dir is None:
+        output_dir = Path.cwd() / "results" / "feature_analysis"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir
 
 
 def _run_one_selection(X_pre, y, random_state):
-    sel = create_selection_pipeline(
+    sel = FeatureSelector.selection_pipeline(
         **FEATURE_SELECTION_CONFIG, random_state=int(random_state)
     ).set_output(transform="pandas")
     sel.fit(X_pre, y)
@@ -201,145 +124,245 @@ def _elbow_index(scores) -> int:
     return int(np.argmax(num)) + 1
 
 
-def feature_count_analysis(
-    X: pd.DataFrame,
-    y: Union[np.ndarray, pd.Series],
-    k_best: int,
-    candidate_counts: List[int],
-    n_runs: int = 200,
-    n_estimators: int = 250,
-    max_depth: int = 5,
-    random_state: int = 42,
-) -> Dict:
-    """Model-independent analysis of how many features to select.
-
-    Combines an intrinsic-signal elbow (sorted mutual-information /
-    ExtraTrees-importance curves) with a selection-stability curve (mean pairwise
-    Jaccard of reseeded top-N selections). Both are derived from one reseeded
-    ExtraTrees pass on the SelectKBest(k_best) matrix; no classifier performance
-    is used. Returns tidy DataFrames and the suggested counts; writes nothing.
-    """
-    pre = create_preprocessing_pipeline(
-        drop_low_count=True, scale=False
-    ).set_output(transform="pandas")
-    X_pre = pre.fit_transform(X, y)
-
-    mi = np.mean(
-        [
-            mutual_info_classif(X_pre, y, random_state=random_state + i)
-            for i in range(3)
-        ],
-        axis=0,
-    )
-    mi_series = pd.Series(mi, index=X_pre.columns).sort_values(ascending=False)
-    mi_elbow = _elbow_index(mi_series.to_numpy())
-
-    k = min(k_best, X_pre.shape[1])
-    X_k = (
-        SelectKBest(partial(mutual_info_classif, random_state=random_state), k=k)
-        .set_output(transform="pandas")
-        .fit_transform(X_pre, y)
-    )
-    k_features = list(X_k.columns)
-
-    rankings = []
-    importance_sum = np.zeros(X_k.shape[1])
-    for i in range(n_runs):
-        et = ExtraTreesClassifier(
-            n_estimators=n_estimators,
-            max_depth=max_depth,
-            random_state=random_state + i,
-        )
-        et.fit(X_k, y)
-        imp = et.feature_importances_
-        importance_sum += imp
-        order = np.argsort(imp)[::-1]
-        rankings.append([k_features[j] for j in order])
-
-    mean_imp = pd.Series(importance_sum / n_runs, index=k_features).sort_values(
-        ascending=False
-    )
-    importance_elbow = _elbow_index(mean_imp.to_numpy())
-
-    counts = [c for c in candidate_counts if c <= len(k_features)]
-    jaccard, core_50, core_75, core_90 = [], [], [], []
-    for n in counts:
-        topn = [set(r[:n]) for r in rankings]
-        pair_jac = [
-            len(a & b) / len(a | b)
-            for i, a in enumerate(topn)
-            for b in topn[i + 1 :]
-            if a | b
-        ]
-        jaccard.append(float(np.mean(pair_jac)) if pair_jac else 0.0)
-        freq = Counter()
-        for s in topn:
-            freq.update(s)
-        core_50.append(sum(1 for v in freq.values() if v / n_runs >= 0.50))
-        core_75.append(sum(1 for v in freq.values() if v / n_runs >= 0.75))
-        core_90.append(sum(1 for v in freq.values() if v / n_runs >= 0.90))
-
-    stable_count = counts[_elbow_index(jaccard) - 1] if counts else None
-
-    ref = min(importance_elbow, len(k_features))
-    ref_freq = Counter()
-    for r in rankings:
-        ref_freq.update(r[:ref])
-    core_df = (
-        pd.Series({g: c / n_runs for g, c in ref_freq.items()})
-        .sort_values(ascending=False)
-        .rename_axis("gene")
-        .reset_index(name="selection_frequency")
-    )
-
-    scores_df = pd.DataFrame(
-        {"rank": np.arange(1, len(mi_series) + 1), "mi_sorted": mi_series.to_numpy()}
-    ).merge(
-        pd.DataFrame(
-            {
-                "rank": np.arange(1, len(mean_imp) + 1),
-                "importance_sorted": mean_imp.to_numpy(),
-            }
-        ),
-        on="rank",
-        how="left",
-    )
-
-    stability_df = pd.DataFrame(
-        {
-            "n_features": counts,
-            "mean_jaccard": jaccard,
-            "core_50pct": core_50,
-            "core_75pct": core_75,
-            "core_90pct": core_90,
-        }
-    )
-
-    return {
-        "mi_elbow": mi_elbow,
-        "importance_elbow": importance_elbow,
-        "stable_count": stable_count,
-        "scores": scores_df,
-        "stability": stability_df,
-        "core": core_df,
-    }
-
-
-class FeatureSelectionAnalyzer:
-    """Analyze feature selection variability across multiple runs."""
+class FeatureSelector:
+    """Feature-selection pipelines plus stability, count and parameter analyses."""
 
     def __init__(self, output_dir: Path = None):
-        """Initialize analyzer.
+        """Initialize selector.
 
         Args:
             output_dir: Directory for output files. Defaults to results/feature_analysis.
         """
-        if output_dir is None:
-            output_dir = Path.cwd() / "results" / "feature_analysis"
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir = _prepare_output_dir(output_dir)
         self.gene_frequency = None
         self.feature_sets = []
+        self.cv_results_ = None
+
+    @staticmethod
+    def preprocessing_pipeline() -> Pipeline:
+        return Pipeline(
+            [
+                ("drop_low_count_features", QCLowerCountRemover()),
+                ("normalise_for_library_size", LibraryLengthNormalizer()),
+                ("log1p", FunctionTransformer(np.log1p, feature_names_out="one-to-one")),
+                ("standard_scale", StandardScaler()),
+            ]
+        )
+
+    @staticmethod
+    def selection_pipeline(
+        k_best: int = 1000,
+        n_estimators: int = 250,
+        max_depth: int = 5,
+        max_features: int = 250,
+        random_state: int = 42,
+    ) -> Pipeline:
+        en = ExtraTreesClassifier(
+            n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
+        )
+        score_func = partial(mutual_info_classif, random_state=random_state)
+        return Pipeline(
+            [
+                ("select_k_best", SelectKBest(score_func, k=k_best)),
+                ("select_forest", SelectFromModel(en, max_features=max_features)),
+            ]
+        )
+
+    @staticmethod
+    def feature_pipeline(**kwargs) -> Pipeline:
+        """Preprocessing followed by feature selection; kwargs forwarded to selection_pipeline."""
+        return Pipeline(
+            [
+                *FeatureSelector.preprocessing_pipeline().steps,
+                *FeatureSelector.selection_pipeline(**kwargs).steps,
+            ]
+        )
+
+    @staticmethod
+    def count_analysis(
+        X: pd.DataFrame,
+        y: Union[np.ndarray, pd.Series],
+        k_best: int,
+        candidate_counts: List[int],
+        n_runs: int = 200,
+        n_estimators: int = 250,
+        max_depth: int = 5,
+        random_state: int = 42,
+    ) -> Dict:
+        """Model-independent analysis of how many features to select.
+
+        Combines an intrinsic-signal elbow (sorted mutual-information /
+        ExtraTrees-importance curves) with a selection-stability curve (mean pairwise
+        Jaccard of reseeded top-N selections). Both are derived from one reseeded
+        ExtraTrees pass on the SelectKBest(k_best) matrix; no classifier performance
+        is used. Returns tidy DataFrames and the suggested counts; writes nothing.
+        """
+        pre = FeatureSelector.preprocessing_pipeline().set_output(transform="pandas")
+        X_pre = pre.fit_transform(X, y)
+
+        mi = np.mean(
+            [
+                mutual_info_classif(X_pre, y, random_state=random_state + i)
+                for i in range(3)
+            ],
+            axis=0,
+        )
+        mi_series = pd.Series(mi, index=X_pre.columns).sort_values(ascending=False)
+        mi_elbow = _elbow_index(mi_series.to_numpy())
+
+        k = min(k_best, X_pre.shape[1])
+        X_k = (
+            SelectKBest(partial(mutual_info_classif, random_state=random_state), k=k)
+            .set_output(transform="pandas")
+            .fit_transform(X_pre, y)
+        )
+        k_features = list(X_k.columns)
+
+        rankings = []
+        importance_sum = np.zeros(X_k.shape[1])
+        for i in range(n_runs):
+            et = ExtraTreesClassifier(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                random_state=random_state + i,
+            )
+            et.fit(X_k, y)
+            imp = et.feature_importances_
+            importance_sum += imp
+            order = np.argsort(imp)[::-1]
+            rankings.append([k_features[j] for j in order])
+
+        mean_imp = pd.Series(importance_sum / n_runs, index=k_features).sort_values(
+            ascending=False
+        )
+        importance_elbow = _elbow_index(mean_imp.to_numpy())
+
+        counts = [c for c in candidate_counts if c <= len(k_features)]
+        jaccard, core_50, core_75, core_90 = [], [], [], []
+        for n in counts:
+            topn = [set(r[:n]) for r in rankings]
+            pair_jac = [
+                len(a & b) / len(a | b)
+                for i, a in enumerate(topn)
+                for b in topn[i + 1 :]
+                if a | b
+            ]
+            jaccard.append(float(np.mean(pair_jac)) if pair_jac else 0.0)
+            freq = Counter()
+            for s in topn:
+                freq.update(s)
+            core_50.append(sum(1 for v in freq.values() if v / n_runs >= 0.50))
+            core_75.append(sum(1 for v in freq.values() if v / n_runs >= 0.75))
+            core_90.append(sum(1 for v in freq.values() if v / n_runs >= 0.90))
+
+        stable_count = counts[_elbow_index(jaccard) - 1] if counts else None
+
+        ref = min(importance_elbow, len(k_features))
+        ref_freq = Counter()
+        for r in rankings:
+            ref_freq.update(r[:ref])
+        core_df = (
+            pd.Series({g: c / n_runs for g, c in ref_freq.items()})
+            .sort_values(ascending=False)
+            .rename_axis("gene")
+            .reset_index(name="selection_frequency")
+        )
+
+        scores_df = pd.DataFrame(
+            {"rank": np.arange(1, len(mi_series) + 1), "mi_sorted": mi_series.to_numpy()}
+        ).merge(
+            pd.DataFrame(
+                {
+                    "rank": np.arange(1, len(mean_imp) + 1),
+                    "importance_sorted": mean_imp.to_numpy(),
+                }
+            ),
+            on="rank",
+            how="left",
+        )
+
+        stability_df = pd.DataFrame(
+            {
+                "n_features": counts,
+                "mean_jaccard": jaccard,
+                "core_50pct": core_50,
+                "core_75pct": core_75,
+                "core_90pct": core_90,
+            }
+        )
+
+        return {
+            "mi_elbow": mi_elbow,
+            "importance_elbow": importance_elbow,
+            "stable_count": stable_count,
+            "scores": scores_df,
+            "stability": stability_df,
+            "core": core_df,
+        }
+
+    @staticmethod
+    def forest_pca_separation(
+        X: pd.DataFrame,
+        y: Union[np.ndarray, pd.Series],
+        k_best: int,
+        candidate_features: List[int],
+        n_estimators: int = 250,
+        max_depth: int = 5,
+        random_state: int = 42,
+        n_components: int = 2,
+    ) -> Dict:
+        """Pick select_forest's max_features by PCA cluster separation.
+
+        SelectKBest(k_best) is applied once; one ExtraTrees pass ranks those features by
+        importance. For each candidate count the top-ranked features are PCA-projected and
+        scored three ways against the class labels: silhouette (supervised), and KMeans
+        (k = n_classes) on the projection compared to the labels by adjusted Rand index and
+        adjusted mutual information. Returns the best count per metric and a tidy DataFrame;
+        writes nothing.
+        """
+        pre = FeatureSelector.preprocessing_pipeline().set_output(transform="pandas")
+        X_pre = pre.fit_transform(X, y)
+
+        k = min(k_best, X_pre.shape[1])
+        X_k = (
+            SelectKBest(partial(mutual_info_classif, random_state=random_state), k=k)
+            .set_output(transform="pandas")
+            .fit_transform(X_pre, y)
+        )
+
+        et = ExtraTreesClassifier(
+            n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
+        )
+        et.fit(X_k, y)
+        order = np.argsort(et.feature_importances_)[::-1]
+        n_classes = len(np.unique(y))
+
+        rows = []
+        for mf in candidate_features:
+            if mf > X_k.shape[1]:
+                continue
+            cols = X_k.columns[order[:mf]]
+            pcs = PCA(n_components=n_components, random_state=random_state).fit_transform(
+                X_k[cols]
+            )
+            km = KMeans(
+                n_clusters=n_classes, random_state=random_state, n_init=10
+            ).fit_predict(pcs)
+            rows.append(
+                {
+                    "max_features": mf,
+                    "silhouette": float(silhouette_score(pcs, y)),
+                    "ari": float(adjusted_rand_score(y, km)),
+                    "ami": float(adjusted_mutual_info_score(y, km)),
+                }
+            )
+
+        scan = pd.DataFrame(rows)
+        best = {
+            m: int(scan.loc[scan[m].idxmax(), "max_features"])
+            for m in ("silhouette", "ari", "ami")
+        }
+        return {"best_max_features": best, "scan": scan}
 
     def run_multiple_selections(
         self,
@@ -367,9 +390,7 @@ class FeatureSelectionAnalyzer:
         rng = np.random.default_rng(125)
         random_states = rng.integers(0, 500000, size=n_runs)
 
-        pre = create_preprocessing_pipeline(
-            drop_low_count=True, scale=False
-        ).set_output(transform="pandas")
+        pre = self.preprocessing_pipeline().set_output(transform="pandas")
         X_pre = pre.fit_transform(X, y)
 
         print(f"Running feature selection {n_runs} times...")
@@ -454,19 +475,7 @@ class FeatureSelectionAnalyzer:
         self.gene_frequency = gene_counts
         print(f"Loaded {len(self.feature_sets)} feature sets")
 
-
-
-class PipelineParamTuner:
-    """Grid search over k_best and max_features pipeline parameters."""
-
-    def __init__(self, output_dir: Path = None):
-        if output_dir is None:
-            output_dir = Path.cwd() / "results" / "feature_analysis"
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.cv_results_ = None
-
-    def run(
+    def tune_params(
         self,
         X: pd.DataFrame,
         y: Union[np.ndarray, pd.Series],
@@ -475,19 +484,19 @@ class PipelineParamTuner:
         scoring: str = "balanced_accuracy",
         cv: int = 5,
     ) -> pd.DataFrame:
+        """Grid search over k_best and max_features pipeline parameters."""
         param_grid = {
             "select_k_best__k": k_best_values,
             "select_forest__max_features": max_features_values,
         }
-        pipe = create_feature_pipeline(**FEATURE_SELECTION_CONFIG)
+        pipe = self.feature_pipeline(**FEATURE_SELECTION_CONFIG)
         gs = GridSearchCV(pipe, param_grid, scoring=scoring, cv=cv, n_jobs=-1, refit=False)
         gs.fit(X, y)
 
-        results = pd.DataFrame(gs.cv_results_)
-        self.cv_results_ = results
-        return results
+        self.cv_results_ = pd.DataFrame(gs.cv_results_)
+        return self.cv_results_
 
-    def plot(self, output_filename: str = "param_tuning_heatmap.png") -> Path:
+    def plot_param_tuning(self, output_filename: str = "param_tuning_heatmap.png") -> Path:
         if self.cv_results_ is None:
             raise ValueError("Run grid search first")
 

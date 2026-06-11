@@ -17,13 +17,8 @@ from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 
 from .feature_engineering import (
     LibraryLengthNormalizer,
-    create_feature_pipeline,
-    create_preprocessing_pipeline,
-    create_selection_pipeline,
-    FeatureSelectionAnalyzer,
-    PipelineParamTuner,
+    FeatureSelector,
     VennDiagramGenerator,
-    feature_count_analysis,
 )
 
 from .model_training import (
@@ -108,9 +103,7 @@ __all__ = [
     "load_tlr_data",
     # Feature engineering
     "LibraryLengthNormalizer",
-    "create_feature_pipeline",
-    "create_preprocessing_pipeline",
-    "create_selection_pipeline",
+    "FeatureSelector",
     # Model training
     "ModelFactory",
     "ModelTrainer",
@@ -135,10 +128,7 @@ __all__ = [
     "merge_go_tables",
     "create_fs_de_go_table",
     # Feature analysis
-    "FeatureSelectionAnalyzer",
-    "PipelineParamTuner",
     "VennDiagramGenerator",
-    "feature_count_analysis",
     # Prediction and model comparison
     "ModelPredictor",
 ]

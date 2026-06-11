@@ -23,8 +23,7 @@ from src import (
     prepare_counts,
     write_count_summary,
     extract_subset,
-    create_feature_pipeline,
-    create_preprocessing_pipeline,
+    FeatureSelector,
     load_tlr_data,
     ModelFactory,
     ModelTrainer,
@@ -32,9 +31,7 @@ from src import (
     plot_feature_count_analysis,
     plot_tlr_hek_blue,
     DESeq2,
-    FeatureSelectionAnalyzer,
     VennDiagramGenerator,
-    feature_count_analysis,
     create_fs_de_go_table,
     ModelPredictor,
 )
@@ -117,10 +114,10 @@ class MATseqPipeline:
         self, X: pd.DataFrame, y: pd.Series, de_genes: set, n_runs: int = 1000
     ):
         def _run():
-            analyzer = FeatureSelectionAnalyzer()
-            analyzer.run_multiple_selections(X=X, y=y, n_runs=n_runs)
-            analyzer.create_gene_frequency_table(de_genes=de_genes)
-            return analyzer, set().union(*analyzer.feature_sets)
+            selector = FeatureSelector()
+            selector.run_multiple_selections(X=X, y=y, n_runs=n_runs)
+            selector.create_gene_frequency_table(de_genes=de_genes)
+            return selector, set().union(*selector.feature_sets)
 
         return self.cache.cached_call(
             _run,
@@ -143,9 +140,9 @@ class MATseqPipeline:
         suffix: str = "",
     ) -> None:
         if fs is None:
-            pre = create_preprocessing_pipeline(
-                drop_low_count=False, scale=True
-            ).set_output(transform="pandas")
+            pre = FeatureSelector.preprocessing_pipeline().set_output(
+                transform="pandas"
+            )
             X_scaled = pre.fit_transform(X)
         else:
             X_scaled = fs.transform(X)
@@ -228,7 +225,7 @@ class MATseqPipeline:
         )
         X, y = extract_subset(features, labels, "main_ligands")
 
-        result = feature_count_analysis(
+        result = FeatureSelector.count_analysis(
             X,
             y,
             k_best=FEATURE_SELECTION_CONFIG["k_best"],
@@ -253,6 +250,35 @@ class MATseqPipeline:
         print(f"Selection-stability count: {result['stable_count']}")
         print(f"Wrote scores/stability CSVs to {out_dir}")
         print(f"Wrote figure to {fig_path}")
+        return result
+
+    def tune_forest_features(self):
+        print("\n--- FOREST FEATURE-COUNT TUNING BY PCA SEPARATION (main_ligands) ---")
+        features, labels = self.cache.cached_call(
+            prepare_counts,
+            name="prepare_counts",
+            force_recompute=self.force_recompute,
+            key_inputs={"ligand_aliases": LIGAND_ALIASES},
+        )
+        X, y = extract_subset(features, labels, "main_ligands")
+
+        result = FeatureSelector.forest_pca_separation(
+            X,
+            y,
+            k_best=FEATURE_SELECTION_CONFIG["k_best"],
+            candidate_features=[50, 100, 150, 200, 250, 300, 400, 500, 750, 1000],
+            n_estimators=FEATURE_SELECTION_CONFIG["n_estimators"],
+            max_depth=FEATURE_SELECTION_CONFIG["max_depth"],
+        )
+
+        out_dir = self.results_dir / "feature_selection"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        result["scan"].to_csv(out_dir / "forest_pca_separation.csv", index=False)
+
+        print(result["scan"].to_string(index=False))
+        for metric, best in result["best_max_features"].items():
+            print(f"Best max_features by {metric}: {best}")
+        print(f"Wrote scan to {out_dir / 'forest_pca_separation.csv'}")
         return result
 
     def run_pipeline(self):
@@ -282,7 +308,7 @@ class MATseqPipeline:
 
             if subset == "main_ligands":
                 X_pca, y_pca = X_sub, y_sub
-                fs_pca = create_feature_pipeline(
+                fs_pca = FeatureSelector.feature_pipeline(
                     **FEATURE_SELECTION_CONFIG
                 ).set_output(transform="pandas")
                 fs_pca.fit(X_sub, y_sub)
@@ -487,6 +513,11 @@ def main():
         action="store_true",
         help="Run model-independent feature-count analysis and exit",
     )
+    parser.add_argument(
+        "--tune-forest",
+        action="store_true",
+        help="Scan select_forest max_features by PCA cluster separation and exit",
+    )
 
     args = parser.parse_args()
     pipeline = MATseqPipeline(
@@ -495,6 +526,9 @@ def main():
 
     if args.tune_features:
         return pipeline.tune_feature_count()
+
+    if args.tune_forest:
+        return pipeline.tune_forest_features()
 
     if args.snakemake:
         from src.config import get_test_sample_dir, get_test_work_dir
