@@ -2,11 +2,15 @@
 """MAT-seq pipeline orchestration script."""
 
 import argparse
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 import pandas as pd
+from sklearn.base import clone
+from sklearn.pipeline import Pipeline as SkPipeline
+from sklearn.utils.class_weight import compute_sample_weight
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -23,6 +27,7 @@ from src import (
     prepare_counts,
     write_count_summary,
     extract_subset,
+    ColumnSelector,
     FeatureSelector,
     load_tlr_data,
     ModelFactory,
@@ -36,6 +41,8 @@ from src import (
     ModelPredictor,
 )
 from src.cache import PipelineCache
+
+FINAL_GENESETS = ("selected_100", "de_overlap")
 
 
 class MATseqPipeline:
@@ -197,6 +204,55 @@ class MATseqPipeline:
             },
         )
 
+    @staticmethod
+    def _best_two_models(summary: pd.DataFrame, rank_col: str = "pooled_f1") -> list:
+        col = rank_col if rank_col in summary.columns else "f1_mean"
+        return summary.sort_values(col, ascending=False)["model"].head(2).tolist()
+
+    def _deploy_geneset_trainer(
+        self,
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        gene_list: list,
+        model_names: list,
+        tuned_params: dict,
+        label_encoder,
+    ) -> ModelTrainer:
+        """Refit the chosen models on a frozen gene list with their tuned params."""
+        base = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
+        y_array = y_train.values if isinstance(y_train, pd.Series) else y_train
+        y_enc = label_encoder.transform(y_array)
+
+        trained = {}
+        for name in model_names:
+            pipe = SkPipeline(
+                [
+                    *FeatureSelector.preprocessing_pipeline().steps,
+                    ("select_genes", ColumnSelector(gene_list)),
+                    ("clf", clone(base[name])),
+                ]
+            ).set_output(transform="pandas")
+            params = tuned_params.get(name, {}).get("chosen_params", {})
+            if params:
+                pipe.set_params(**params)
+            fit_kwargs = (
+                {"clf__sample_weight": compute_sample_weight("balanced", y_enc)}
+                if name == "XGBoost"
+                else {}
+            )
+            pipe.fit(X_train, y_enc, **fit_kwargs)
+            trained[name] = pipe
+
+        return ModelTrainer.from_trained_models(trained, label_encoder)
+
+    def _endpoint_predictions(
+        self, trainers: dict, base_dir: Path, X_other, y_other, X_bact, y_bact
+    ) -> None:
+        for gs in FINAL_GENESETS:
+            predictor = ModelPredictor(trainers[gs])
+            self._predict(predictor, "additional_ligands", X_other, y_other, base_dir / gs)
+            self._predict(predictor, "bacteria_ligands", X_bact, y_bact, base_dir / gs)
+
     def _predict(
         self,
         predictor: ModelPredictor,
@@ -296,6 +352,32 @@ class MATseqPipeline:
         write_count_summary(features, labels, self.results_dir / "counts")
         print(f"Count df shape: {features.shape}")
 
+        print("\n--- STEP 1b: FEATURE-NUMBER EVALUATION (MI elbow + PCA/k-means scan) ---")
+        count_result = self.tune_feature_count()
+        mi_elbow = int(count_result["mi_elbow"])
+        max_feat = FEATURE_SELECTION_CONFIG["max_features"]
+        k_best_prev = FEATURE_SELECTION_CONFIG["k_best"]
+        k_best = max(mi_elbow, max_feat)
+        FEATURE_SELECTION_CONFIG["k_best"] = k_best
+        print(f"  MI elbow={mi_elbow}; using k_best={k_best} (was {k_best_prev}).")
+
+        fs_dir = self.results_dir / "feature_selection"
+        fs_dir.mkdir(parents=True, exist_ok=True)
+        with open(fs_dir / "mi_elbow.json", "w") as f:
+            json.dump(
+                {
+                    "mi_elbow": mi_elbow,
+                    "importance_elbow": int(count_result["importance_elbow"]),
+                    "stable_count": count_result["stable_count"],
+                    "k_best_used": k_best,
+                    "max_features": max_feat,
+                },
+                f,
+                indent=2,
+            )
+
+        self.tune_forest_features()
+
         print("\n--- STEP 2: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ---")
         subset_names = ["main_ligands", "additional_ligands", "bacteria_ligands"]
         subset_xy: dict[str, tuple[pd.DataFrame, pd.Series]] = {}
@@ -377,6 +459,32 @@ class MATseqPipeline:
             geneid_symbol_mapper=geneid_symbol_mapper,
         )
 
+        print("\n--- STEP 3b: FINAL GENE SETS (stable selection and DE overlap) ---")
+        n_stable = FEATURE_SELECTION_CONFIG["max_features"]
+        stable_genes = fs_analyzer.stable_gene_set(top_n=n_stable)
+        overlap_genes = sorted(set(stable_genes) & set(de_genes))
+        union_genes = sorted(set(stable_genes) | set(de_genes))
+        genesets = {
+            "selected_100": list(stable_genes),
+            "de_overlap": overlap_genes,
+            "union_stable_de": union_genes,
+        }
+
+        fs_dir = self.results_dir / "feature_selection"
+        fs_dir.mkdir(parents=True, exist_ok=True)
+        pd.Series(stable_genes, name="gene").to_csv(
+            fs_dir / "selected_genes_100.csv", index=False
+        )
+        pd.Series(overlap_genes, name="gene").to_csv(
+            fs_dir / "selected_genes_de_overlap.csv", index=False
+        )
+        pd.DataFrame(
+            {"gene": stable_genes, "in_de": [g in de_genes for g in stable_genes]}
+        ).to_csv(fs_dir / "selected_vs_de_overlap_table.csv", index=False)
+        print(
+            f"  stable selected: {len(stable_genes)}; DE overlap: {len(overlap_genes)}"
+        )
+
         from src.config import get_test_work_dir, get_test_name
 
         print(
@@ -395,7 +503,44 @@ class MATseqPipeline:
         )
         trainer_wo.save_models(self.results_dir / "models" / "no_flapa")
 
+        all_models = trainer.nested_cv_summary_["model"].tolist()
+        best_two_cv = self._best_two_models(trainer.nested_cv_summary_)
+        tuned_params = trainer.selected_params_
+        tuned_params_wo = trainer_wo.selected_params_
+        print(f"  Best two models by nested CV (at ceiling, tie): {best_two_cv}")
+
+        tables_dir = self.results_dir / "tables"
+        tables_dir.mkdir(parents=True, exist_ok=True)
+        trainer.nested_cv_summary_.to_csv(
+            tables_dir / "supp_nested_cv_main.csv", index=False
+        )
+        trainer_wo.nested_cv_summary_.to_csv(
+            tables_dir / "supp_nested_cv_no_flapa.csv", index=False
+        )
+
+        print(
+            "\n--- STEP 4b: DEPLOY ALL MODELS ON FINAL GENE SETS ---"
+        )
+        geneset_trainers = {
+            gs: self._deploy_geneset_trainer(
+                X_train, y_train, genes, all_models, tuned_params, trainer.label_encoder
+            )
+            for gs, genes in genesets.items()
+        }
+        geneset_trainers_wo = {
+            gs: self._deploy_geneset_trainer(
+                X_wo, y_wo, genes, all_models, tuned_params_wo, trainer_wo.label_encoder
+            )
+            for gs, genes in genesets.items()
+        }
+        for gs, gtr in geneset_trainers.items():
+            gtr.save_models(self.results_dir / "models" / gs)
+            geneset_trainers_wo[gs].save_models(
+                self.results_dir / "models" / "no_flapa" / gs
+            )
+
         print("\n--- STEP 5: MODEL VALIDATION ON EXTERNAL TEST BATCH ---")
+        best_two = best_two_cv
         test_fc = get_test_work_dir() / "featurecounts"
         if not test_fc.is_dir() or not any(test_fc.glob("*.txt")):
             print(f"  Skipping validation: no featurecounts at {test_fc}")
@@ -416,39 +561,41 @@ class MATseqPipeline:
                 SUBSET_CLASS_ORDERS["main_ligands"],
                 negative_control="negative_control",
             )
-            
+
             val_dir = self.results_dir / "validation" / get_test_name()
-            self._predict(
-                ModelPredictor(trainer),
-                "main_ligands",
-                Xv,
-                yv,
-                val_dir,
-                all_controls=True,
-            )
-            wo = yv != "Fla-PA"
-            self._predict(
-                ModelPredictor(trainer_wo),
-                "no_flapa",
-                Xv[wo],
-                yv[wo],
-                val_dir,
-                subset="main_ligands",
-                all_controls=True,
-            )
+            table2_rows = []
+            for gs, gtr in geneset_trainers.items():
+                self._predict(
+                    ModelPredictor(gtr), "main_ligands", Xv, yv, val_dir / gs,
+                    all_controls=True,
+                )
+                summ = pd.read_csv(
+                    val_dir / gs / "main_ligands" / "test_scores_summary.csv"
+                )
+                summ.insert(0, "gene_set", gs)
+                table2_rows.append(summ)
+            external_perf_df = pd.concat(table2_rows, ignore_index=True)
+            external_perf_csv = tables_dir / "external_validation_performance.csv"
+            external_perf_df.to_csv(external_perf_csv, index=False)
+            print(f"  External-validation performance table saved: {external_perf_csv}")
+            table2_df = external_perf_df
+
+            primary = table2_df[table2_df["gene_set"] == "selected_100"]
+            best_two = primary.sort_values("f1", ascending=False)["model"].head(2).tolist()
+            print(f"  Best two models by EXTERNAL F1 (selected_100): {best_two}")
 
             self._pca_plot(Xv, yv, "main_ligands", suffix="_external_test")
             self._pca_plot(
                 Xv, yv, "main_ligands", fs=fs_pca, suffix="_external_test_selected"
             )
 
-
-
-        print("\n--- STEP 6: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS ---")
-        predictor = ModelPredictor(trainer)
-        pred_dir = self.results_dir / "predictions"
-        self._predict(predictor, "additional_ligands", X_other, y_other, pred_dir)
-        self._predict(predictor, "bacteria_ligands", X_bact, y_bact, pred_dir)
+        print(
+            "\n--- STEP 6: ENDPOINT PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS ---"
+        )
+        self._endpoint_predictions(
+            geneset_trainers, self.results_dir / "predictions",
+            X_other, y_other, X_bact, y_bact,
+        )
 
         print("\n--- STEP 7: TLR HEK BLUE VISUALIZATION ---")
         tlr2_df, tlr4_df, flapa_data = load_tlr_data(
@@ -459,12 +606,16 @@ class MATseqPipeline:
         )
 
         print(
-            "\n--- STEP 8: CLASS PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS (without Fla-PA) ---"
+            "\n--- STEP 8: ENDPOINT PREDICTION ON ADDITIONAL AND BACTERIA LIGANDS (without Fla-PA) ---"
         )
-        predictor_wo = ModelPredictor(trainer_wo)
-        pred_dir_wo = self.results_dir / "predictions" / "main_ligands_no_flapa"
-        self._predict(predictor_wo, "additional_ligands", X_other, y_other, pred_dir_wo)
-        self._predict(predictor_wo, "bacteria_ligands", X_bact, y_bact, pred_dir_wo)
+        self._endpoint_predictions(
+            geneset_trainers_wo, self.results_dir / "predictions" / "no_flapa",
+            X_other, y_other, X_bact, y_bact,
+        )
+
+        print("\n--- STEP 9: COMPOSE MAIN-TEXT FIGURES ---")
+        from src.figure_composition import compose_all
+        compose_all()
 
         print("\n" + "=" * 80)
         print("PIPELINE COMPLETED SUCCESSFULLY")
@@ -475,9 +626,10 @@ class MATseqPipeline:
         return {
             "feature_analysis": fs_analyzer,
             "models": trainer,
-            "predictor": predictor,
             "models_wo_flapa": trainer_wo,
-            "predictor_wo_flapa": predictor_wo,
+            "best_two": best_two,
+            "geneset_trainers": geneset_trainers,
+            "geneset_trainers_wo": geneset_trainers_wo,
         }
 
 

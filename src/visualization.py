@@ -8,13 +8,44 @@ import seaborn as sns
 import textwrap
 from pathlib import Path
 from typing import Union
-from matplotlib.patches import Patch
+from matplotlib.patches import Patch, FancyArrowPatch
 from sklearn.decomposition import PCA
 from adjustText import adjust_text
 import scanpy as sc
 
 from .preprocessing import normalize_rpm
 from .config import CUSTOM_PALETTE_6
+
+
+def _savefig_with_arrow_fallback(save_path, **kwargs):
+    """Save the current figure, retrying without adjust_text connector arrows.
+
+    adjustText 0.8 with matplotlib >= 3.x can emit a degenerate FancyArrowPatch
+    (text left at its anchor, so posA ~= posB) whose path cannot be clipped,
+    raising StopIteration inside the draw call at savefig time. The connectors
+    are cosmetic, so on that failure we drop them and re-save.
+    """
+    try:
+        plt.savefig(save_path, **kwargs)
+    except StopIteration:
+        for ax in plt.gcf().axes:
+            for patch in [p for p in ax.patches if isinstance(p, FancyArrowPatch)]:
+                patch.remove()
+            for txt in list(ax.texts):
+                if getattr(txt, "arrow_patch", None) is None:
+                    continue
+                ax.text(
+                    *txt.get_position(),
+                    txt.get_text(),
+                    ha=txt.get_ha(),
+                    va=txt.get_va(),
+                    size=txt.get_size(),
+                    weight=txt.get_weight(),
+                    color=txt.get_color(),
+                    alpha=txt.get_alpha(),
+                )
+                txt.remove()
+        plt.savefig(save_path, **kwargs)
 
 
 def plot_feature_count_analysis(
@@ -273,7 +304,7 @@ def plot_pca_pandas(
 
         save_path = output_path / output_filename
         try:
-            plt.savefig(save_path, dpi=300, bbox_inches="tight")
+            _savefig_with_arrow_fallback(save_path, dpi=300, bbox_inches="tight")
             print(f"Figure saved to: {save_path.absolute()}")
         finally:
             plt.close()
@@ -381,7 +412,7 @@ def plot_volcano(
 
     save_path = output_path / output_filename
     try:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        _savefig_with_arrow_fallback(save_path, dpi=300, bbox_inches="tight")
         print(f"Figure saved: {save_path}")
     finally:
         plt.close()

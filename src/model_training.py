@@ -421,6 +421,8 @@ class ModelTrainer:
         self._memory = None
         shutil.rmtree(memory_dir, ignore_errors=True)
 
+        self.nested_cv_summary_ = summary
+        self.selected_params_ = selected_params
         return summary
 
     def _select_and_refit(
@@ -483,6 +485,16 @@ class ModelTrainer:
             plt.close()
 
     @classmethod
+    def from_trained_models(cls, trained_models: Dict, label_encoder) -> "ModelTrainer":
+        """Build a trainer around already-fitted models, bypassing __init__ validation."""
+        trainer = cls.__new__(cls)
+        trainer.trained_models = trained_models
+        trainer.label_encoder = label_encoder
+        trainer.X = None
+        trainer.y = None
+        return trainer
+
+    @classmethod
     def load_models(cls, model_dir: Path) -> "ModelTrainer":
         """Load trained models from disk.
 
@@ -505,10 +517,5 @@ class ModelTrainer:
             with open(model_file, "rb") as f:
                 trained_models[model_name] = pickle.load(f)
 
-        trainer = cls.__new__(cls)
-        trainer.trained_models = trained_models
-        trainer.label_encoder = label_encoder
-        trainer.X = None
-        trainer.y = None
         print(f"Models loaded from {model_dir}")
-        return trainer
+        return cls.from_trained_models(trained_models, label_encoder)

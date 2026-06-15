@@ -38,13 +38,34 @@ def _record_input(estimator, X):
 
 
 class QCLowerCountRemover(BaseEstimator, TransformerMixin):
+    """Keep genes with CPM > min_cpm in at least min_samples samples.
+
+    min_samples defaults to the smallest class size in y (edgeR filterByExpr
+    convention). The mask is learned on the fit (training) data and applied
+    positionally at transform, so the train and test matrices keep the same
+    gene columns regardless of the test counts.
+    """
+
+    def __init__(self, min_cpm: float = 1.0, min_samples: int | None = None):
+        self.min_cpm = min_cpm
+        self.min_samples = min_samples
+
     def fit(self, X, y=None):
         values = (
             X.to_numpy(dtype=float)
             if isinstance(X, pd.DataFrame)
             else np.asarray(X, dtype=float)
         )
-        self.mask_ = values.sum(axis=0) >= 10
+        if self.min_samples is not None:
+            n = self.min_samples
+        elif y is not None:
+            n = int(pd.Series(np.asarray(y)).value_counts().min())
+        else:
+            n = 1
+        lib = values.sum(axis=1, keepdims=True)
+        lib[lib == 0] = 1.0
+        cpm = values / lib * 1_000_000.0
+        self.mask_ = (cpm > self.min_cpm).sum(axis=0) >= n
         _record_input(self, X)
         return self
 
@@ -92,6 +113,30 @@ class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMi
         if X is None:
             raise ValueError("X cannot be None")
         return normalize_rpm(X)
+
+
+class ColumnSelector(BaseEstimator, TransformerMixin):
+    """Keep a fixed set of named columns; used to deploy a frozen gene list."""
+
+    def __init__(self, genes):
+        self.genes = list(genes)
+
+    def fit(self, X, y=None):
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("ColumnSelector requires a DataFrame input")
+        self.columns_ = [g for g in self.genes if g in X.columns]
+        if not self.columns_:
+            raise ValueError("none of the requested genes are present in X")
+        _record_input(self, X)
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("ColumnSelector requires a DataFrame input")
+        return X.reindex(columns=self.columns_)
+
+    def get_feature_names_out(self, input_features=None):
+        return np.asarray(self.columns_, dtype=object)
 
 
 def _prepare_output_dir(output_dir: Path = None) -> Path:
@@ -409,6 +454,12 @@ class FeatureSelector:
         print(f"Unique genes across all runs: {len(gene_counts)}")
 
         return dict(enumerate(self.feature_sets))
+
+    def stable_gene_set(self, top_n: int = 100) -> list:
+        """Most stable genes across the reseeded selections, by selection frequency."""
+        if self.gene_frequency is None:
+            raise ValueError("Run feature selection first")
+        return [g for g, _ in self.gene_frequency.most_common(top_n)]
 
     def create_gene_frequency_table(
         self, de_genes: set = None, output_filename: str = "gene_frequency_table.csv"

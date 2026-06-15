@@ -17,6 +17,7 @@ from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 
 from .feature_engineering import (
     LibraryLengthNormalizer,
+    ColumnSelector,
     FeatureSelector,
     VennDiagramGenerator,
 )
@@ -103,6 +104,7 @@ __all__ = [
     "load_tlr_data",
     # Feature engineering
     "LibraryLengthNormalizer",
+    "ColumnSelector",
     "FeatureSelector",
     # Model training
     "ModelFactory",
