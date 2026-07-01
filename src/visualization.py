@@ -9,6 +9,7 @@ import textwrap
 from pathlib import Path
 from typing import Union
 from matplotlib.patches import Patch, FancyArrowPatch
+from matplotlib_venn import venn2, venn3
 from sklearn.decomposition import PCA
 from adjustText import adjust_text
 import scanpy as sc
@@ -48,43 +49,69 @@ def _savefig_with_arrow_fallback(save_path, **kwargs):
         plt.savefig(save_path, **kwargs)
 
 
+def plot_venn(
+    sets: list,
+    set_labels: tuple,
+    output_filename: str,
+    output_dir: Path = None,
+    title: str = None,
+) -> Path:
+    """Plot a 2- or 3-set Venn diagram and save it.
+
+    Args:
+        sets: List of 2 or 3 sets to compare.
+        set_labels: Labels for the sets, same length as `sets`.
+        output_filename: Name for the output figure.
+        output_dir: Directory for the figure. Defaults to results/figures/venn.
+        title: Optional figure title.
+    """
+    if len(sets) == 2:
+        venn = venn2
+    elif len(sets) == 3:
+        venn = venn3
+    else:
+        raise ValueError(f"plot_venn supports 2 or 3 sets, got {len(sets)}")
+
+    if output_dir is None:
+        output_dir = Path.cwd() / "results" / "figures" / "venn"
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    plt.figure(figsize=(8, 8))
+    venn([set(s) for s in sets], set_labels=set_labels)
+    if title:
+        plt.title(title)
+    output_path = output_dir / output_filename
+    try:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+        print(f"Saved Venn diagram to {output_path}")
+    finally:
+        plt.close()
+
+    return output_path
+
+
 def plot_feature_count_analysis(
     result: dict,
     output_path: Path = None,
     output_filename: str = None,
 ) -> Path:
-    """Plot intrinsic-signal elbow and selection-stability curves from FeatureSelector.count_analysis."""
+    """Plot the sorted mutual-information curve with per-seed and mean elbows."""
     mi_elbow = result["mi_elbow"]
-    imp_elbow = result["importance_elbow"]
-    stable_count = result["stable_count"]
+    per_run_elbows = result["per_run_elbows"]
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    fig, ax1 = plt.subplots(figsize=(8, 5))
     scores = result["scores"]
     ax1.plot(scores["rank"], scores["mi_sorted"], label="mutual information")
-    imp = scores.dropna(subset=["importance_sorted"])
-    ax1.plot(imp["rank"], imp["importance_sorted"], label="ExtraTrees importance")
-    ax1.axvline(mi_elbow, color="C0", ls="--", label=f"MI elbow ({mi_elbow})")
+    for e in per_run_elbows:
+        ax1.axvline(e, color="C1", ls=":", alpha=0.6)
     ax1.axvline(
-        imp_elbow, color="C1", ls="--", label=f"importance elbow ({imp_elbow})"
+        mi_elbow, color="C0", ls="--", label=f"MI elbow (mean {mi_elbow})"
     )
     ax1.set_xlabel("gene rank")
-    ax1.set_ylabel("sorted score")
-    ax1.set_title("Intrinsic signal elbow")
+    ax1.set_ylabel("sorted mutual information")
+    ax1.set_title(f"MI elbow (per-seed: {per_run_elbows})")
     ax1.legend()
-
-    stab = result["stability"]
-    ax2.plot(stab["n_features"], stab["mean_jaccard"], marker="o")
-    if stable_count is not None:
-        ax2.axvline(
-            stable_count,
-            color="C2",
-            ls="--",
-            label=f"stable count ({stable_count})",
-        )
-        ax2.legend()
-    ax2.set_xlabel("n_features")
-    ax2.set_ylabel("mean pairwise Jaccard")
-    ax2.set_title("Selection stability")
 
     if output_path is None:
         output_path = (
@@ -453,7 +480,18 @@ def plot_heatmap(
         columns=dds_sigs.obs.condition,
     )
 
-    lut = dict(zip(set(dds_sigs.obs.condition), "rgb"))
+    def _is_negative_control(cond):
+        c = str(cond).lower().replace("-", "_")
+        return "negative" in c or c == "control"
+
+    other_palette = ["green", "tab:blue", "tab:orange", "tab:purple", "tab:brown"]
+    lut, oi = {}, 0
+    for cond in dict.fromkeys(dds_sigs.obs.condition):
+        if _is_negative_control(cond):
+            lut[cond] = "magenta"
+        else:
+            lut[cond] = other_palette[oi % len(other_palette)]
+            oi += 1
     col_colors = list(dds_sigs.obs.condition.map(lut))
     g = sns.clustermap(
         figsize=(8, 10),

@@ -1,16 +1,21 @@
 """Assemble the per-panel pipeline outputs into the manuscript composite figures.
 
-Each emitted page holds at most four panels so it drops cleanly onto one Word page.
-Panel white margins are auto-cropped to remove inter-panel whitespace. Original panel
-letters are preserved across split pages so manuscript text references stay valid.
+This is a post-processing script, not part of the pipeline: run it after a pipeline run
+has produced the per-panel figures and predictions, with `python scripts/figure_composition.py`.
 
-Run standalone (`python src/figure_composition.py`) or call `compose_all` from the
-pipeline. Missing panels are flagged in place rather than breaking the run.
+Most pages hold at most four panels so they drop cleanly onto one Word page; the
+model-comparison pages carry PCA plus all five models. Panel white margins are auto-cropped
+to remove inter-panel whitespace, and original panel letters are preserved across split
+pages so manuscript text references stay valid. Missing panels are flagged in place rather
+than breaking the script.
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import matplotlib
 
@@ -20,9 +25,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Circle, FancyArrow, FancyBboxPatch
 
+from src.config import primary_geneset_name
+
+GENESET = primary_geneset_name()
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 FIG = RESULTS / "figures"
-PRED = RESULTS / "predictions" / "selected_100"
+PRED = RESULTS / "predictions" / GENESET
 OUT = Path(__file__).resolve().parent.parent / "paper" / "paper_updated" / "figures"
 
 
@@ -143,7 +151,7 @@ def _draw_stable_de_venn(ax) -> None:
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.set_aspect("equal")
-    stable = _read_gene_set(RESULTS / "feature_selection" / "selected_genes_100.csv")
+    stable = _read_gene_set(RESULTS / "feature_selection" / "selected_genes.csv")
     de = _read_gene_set(
         RESULTS / "differential_gene_expression" / "de_genes_main_ligands.csv")
     inter = len(stable & de)
@@ -202,26 +210,48 @@ def compose_figure3(out_dir: Path = OUT) -> list[Path]:
     return [p1, p2]
 
 
+MODELS = ["LinearSVC", "LogisticRegression", "RandomForest", "SGDClassifier", "XGBoost"]
+MODEL_TITLES = {
+    "LinearSVC": "LinearSVC", "LogisticRegression": "Logistic Regression",
+    "RandomForest": "Random Forest", "SGDClassifier": "SGD", "XGBoost": "XGBoost",
+}
+
+
+def _model_grid_page(pca_png, pca_title, pred_dir, letters, out_path: Path,
+                     ncols: int = 3, height: float = 4.4) -> Path:
+    """PCA + every model's probability heatmap on one page (2 rows x ncols)."""
+    paths = [pca_png] + [pred_dir / f"{m}_probabilities_heatmap.png" for m in MODELS]
+    titles = [pca_title] + [MODEL_TITLES[m] for m in MODELS]
+    nrows = -(-len(paths) // ncols)
+    wr = []
+    for c in range(ncols):
+        col = [_aspect(paths[r * ncols + c]) for r in range(nrows)
+               if r * ncols + c < len(paths)]
+        wr.append(max(col) if col else 1.0)
+    fig = plt.figure(figsize=(height * sum(wr), height * nrows))
+    gs = fig.add_gridspec(nrows, ncols, width_ratios=wr, wspace=0.04, hspace=0.12)
+    for i, (p, t, l) in enumerate(zip(paths, titles, letters)):
+        r, c = divmod(i, ncols)
+        ax = fig.add_subplot(gs[r, c])
+        _place_image(ax, p, t)
+        _letter(ax, l)
+    return _save(fig, out_path)
+
+
 def _prediction_pages(base: str, pred_root: Path, out_dir: Path):
-    """Two pages (unseen ligands / heat-killed bacteria); each a tight PCA+SVC+LogReg row."""
+    """One page per sample group; each shows PCA plus all five models."""
     specs = [
         ("unseen ligands", FIG / "pca" / "additional_ligands_selected_pca.png",
-         pred_root / "additional_ligands", ["A", "B", "C"], f"{base}_p1.png"),
+         pred_root / "additional_ligands", list("ABCDEF"), f"{base}_p1.png"),
         ("heat-killed bacteria", FIG / "pca" / "bacteria_ligands_selected_pca.png",
-         pred_root / "bacteria_ligands", ["D", "E", "F"], f"{base}_p2.png"),
+         pred_root / "bacteria_ligands", list("GHIJKL"), f"{base}_p2.png"),
     ]
-    outs = []
-    for label, pca_png, pdir, letters, fname in specs:
-        outs.append(_row_page(
-            [pca_png, pdir / "LinearSVC_probabilities_heatmap.png",
-             pdir / "LogisticRegression_probabilities_heatmap.png"],
-            [f"PCA ({label})", "LinearSVC", "Logistic Regression"],
-            letters, out_dir / fname))
-    return outs
+    return [_model_grid_page(pca_png, f"PCA ({label})", pdir, letters, out_dir / fname)
+            for label, pca_png, pdir, letters, fname in specs]
 
 
 def compose_figure4(out_dir: Path = OUT) -> list[Path]:
-    """Exploratory predictions on unseen ligands and heat-killed bacteria."""
+    """Exploratory predictions on unseen ligands and heat-killed bacteria (all models)."""
     return _prediction_pages("Figure4", PRED, out_dir)
 
 
@@ -232,14 +262,12 @@ def _external_test_name() -> str:
 
 
 def compose_figure4a(out_dir: Path = OUT) -> list[Path]:
-    """Figure 4a: same composition as Figure 4 but on the external test batch."""
-    val = RESULTS / "validation" / _external_test_name() / "selected_100" / "main_ligands"
-    return [_row_page(
-        [FIG / "pca" / "main_ligands_external_test_selected_pca.png",
-         val / "LinearSVC_probabilities_heatmap.png",
-         val / "LogisticRegression_probabilities_heatmap.png"],
-        ["PCA (external test batch)", "LinearSVC", "Logistic Regression"],
-        ["A", "B", "C"], out_dir / "Figure4a_external_test.png")]
+    """Figure 4a: same composition as Figure 4 but on the external test batch (all models)."""
+    val = RESULTS / "validation" / _external_test_name() / GENESET / "main_ligands"
+    return [_model_grid_page(
+        FIG / "pca" / "main_ligands_external_test_selected_pca.png",
+        "PCA (external test batch)", val, list("ABCDEF"),
+        out_dir / "Figure4a_external_test.png")]
 
 
 # --------------------------------------------------------------------------- #
@@ -296,7 +324,7 @@ def compose_supp_figure2(out_dir: Path = OUT) -> list[Path]:
 
 
 def compose_supp_figure3(out_dir: Path = OUT) -> list[Path]:
-    pred = RESULTS / "predictions" / "no_flapa" / "selected_100"
+    pred = RESULTS / "predictions" / "no_flapa" / GENESET
     return _prediction_pages("SupplementaryFigure3", pred, out_dir)
 
 

@@ -34,15 +34,14 @@ from src import (
     ModelTrainer,
     plot_pca_pandas,
     plot_feature_count_analysis,
+    plot_venn,
     plot_tlr_hek_blue,
     DESeq2,
-    VennDiagramGenerator,
     create_fs_de_go_table,
     ModelPredictor,
 )
+from src.config import FOREST_SELECTION_GRID, update_config, primary_geneset_name
 from src.cache import PipelineCache
-
-FINAL_GENESETS = ("selected_100", "de_overlap")
 
 
 class MATseqPipeline:
@@ -117,22 +116,22 @@ class MATseqPipeline:
         print(f"Snakemake preprocessing failed with code {result.returncode}")
         return False
 
-    def _venn_feature_selection(
-        self, X: pd.DataFrame, y: pd.Series, de_genes: set, n_runs: int = 1000
-    ):
+    def _select_features(self, X: pd.DataFrame, y: pd.Series) -> list:
+        """Fit the tuned feature pipeline once and return its selected gene list."""
+
         def _run():
-            selector = FeatureSelector()
-            selector.run_multiple_selections(X=X, y=y, n_runs=n_runs)
-            selector.create_gene_frequency_table(de_genes=de_genes)
-            return selector, set().union(*selector.feature_sets)
+            fs = FeatureSelector.feature_pipeline(
+                **FEATURE_SELECTION_CONFIG
+            ).set_output(transform="pandas")
+            fs.fit(X, y)
+            return list(fs.get_feature_names_out())
 
         return self.cache.cached_call(
             _run,
-            name=f"venn_feature_selection_{n_runs}",
+            name="selected_features",
             force_recompute=self.force_recompute,
             key_inputs={
                 "feature_selection": FEATURE_SELECTION_CONFIG,
-                "n_runs": n_runs,
                 "n_samples": int(len(X)),
                 "labels": sorted(set(y.tolist())),
             },
@@ -248,7 +247,7 @@ class MATseqPipeline:
     def _endpoint_predictions(
         self, trainers: dict, base_dir: Path, X_other, y_other, X_bact, y_bact
     ) -> None:
-        for gs in FINAL_GENESETS:
+        for gs in (primary_geneset_name(), "de_overlap"):
             predictor = ModelPredictor(trainers[gs])
             self._predict(predictor, "additional_ligands", X_other, y_other, base_dir / gs)
             self._predict(predictor, "bacteria_ligands", X_bact, y_bact, base_dir / gs)
@@ -281,35 +280,23 @@ class MATseqPipeline:
         )
         X, y = extract_subset(features, labels, "main_ligands")
 
-        result = FeatureSelector.count_analysis(
-            X,
-            y,
-            k_best=FEATURE_SELECTION_CONFIG["k_best"],
-            candidate_counts=[50, 100, 150, 200, 250, 300, 400, 500],
-            n_estimators=FEATURE_SELECTION_CONFIG["n_estimators"],
-            max_depth=FEATURE_SELECTION_CONFIG["max_depth"],
-        )
+        result = FeatureSelector.count_analysis(X, y)
 
         out_dir = self.results_dir / "feature_selection"
         out_dir.mkdir(parents=True, exist_ok=True)
         result["scores"].to_csv(out_dir / "feature_count_scores.csv", index=False)
-        result["stability"].to_csv(
-            out_dir / "feature_count_stability.csv", index=False
-        )
-        result["core"].to_csv(out_dir / "feature_count_core_genes.csv", index=False)
 
         fig_dir = self.results_dir / "figures" / "feature_selection"
         fig_path = plot_feature_count_analysis(result, output_path=fig_dir)
 
-        print(f"MI elbow: {result['mi_elbow']}")
-        print(f"ExtraTrees-importance elbow: {result['importance_elbow']}")
-        print(f"Selection-stability count: {result['stable_count']}")
-        print(f"Wrote scores/stability CSVs to {out_dir}")
+        print(f"Per-seed MI elbows: {result['per_run_elbows']}")
+        print(f"Mean MI elbow (k_best): {result['mi_elbow']}")
+        print(f"Wrote scores CSV to {out_dir}")
         print(f"Wrote figure to {fig_path}")
         return result
 
     def tune_forest_features(self):
-        print("\n--- FOREST FEATURE-COUNT TUNING BY PCA SEPARATION (main_ligands) ---")
+        print("\n--- FOREST FEATURE-COUNT TUNING BY KMEANS SEPARATION (main_ligands) ---")
         features, labels = self.cache.cached_call(
             prepare_counts,
             name="prepare_counts",
@@ -318,23 +305,25 @@ class MATseqPipeline:
         )
         X, y = extract_subset(features, labels, "main_ligands")
 
-        result = FeatureSelector.forest_pca_separation(
+        result = FeatureSelector.forest_kmeans_separation(
             X,
             y,
             k_best=FEATURE_SELECTION_CONFIG["k_best"],
-            candidate_features=[50, 100, 150, 200, 250, 300, 400, 500, 750, 1000],
-            n_estimators=FEATURE_SELECTION_CONFIG["n_estimators"],
-            max_depth=FEATURE_SELECTION_CONFIG["max_depth"],
+            grid=FOREST_SELECTION_GRID,
         )
 
         out_dir = self.results_dir / "feature_selection"
         out_dir.mkdir(parents=True, exist_ok=True)
-        result["scan"].to_csv(out_dir / "forest_pca_separation.csv", index=False)
+        result["scan"].to_csv(out_dir / "forest_kmeans_separation.csv", index=False)
 
+        best = result["best"]
         print(result["scan"].to_string(index=False))
-        for metric, best in result["best_max_features"].items():
-            print(f"Best max_features by {metric}: {best}")
-        print(f"Wrote scan to {out_dir / 'forest_pca_separation.csv'}")
+        print(
+            f"Best by ARI: n_estimators={best['n_estimators']}, "
+            f"max_depth={best['max_depth']}, n_selected={best['n_selected']} "
+            f"(ARI={best['ari']:.3f})"
+        )
+        print(f"Wrote scan to {out_dir / 'forest_kmeans_separation.csv'}")
         return result
 
     def run_pipeline(self):
@@ -352,12 +341,11 @@ class MATseqPipeline:
         write_count_summary(features, labels, self.results_dir / "counts")
         print(f"Count df shape: {features.shape}")
 
-        print("\n--- STEP 1b: FEATURE-NUMBER EVALUATION (MI elbow + PCA/k-means scan) ---")
+        print("\n--- STEP 1b: FEATURE-NUMBER EVALUATION (MI elbow + KMeans forest scan) ---")
         count_result = self.tune_feature_count()
         mi_elbow = int(count_result["mi_elbow"])
-        max_feat = FEATURE_SELECTION_CONFIG["max_features"]
         k_best_prev = FEATURE_SELECTION_CONFIG["k_best"]
-        k_best = max(mi_elbow, max_feat)
+        k_best = int(round(mi_elbow))
         FEATURE_SELECTION_CONFIG["k_best"] = k_best
         print(f"  MI elbow={mi_elbow}; using k_best={k_best} (was {k_best_prev}).")
 
@@ -367,16 +355,28 @@ class MATseqPipeline:
             json.dump(
                 {
                     "mi_elbow": mi_elbow,
-                    "importance_elbow": int(count_result["importance_elbow"]),
-                    "stable_count": count_result["stable_count"],
-                    "k_best_used": k_best,
-                    "max_features": max_feat,
+                    "per_run_elbows": count_result["per_run_elbows"],
+                    "k_best": k_best,
                 },
                 f,
                 indent=2,
             )
 
-        self.tune_forest_features()
+        forest_result = self.tune_forest_features()
+        best = forest_result["best"]
+        update_config(
+            {
+                "k_best": k_best,
+                "max_features": best["n_selected"],
+                "n_estimators": best["n_estimators"],
+                "max_depth": best["max_depth"],
+            }
+        )
+        print(
+            f"  Persisted to config.json: k_best={k_best}, "
+            f"max_features={best['n_selected']}, n_estimators={best['n_estimators']}, "
+            f"max_depth={best['max_depth']}."
+        )
 
         print("\n--- STEP 2: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ---")
         subset_names = ["main_ligands", "additional_ligands", "bacteria_ligands"]
@@ -436,7 +436,7 @@ class MATseqPipeline:
         pd.Series(sorted(shared), name="gene").to_csv(
             de_dir / "de_genes_shared_all_subsets.csv", index=False
         )
-        VennDiagramGenerator().plot_venn3(
+        plot_venn(
             [de_sets[s] for s in subset_names],
             set_labels=tuple(subset_names),
             output_filename="venn_de_across_subsets.png",
@@ -445,11 +445,11 @@ class MATseqPipeline:
 
         print("\n--- STEP 3: VENN OF FS vs DE GENES (training subset) ---")
         de_genes = deseq2_main.get_de_genes()
-        fs_analyzer, fs_genes = self._venn_feature_selection(
-            X_train, y_train, de_genes=de_genes, n_runs=1000
-        )
-        VennDiagramGenerator().plot_venn(
-            de_genes, fs_genes, output_filename="venn_de_vs_fs.png"
+        fs_genes = set(self._select_features(X_train, y_train))
+        plot_venn(
+            [de_genes, fs_genes],
+            set_labels=("Differentially Expressed Genes", "Feature Selection Genes"),
+            output_filename="venn_de_vs_fs.png",
         )
         goeaobj, geneid_symbol_mapper = deseq2_main.get_go_objects()
         create_fs_de_go_table(
@@ -459,30 +459,30 @@ class MATseqPipeline:
             geneid_symbol_mapper=geneid_symbol_mapper,
         )
 
-        print("\n--- STEP 3b: FINAL GENE SETS (stable selection and DE overlap) ---")
-        n_stable = FEATURE_SELECTION_CONFIG["max_features"]
-        stable_genes = fs_analyzer.stable_gene_set(top_n=n_stable)
-        overlap_genes = sorted(set(stable_genes) & set(de_genes))
-        union_genes = sorted(set(stable_genes) | set(de_genes))
+        print("\n--- STEP 3b: FINAL GENE SETS (selected genes and DE overlap) ---")
+        selected_genes = sorted(fs_genes)
+        overlap_genes = sorted(fs_genes & set(de_genes))
+        union_genes = sorted(fs_genes | set(de_genes))
+        primary_gs = primary_geneset_name()
         genesets = {
-            "selected_100": list(stable_genes),
+            primary_gs: selected_genes,
             "de_overlap": overlap_genes,
             "union_stable_de": union_genes,
         }
 
         fs_dir = self.results_dir / "feature_selection"
         fs_dir.mkdir(parents=True, exist_ok=True)
-        pd.Series(stable_genes, name="gene").to_csv(
-            fs_dir / "selected_genes_100.csv", index=False
+        pd.Series(selected_genes, name="gene").to_csv(
+            fs_dir / "selected_genes.csv", index=False
         )
         pd.Series(overlap_genes, name="gene").to_csv(
             fs_dir / "selected_genes_de_overlap.csv", index=False
         )
         pd.DataFrame(
-            {"gene": stable_genes, "in_de": [g in de_genes for g in stable_genes]}
+            {"gene": selected_genes, "in_de": [g in de_genes for g in selected_genes]}
         ).to_csv(fs_dir / "selected_vs_de_overlap_table.csv", index=False)
         print(
-            f"  stable selected: {len(stable_genes)}; DE overlap: {len(overlap_genes)}"
+            f"  selected: {len(selected_genes)}; DE overlap: {len(overlap_genes)}"
         )
 
         from src.config import get_test_work_dir, get_test_name
@@ -580,9 +580,10 @@ class MATseqPipeline:
             print(f"  External-validation performance table saved: {external_perf_csv}")
             table2_df = external_perf_df
 
-            primary = table2_df[table2_df["gene_set"] == "selected_100"]
+            primary_gs = primary_geneset_name()
+            primary = table2_df[table2_df["gene_set"] == primary_gs]
             best_two = primary.sort_values("f1", ascending=False)["model"].head(2).tolist()
-            print(f"  Best two models by EXTERNAL F1 (selected_100): {best_two}")
+            print(f"  Best two models by EXTERNAL F1 ({primary_gs}): {best_two}")
 
             self._pca_plot(Xv, yv, "main_ligands", suffix="_external_test")
             self._pca_plot(
@@ -613,10 +614,6 @@ class MATseqPipeline:
             X_other, y_other, X_bact, y_bact,
         )
 
-        print("\n--- STEP 9: COMPOSE MAIN-TEXT FIGURES ---")
-        from src.figure_composition import compose_all
-        compose_all()
-
         print("\n" + "=" * 80)
         print("PIPELINE COMPLETED SUCCESSFULLY")
         print("=" * 80)
@@ -624,7 +621,7 @@ class MATseqPipeline:
         print(f"Cache saved to: {self.cache.cache_dir.absolute()}")
 
         return {
-            "feature_analysis": fs_analyzer,
+            "selected_genes": selected_genes,
             "models": trainer,
             "models_wo_flapa": trainer_wo,
             "best_two": best_two,
@@ -668,7 +665,7 @@ def main():
     parser.add_argument(
         "--tune-forest",
         action="store_true",
-        help="Scan select_forest max_features by PCA cluster separation and exit",
+        help="Grid-search the forest selector by KMeans cluster separation (ARI) and exit",
     )
 
     args = parser.parse_args()

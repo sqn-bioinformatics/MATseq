@@ -13,10 +13,10 @@
     "n_cpus": 42
   },
   "feature_selection": {
-    "k_best": 4063,
-    "n_estimators": 250,
+    "k_best": 4548,
+    "n_estimators": 100,
     "max_depth": 5,
-    "max_features": 100
+    "max_features": 500
   },
   "model_training": {
     "random_state": 42
@@ -122,30 +122,101 @@
     "additional_ligands": "palette_9",
     "bacteria_ligands": "palette_8"
   },
+  "forest_selection_grid": {
+    "n_estimators": [
+      100,
+      200,
+      250,
+      300
+    ],
+    "max_depth": [
+      2,
+      3,
+      5
+    ],
+    "n_selected": [
+      50,
+      70,
+      90,
+      110,
+      130,
+      150,
+      200,
+      300,
+      500
+    ]
+  },
   "hyperparameter_grids": {
     "LinearSVC": {
-      "clf__estimator__C": [0.1, 1, 10]
+      "clf__estimator__C": [
+        0.1,
+        1,
+        10
+      ]
     },
     "SGDClassifier": {
-      "clf__alpha": [0.0001, 0.001, 0.01, 0.1, 1.0],
-      "clf__penalty": ["l2", "elasticnet"]
+      "clf__alpha": [
+        0.0001,
+        0.001,
+        0.01,
+        0.1,
+        1.0
+      ],
+      "clf__penalty": [
+        "l2",
+        "elasticnet"
+      ]
     },
     "LogisticRegression": {
-      "clf__C": [0.01, 0.1, 1, 10]
+      "clf__C": [
+        0.01,
+        0.1,
+        1,
+        10
+      ]
     },
     "RandomForest": {
-      "clf__n_estimators": [200, 500],
-      "clf__max_depth": [5, null]
+      "clf__n_estimators": [
+        200,
+        250,
+        300,
+        500
+      ],
+      "clf__max_depth": [
+        null,
+        3,
+        5
+      ]
     },
     "XGBoost": {
-      "clf__max_depth": [2, 3],
-      "clf__n_estimators": [100, 300, 500],
-      "clf__learning_rate": [0.05, 0.1],
-      "clf__min_child_weight": [1, 5],
-      "clf__subsample": [0.8],
-      "clf__colsample_bytree": [0.8],
-      "clf__reg_lambda": [1, 10],
-      "clf__gamma": [0, 1]
+      "clf__max_depth": [
+        2,
+        3
+      ],
+      "clf__n_estimators": [
+        100,
+        300,
+        500
+      ],
+      "clf__learning_rate": [
+        0.05,
+        0.1
+      ],
+      "clf__subsample": [
+        0.8,
+        0.9
+      ],
+      "clf__colsample_bytree": [
+        0.3,
+        0.5,
+        0.8
+      ],
+      "clf__reg_lambda": [
+        1,
+        10,
+        50,
+        100
+      ]
     }
   },
   "snakemake": {
