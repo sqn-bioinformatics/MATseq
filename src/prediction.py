@@ -10,7 +10,7 @@ import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix
 
 from .model_training import ModelTrainer, ModelFactory, make_score
-from .config import SUBSET_CLASS_ORDERS
+from .config import SUBSET_CLASS_ORDERS, order_labels
 
 
 class ModelPredictor:
@@ -97,7 +97,7 @@ class ModelPredictor:
             proba_df.to_csv(output_path)
             print(f"Saved probabilities to {output_path}")
 
-    def evaluate(self, output_dir: Path) -> pd.DataFrame:
+    def evaluate(self, output_dir: Path, subset: str = "main_ligands") -> pd.DataFrame:
         """Score predictions against true labels, identically to nested-CV training.
 
         Reuses make_score (accuracy, balanced accuracy, macro precision/recall/f1,
@@ -122,7 +122,7 @@ class ModelPredictor:
             y_pred = pred_df["prediction"].to_numpy()
             rows.append({"model": model_name, **make_score(y_true, y_pred)})
 
-            labels = sorted(set(y_true) | set(y_pred))
+            labels = order_labels(set(y_true) | set(y_pred), subset)
             report = classification_report(
                 y_true, y_pred, labels=labels, zero_division=0, output_dict=True
             )
@@ -139,7 +139,7 @@ class ModelPredictor:
                 output_dir / f"{model_name}_confusion_matrix_normalized.csv"
             )
             self.trainer._save_confusion_matrix(
-                cm_norm, labels, model_name, output_dir
+                cm_norm, labels, model_name, output_dir, subset=subset,
             )
 
         summary = pd.DataFrame(rows)

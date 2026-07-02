@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.pipeline import Pipeline as SkPipeline
@@ -165,6 +166,7 @@ class MATseqPipeline:
                 name=f"{subset_name}{suffix}{label_suffix}",
                 with_sample_names=with_names,
                 output_filename=f"{subset_name}{suffix}_pca{label_suffix}.png",
+                equal_aspect=True,
             )
 
     def _tune_subset(
@@ -265,7 +267,7 @@ class MATseqPipeline:
         out_dir = output_dir / subset_key
         predictor.predict_samples(X, sample_names=X.index.to_numpy(), y_test=y)
         predictor.save_predictions(out_dir)
-        predictor.evaluate(out_dir)
+        predictor.evaluate(out_dir, subset=subset or subset_key)
         predictor.create_probability_heatmaps(
             out_dir, subset=subset or subset_key, all_controls=all_controls
         )
@@ -325,6 +327,151 @@ class MATseqPipeline:
         )
         print(f"Wrote scan to {out_dir / 'forest_kmeans_separation.csv'}")
         return result
+
+    def replot(self):
+        """Regenerate figures from cache + saved CSVs (NO model recompute).
+
+        Rebuilds the equal-aspect PCA scatters and re-renders every saved
+        confusion matrix in the Nature 'Blues' style, then assembles three
+        review collages (Training / Test / Additional ligands), each a 2x3
+        grid of one PCA panel + five model confusion matrices.
+        """
+        from functools import partial
+        import numpy as np
+        from src.config import (
+            get_test_name,
+            get_test_work_dir,
+            primary_geneset_name,
+            subset_display,
+            confusion_title,
+        )
+        from src.visualization import (
+            draw_pca,
+            draw_confusion_matrix,
+            assemble_panel_collage,
+        )
+        from sklearn.decomposition import PCA
+
+        print("=" * 80)
+        print("MAT-seq REPLOT (figures only; no model recompute)")
+        print("=" * 80)
+
+        models = ["LogisticRegression", "SGDClassifier", "LinearSVC",
+                  "RandomForest", "XGBoost"]
+        gs = primary_geneset_name()
+        test_name = get_test_name()
+        fig_root = self.results_dir / "figures"
+        collage_dir = fig_root / "collages"
+        collage_dir.mkdir(parents=True, exist_ok=True)
+
+        # --- Data from cache (cheap) + frozen selected-gene PCA pipeline -----
+        features, labels = self.cache.cached_call(
+            prepare_counts, name="prepare_counts",
+            force_recompute=False, key_inputs={"ligand_aliases": LIGAND_ALIASES},
+        )
+        X_main, y_main = extract_subset(features, labels, "main_ligands")
+        fs_pca = FeatureSelector.feature_pipeline(
+            **FEATURE_SELECTION_CONFIG
+        ).set_output(transform="pandas")
+        fs_pca.fit(X_main, y_main)
+
+        subset_xy = {}
+        for subset in ["main_ligands", "additional_ligands", "bacteria_ligands"]:
+            X_sub, y_sub = extract_subset(features, labels, subset)
+            subset_xy[subset] = (X_sub, y_sub)
+            if subset == "main_ligands":
+                X_pca, y_pca = X_sub, y_sub
+            else:
+                X_pca = pd.concat([X_sub, X_main])
+                y_pca = pd.concat([y_sub, y_main])
+            self._pca_plot(X_pca, y_pca, subset)
+            self._pca_plot(X_pca, y_pca, subset, fs=fs_pca, suffix="_selected")
+
+        def _cm(ax, csv_path, model, subset, show_cbar=False):
+            df = pd.read_csv(csv_path, index_col=0)
+            draw_confusion_matrix(
+                ax, df.values, list(df.index),
+                title=confusion_title(model, subset), show_cbar=show_cbar,
+                show_tick_labels=False,
+            )
+
+        def _pca_panel(ax, X, y, subset_key, title):
+            Xt = fs_pca.transform(X)
+            coords = PCA(n_components=2).fit_transform(Xt)
+            draw_pca(
+                ax, coords, np.asarray(y),
+                palette=SUBSET_PALETTES.get(subset_key, CUSTOM_PALETTE_9),
+                hue_order=SUBSET_CLASS_ORDERS.get(subset_key),
+                equal_aspect=True, title=title,
+            )
+
+        def build_collage(pca_draw, cm_dir, subset_label_key, out_name, title,
+                          file_prefix=""):
+            panels = [pca_draw]
+            for m in models:
+                csv = (Path(cm_dir)
+                       / f"{file_prefix}{m}_confusion_matrix_normalized.csv")
+                panels.append(
+                    partial(_cm, csv_path=csv, model=m, subset=subset_label_key)
+                )
+            out = assemble_panel_collage(
+                panels, collage_dir / out_name, ncols=3, title=title,
+            )
+            print(f"  Collage saved: {out}")
+            return out
+
+        # 1. Training Ligands (internal nested-CV OOF confusion matrices).
+        X_tr, y_tr = subset_xy["main_ligands"]
+        build_collage(
+            partial(_pca_panel, X=X_tr, y=y_tr, subset_key="main_ligands",
+                    title="PCA Training Ligands"),
+            fig_root / "model_evaluation",
+            "main_ligands",
+            "training_ligands_collage.png",
+            "Training Ligands",
+            file_prefix="main_ligands_",
+        )
+
+        # 2. Test Ligands (external batch 7086)
+        test_fc = get_test_work_dir() / "featurecounts"
+        test_cm_dir = self.results_dir / "validation" / test_name / gs / "main_ligands"
+        if test_fc.is_dir() and any(test_fc.glob("*.txt")):
+            test_counts, test_labels = prepare_counts(featurecounts_dir=test_fc)
+            Xv, yv = extract_subset(test_counts, test_labels, "main_ligands")
+            test_pca = partial(_pca_panel, X=Xv, y=yv, subset_key="main_ligands",
+                               title="PCA Test Ligands")
+        else:
+            print("  (no external featurecounts; Test PCA panel skipped)")
+            test_pca = lambda ax: ax.axis("off")
+        build_collage(
+            test_pca, test_cm_dir, "external_test",
+            "test_ligands_collage.png", "Test Ligands",
+        )
+
+        # 3. Additional Ligands (prediction on unseen ligands)
+        X_add, y_add = subset_xy["additional_ligands"]
+        add_cm_dir = self.results_dir / "predictions" / gs / "additional_ligands"
+        build_collage(
+            partial(_pca_panel, X=pd.concat([X_add, X_main]),
+                    y=pd.concat([y_add, y_main]), subset_key="additional_ligands",
+                    title="PCA Additional Ligands"),
+            add_cm_dir, "additional_ligands",
+            "additional_ligands_collage.png", "Additional Ligands",
+        )
+
+        # 4. Bacterial Ligands (heat-killed E. coli / S. aureus)
+        X_bact, y_bact = subset_xy["bacteria_ligands"]
+        bact_cm_dir = self.results_dir / "predictions" / gs / "bacteria_ligands"
+        build_collage(
+            partial(_pca_panel, X=pd.concat([X_bact, X_main]),
+                    y=pd.concat([y_bact, y_main]), subset_key="bacteria_ligands",
+                    title="PCA Bacterial Ligands"),
+            bact_cm_dir, "bacteria_ligands",
+            "bacterial_ligands_collage.png", "Bacterial Ligands",
+        )
+
+        print("\nReplot complete. Collages in:", collage_dir)
+        return collage_dir
 
     def run_pipeline(self):
         print("=" * 80)
@@ -667,11 +814,19 @@ def main():
         action="store_true",
         help="Grid-search the forest selector by KMeans cluster separation (ARI) and exit",
     )
+    parser.add_argument(
+        "--replot",
+        action="store_true",
+        help="Regenerate figures/collages from cache + saved CSVs (no model recompute) and exit",
+    )
 
     args = parser.parse_args()
     pipeline = MATseqPipeline(
         cache_dir=args.cache_dir, force_recompute=args.force_recompute
     )
+
+    if args.replot:
+        return pipeline.replot()
 
     if args.tune_features:
         return pipeline.tune_feature_count()

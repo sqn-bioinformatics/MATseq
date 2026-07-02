@@ -15,7 +15,12 @@ from adjustText import adjust_text
 import scanpy as sc
 
 from .preprocessing import normalize_rpm
-from .config import CUSTOM_PALETTE_6
+from .config import (
+    CUSTOM_PALETTE_6,
+    display_labels,
+    subset_display,
+    confusion_title,
+)
 
 
 def _savefig_with_arrow_fallback(save_path, **kwargs):
@@ -47,6 +52,124 @@ def _savefig_with_arrow_fallback(save_path, **kwargs):
                 )
                 txt.remove()
         plt.savefig(save_path, **kwargs)
+
+
+def draw_confusion_matrix(ax, cm_norm, class_names, title=None, show_cbar=True,
+                          show_tick_labels=True):
+    """Render a row-normalized confusion matrix on ``ax`` in Nature 'Blues' style.
+
+    Parameters
+    ----------
+    ax : matplotlib Axes
+    cm_norm : 2D array-like, row-normalized (values in [0, 1])
+    class_names : sequence of RAW class labels (display-cleaned internally)
+    title : optional str (used verbatim; caller builds via confusion_title)
+    show_cbar : whether to draw the colour bar (off for collage panels)
+    show_tick_labels : whether to print the per-class ligand names on the axes.
+        Off for collage panels, where the panel title already identifies the
+        matrix and dropping the (repeated) labels tightens inter-panel spacing.
+    """
+    cm = np.asarray(cm_norm, dtype=float)
+    labels = display_labels(class_names)
+    n = cm.shape[0]
+    ncol = cm.shape[1]
+
+    # Fontsizes shrink as the matrix widens so "100.0%" always fits a cell.
+    ncell = max(n, ncol)
+    annot_fs = 9 if ncell <= 6 else (7 if ncell == 7 else 6)
+    tick_fs = 9 if ncell <= 7 else 8
+
+    # aspect="auto" + a fixed square box makes every matrix render at the SAME
+    # physical size regardless of class count (5x5 / 6x6 / 7x7). With equal
+    # aspect the larger matrices drew bigger and tight_layout left uneven
+    # margins between collage panels; a fixed box keeps the panels uniform and
+    # lets them pack tightly.
+    im = ax.imshow(cm, cmap="Blues", vmin=0.0, vmax=1.0, aspect="auto")
+    ax.set_box_aspect(1)
+
+    ax.set_xticks(range(ncol))
+    ax.set_yticks(range(n))
+    if show_tick_labels:
+        ax.set_xticklabels(labels[:ncol], rotation=45, ha="right",
+                           fontsize=tick_fs)
+        ax.set_yticklabels(labels[:n], fontsize=tick_fs)
+    else:
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+    ax.set_xlabel("Predicted class", fontsize=10)
+    ax.set_ylabel("True class", fontsize=10)
+    if title:
+        ax.set_title(title, fontsize=11, pad=8)
+
+    for i in range(n):
+        for j in range(ncol):
+            v = cm[i, j]
+            # Drop the decimal for a full 100% so it never overruns the cell.
+            txt = "100%" if v >= 0.9995 else f"{v * 100:.1f}%"
+            ax.text(j, i, txt, ha="center", va="center",
+                    color="white" if v > 0.5 else "#222222", fontsize=annot_fs)
+
+    # White minor gridlines between cells; hide spines and tick marks.
+    ax.set_xticks(np.arange(-0.5, cm.shape[1], 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, n, 1), minor=True)
+    ax.grid(which="minor", color="white", linewidth=1.5)
+    ax.tick_params(which="both", length=0)
+    for s in ax.spines.values():
+        s.set_visible(False)
+
+    if show_cbar:
+        cbar = ax.figure.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cbar.outline.set_visible(False)
+        cbar.ax.tick_params(length=0)
+    return im
+
+
+def save_confusion_matrix(cm_norm, class_names, model, subset, output_dir,
+                          filename=None):
+    """Save a single Nature-style confusion matrix figure and return its path."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(6.5, 6))
+    draw_confusion_matrix(ax, cm_norm, class_names,
+                          title=confusion_title(model, subset))
+    fig.tight_layout()
+    if filename is None:
+        filename = f"{subset}_{model}_confusion_matrix.png"
+    save_path = output_dir / filename
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return save_path
+
+
+def assemble_panel_collage(panels, output_path, ncols=3, panel_size=5.0,
+                           title=None):
+    """Compose an N-panel collage from a list of draw callables.
+
+    Each entry in ``panels`` is a callable ``fn(ax)`` that renders one panel on
+    the Axes it is given. Panels are laid out row-major into ceil(N/ncols) rows.
+    """
+    n = len(panels)
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(panel_size * ncols, panel_size * nrows)
+    )
+    axes = np.atleast_1d(axes).ravel()
+    for ax, draw in zip(axes, panels):
+        draw(ax)
+    for ax in axes[n:]:
+        ax.axis("off")
+    if title:
+        fig.suptitle(title, fontsize=15, y=1.0)
+    # Panels are fixed square boxes. The gutter is widened (wspace) so the PCA
+    # panel's legend, anchored just outside its top-right corner, clears the
+    # neighbouring confusion matrix without truncating any class name.
+    fig.subplots_adjust(wspace=0.45, hspace=0.18,
+                        left=0.04, right=0.98, top=0.93, bottom=0.05)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
 
 
 def plot_venn(
@@ -231,6 +354,66 @@ def plot_gene_expression_by_class(
     return save_path.absolute()
 
 
+def draw_pca(ax, X_reduced, label_values, palette=CUSTOM_PALETTE_6,
+             hue_order=None, with_sample_names=False, sample_names=None,
+             equal_aspect=True, title=None, marker_size=80):
+    """Render a 2-component PCA scatter on ``ax`` (equal aspect by default).
+
+    Legend entries are display-cleaned (no underscores). ``X_reduced`` is the
+    Nx2 PCA-projected array; ``label_values`` the per-sample class labels.
+    """
+    sns.scatterplot(
+        x=X_reduced[:, 0],
+        y=X_reduced[:, 1],
+        hue=label_values,
+        hue_order=hue_order,
+        s=200 if with_sample_names else marker_size,
+        alpha=0.6,
+        palette=palette,
+        ax=ax,
+    )
+    ax.set_xlabel("PC1", fontsize=12)
+    ax.set_ylabel("PC2", fontsize=12)
+    ax.tick_params(axis="both", labelsize=11)
+    if title:
+        ax.set_title(title, fontsize=11, pad=8)
+
+    if with_sample_names and sample_names is not None:
+        texts = [
+            ax.text(X_reduced[i, 0], X_reduced[i, 1], sample_names[i],
+                    ha="left", va="bottom", alpha=0.8, fontsize=12)
+            for i in range(len(X_reduced))
+        ]
+        adjust_text(texts, ax=ax,
+                    arrowprops=dict(arrowstyle="->", color="black"))
+
+    # Clean legend labels (strip underscores / apply display names).
+    handles, labels_txt = ax.get_legend_handles_labels()
+    if handles:
+        # Place the legend OUTSIDE the axes, anchored to the top-right corner
+        # of the (fixed-square) PCA box. The collage reserves gutter space to
+        # the right of the PCA panel (see assemble_panel_collage wspace) so the
+        # legend clears the neighbouring confusion matrix and no class name is
+        # truncated, while never overlapping the scatter points.
+        ax.legend(handles, display_labels(labels_txt),
+                  loc="upper left", bbox_to_anchor=(1.02, 1.0),
+                  borderaxespad=0, ncol=1, fontsize=9,
+                  frameon=False, handletextpad=0.4)
+
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
+    for spine in ["left", "bottom"]:
+        ax.spines[spine].set_linewidth(1.5)
+
+    if equal_aspect:
+        # Equal data aspect inside a fixed square box: keeps PC1/PC2 on the
+        # same scale while matching the fixed-square confusion-matrix panels so
+        # all collage panels align and pack tightly.
+        ax.set_aspect("equal", adjustable="datalim")
+        ax.set_box_aspect(1)
+    return ax
+
+
 def plot_pca_pandas(
     name: str,
     X: pd.DataFrame,
@@ -270,7 +453,6 @@ def plot_pca_pandas(
     X_reduced = PCA(n_components=2).fit_transform(X)
 
     figsize = (20, 15) if with_sample_names else (6, 6)
-    marker_size = 200 if with_sample_names else 80
 
     with plt.rc_context(
         {
@@ -279,45 +461,17 @@ def plot_pca_pandas(
         }
     ):
         fig = plt.figure(figsize=figsize)
-        ax = sns.scatterplot(
-            x=X_reduced[:, 0],
-            y=X_reduced[:, 1],
-            hue=label_values,
-            hue_order=hue_order,
-            s=marker_size,
-            alpha=0.6,
+        ax = fig.add_subplot(111)
+        draw_pca(
+            ax,
+            X_reduced,
+            label_values,
             palette=palette,
+            hue_order=hue_order,
+            with_sample_names=with_sample_names,
+            sample_names=sample_names,
+            equal_aspect=equal_aspect,
         )
-
-        ax.set_xlabel("1st Eigenvector", fontsize=14)
-        ax.set_ylabel("2nd Eigenvector", fontsize=14)
-        ax.tick_params(axis="both", labelsize=14)
-
-        if with_sample_names:
-            texts = [
-                ax.text(
-                    X_reduced[:, 0][i],
-                    X_reduced[:, 1][i],
-                    sample_names[i],
-                    ha="left",
-                    va="bottom",
-                    alpha=0.8,
-                    fontsize=12,
-                )
-                for i in range(len(X_reduced))
-            ]
-            adjust_text(texts, arrowprops=dict(arrowstyle="->", color="black"))
-
-        ax.legend(bbox_to_anchor=(1, 1.0), ncol=1, fontsize=12)
-
-        for spine in ["top", "right"]:
-            ax.spines[spine].set_visible(False)
-        for spine in ["left", "bottom"]:
-            ax.spines[spine].set_linewidth(1.5)
-
-        if equal_aspect:
-            ax.set_aspect("equal", adjustable="box")
-
         plt.tight_layout()
 
         project_root = Path(__file__).parent.parent
