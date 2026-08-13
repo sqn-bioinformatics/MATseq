@@ -25,29 +25,19 @@ from sklearn.metrics import (
     f1_score,
     classification_report,
     confusion_matrix,
-    ConfusionMatrixDisplay,
 )
 from sklearn.model_selection import (
     StratifiedKFold,
     GridSearchCV,
 )
 from sklearn.base import clone
-import matplotlib.pyplot as plt
 
-from .feature_engineering import FeatureSelector
-from .config import FEATURE_SELECTION_CONFIG, SUBSET_CLASS_ORDERS, order_labels
+from .feature_engineering import feature_pipeline
+from .config import FEATURE_SELECTION_CONFIG, CLASS_ORDER
 
 
 def make_score(y_test, y_pred) -> dict:
-    """Calculate multiple classification metrics.
-
-    Args:
-        y_test: True labels.
-        y_pred: Predicted labels.
-
-    Returns:
-        dict: Dictionary of metric names to scores.
-    """
+    """Accuracy, balanced accuracy, macro precision/recall/f1, and weighted f1."""
     return {
         "accuracy": accuracy_score(y_test, y_pred),
         "balanced_accuracy": balanced_accuracy_score(y_test, y_pred),
@@ -66,15 +56,7 @@ class ModelFactory:
         random_state: int = 42,
         calibrate: bool = True,
     ) -> Dict:
-        """Create a dictionary of classifier models.
-
-        Args:
-            random_state: Random state for reproducibility.
-            calibrate: Whether to use CalibratedClassifierCV for SVM.
-
-        Returns:
-            Dictionary of model names to model instances.
-        """
+        """Create the classifier dict; calibrate wraps LinearSVC in CalibratedClassifierCV."""
         models = {}
 
         svc = LinearSVC(
@@ -136,31 +118,8 @@ class ModelTrainer:
         models: Optional[Dict] = None,
         random_state: int = 42,
     ) -> None:
-        """Initialize trainer with data and models.
-
-        Args:
-            X: Feature matrix (samples x features).
-            y: Target labels as 1D array or string labels.
-            models: Dictionary of model names to instances. If None, creates default set.
-            random_state: Random state for reproducibility.
-        """
         if not isinstance(X, (np.ndarray, pd.DataFrame)):
             raise TypeError(f"X must be ndarray or DataFrame, got {type(X)}")
-        if X.ndim != 2:
-            raise ValueError(f"X must be 2D, got shape {X.shape}")
-        if len(X) == 0:
-            raise ValueError(f"X must have samples, got {len(X)}")
-        if not isinstance(y, (np.ndarray, pd.Series)):
-            raise TypeError(f"y must be ndarray or Series, got {type(y)}")
-        if y.ndim != 1:
-            raise ValueError(f"y must be 1D, got shape {y.shape}")
-        if len(X) != len(y):
-            raise ValueError(f"X and y must have same length: {len(X)} vs {len(y)}")
-        if not isinstance(random_state, int):
-            raise TypeError(f"random_state must be int, got {type(random_state)}")
-
-        self.X = X
-        self.y = y
         self.models = (
             models
             if models is not None
@@ -171,25 +130,11 @@ class ModelTrainer:
         self.trained_models = {}
 
     def decode_predictions(self, y_pred_encoded: np.ndarray) -> np.ndarray:
-        """Convert encoded predictions back to original labels.
-
-        Args:
-            y_pred_encoded: Encoded predictions.
-
-        Returns:
-            Decoded predictions with original labels.
-        """
+        """Convert encoded predictions back to original labels."""
         return self.label_encoder.inverse_transform(y_pred_encoded)
 
     def save_models(self, output_dir: Path) -> Path:
-        """Save trained models to disk.
-
-        Args:
-            output_dir: Directory to save models.
-
-        Returns:
-            Path to the saved models directory.
-        """
+        """Pickle the trained models and the label encoder into output_dir."""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -207,7 +152,7 @@ class ModelTrainer:
         return output_dir
 
     def _build_tuning_pipeline(self, model, fold_seed: int) -> SkPipeline:
-        fs = FeatureSelector.feature_pipeline(
+        fs = feature_pipeline(
             **FEATURE_SELECTION_CONFIG, random_state=fold_seed
         )
         # The FS steps are identical across all clf hyperparameter combos in a
@@ -234,20 +179,6 @@ class ModelTrainer:
         eval_name: Optional[str] = None,
     ) -> pd.DataFrame:
         """Nested CV tuning + deployment refit.
-
-        Leakage boundary: every step that learns from X or y (library-size
-        normalization, log1p, feature selection, scaling, class-weight
-        derivation, calibration) lives inside the sklearn Pipeline and is
-        refit per outer fold. No selection or filtering on labels happens
-        outside outer CV.
-
-        Outer split estimates generalization of the tuning procedure. Inner
-        GridSearchCV jointly selects FS and model hyperparameters per outer
-        fold using f1_macro. Final deployment params are selected by majority
-        vote across outer folds (tie-break: mean inner f1_macro, then pooled
-        outer f1_macro); pipeline is refit on the full data.
-
-        X and y are method arguments — not instance state.
         """
         output_dir = Path(output_dir)
         inner_results_dir = output_dir / "inner_cv_results"
@@ -359,8 +290,10 @@ class ModelTrainer:
         oof_frames = []
         pooled_rows = []
         _subset_key = (eval_name or "main_ligands").split("_no_flapa")[0]
-        if _subset_key not in SUBSET_CLASS_ORDERS:
+        if _subset_key not in CLASS_ORDER:
             _subset_key = "main_ligands"
+        from .visualization import order_labels
+
         class_names = order_labels(self.label_encoder.classes_, _subset_key)
         for model_name in self.models:
             df = pd.DataFrame(pooled[model_name])
@@ -393,17 +326,15 @@ class ModelTrainer:
                 output_dir / f"{prefix}{model_name}_classification_report.csv"
             )
 
-            cm = confusion_matrix(y_true_dec, y_pred_dec, labels=class_names)
-            cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True).clip(min=1)
+            cm = confusion_matrix(
+                y_true_dec, y_pred_dec, labels=class_names, normalize="true"
+            )
             pd.DataFrame(cm, index=class_names, columns=class_names).to_csv(
                 fig_dir / f"{prefix}{model_name}_confusion_matrix.csv"
             )
-            pd.DataFrame(cm_norm, index=class_names, columns=class_names).to_csv(
-                fig_dir / f"{prefix}{model_name}_confusion_matrix_normalized.csv"
-            )
             self._save_confusion_matrix(
-                cm_norm, class_names, model_name, fig_dir,
-                subset=eval_name or "main_ligands", file_prefix=prefix,
+                cm, class_names, model_name, fig_dir,
+                subset=eval_name or "main_ligands"is th, file_prefix=prefix,
             )
 
         pd.concat(oof_frames, ignore_index=True).to_csv(
@@ -432,7 +363,10 @@ class ModelTrainer:
     def _select_and_refit(
         self, X, y_encoded, per_fold_df: pd.DataFrame
     ) -> Dict[str, dict]:
-        """Select deployment params by majority vote across outer folds; tie-break by mean inner f1_macro, then mean outer f1; refit on full data."""
+        """Select deployment params by majority vote across outer folds.
+
+        Tie-break by mean inner f1_macro, then mean outer f1; refit on full data.
+        """
         selected = {}
         for model_name, model in self.models.items():
             rows = per_fold_df[per_fold_df["model"] == model_name]
@@ -466,14 +400,15 @@ class ModelTrainer:
         return selected
 
     def _save_confusion_matrix(
-        self, cm_norm, class_names, model: str, output_dir: Path,
+        self, cm, class_names, model: str, output_dir: Path,
         subset: str = "main_ligands", file_prefix: str = "",
     ) -> None:
-        """Save a Nature-style confusion matrix (delegates to visualization)."""
-        from .visualization import save_confusion_matrix
+        """Save a confusion matrix (delegates to visualization)."""
+        from .visualization import plot_confusion_matrix, confusion_title
 
-        save_path = save_confusion_matrix(
-            cm_norm, class_names, model, subset, output_dir,
+        save_path = plot_confusion_matrix(
+            cm, class_names, title=confusion_title(model, subset),
+            output_dir=output_dir,
             filename=f"Confusion_Matrix_{file_prefix}{model}.png",
         )
         print(f"Figure saved: {save_path}")
@@ -484,32 +419,6 @@ class ModelTrainer:
         trainer = cls.__new__(cls)
         trainer.trained_models = trained_models
         trainer.label_encoder = label_encoder
-        trainer.X = None
-        trainer.y = None
         return trainer
 
-    @classmethod
-    def load_models(cls, model_dir: Path) -> "ModelTrainer":
-        """Load trained models from disk.
 
-        Args:
-            model_dir: Directory containing saved models.
-
-        Returns:
-            ModelTrainer instance with loaded models.
-        """
-        model_dir = Path(model_dir)
-
-        with open(model_dir / "label_encoder.pkl", "rb") as f:
-            label_encoder = pickle.load(f)
-
-        trained_models = {}
-        for model_file in model_dir.glob("*.pkl"):
-            if model_file.name == "label_encoder.pkl":
-                continue
-            model_name = model_file.stem
-            with open(model_file, "rb") as f:
-                trained_models[model_name] = pickle.load(f)
-
-        print(f"Models loaded from {model_dir}")
-        return cls.from_trained_models(trained_models, label_encoder)

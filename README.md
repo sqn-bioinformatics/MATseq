@@ -126,17 +126,23 @@ cached under `results/cache`; rerun with `--force-recompute` to ignore the cache
    - Gene-frequency table; GO enrichment on DE ∩ FS and FS \ DE gene sets
 
 4. **Nested CV tuning + deployment refit** (main panel, with and without Fla-PA)
-   - Nested stratified CV (5 outer, 3 inner) tuning LinearSVC, LogisticRegression, RandomForest, XGBoost
-   - Inner `GridSearchCV` jointly tunes feature-selection and classifier hyperparameters on macro F1
+   - Nested stratified CV (5 outer, 3 inner) tuning LinearSVC, SGDClassifier, LogisticRegression, RandomForest, XGBoost
+   - Feature selection is embedded in the cross-validation pipeline and re-fit on each outer training fold only (no test-fold information reaches selection), so reported metrics are leakage-free
+   - Inner `GridSearchCV` tunes classifier hyperparameters on macro F1
    - Class imbalance handled with balanced class/sample weights (no SMOTE)
    - Deployment hyperparameters chosen by majority vote across outer folds, then refit on the full panel
    - Writes per-fold and pooled out-of-fold metrics, confusion matrices, and `selected_params.json`
    - A second model set is trained on the main panel excluding Fla-PA
 
+4c. **Table 2 feature-set benchmark** (`ModelTrainer.benchmark_feature_set_conditions`)
+   - Re-runs the leakage-free nested CV (5 outer, 3 inner) for every model across four feature-set conditions: all genes, feature selection, feature selection + DE, and a randomly selected gene set of matching size
+   - The gene set for each condition is derived on the outer-training fold only (feature selection and DESeq2 re-run per fold), frozen, then scored once on the outer-test fold
+   - Writes the raw long-form `results/tables/table2_feature_set_benchmark.csv`; `src/make_tables.py` (`format_table2`) reshapes it into the publication table (`table2_formatted.csv` and `table2.tex`)
+
 5. **Model validation on external test batch**
    - Apply the deployed models to an independent sequencing batch (`test.work_dir/featurecounts`)
    - Predictions, probabilities and probability heatmaps, with and without Fla-PA
-   - PCA before and after the 200-gene selection (reusing the main-panel palette and class order)
+   - PCA before and after feature selection (reusing the main-panel palette and class order)
    - DESeq2 of each ligand vs negative control on the external batch
    - Skipped automatically if no external featureCounts are present
 
@@ -165,6 +171,12 @@ results/
 │   ├── GO_merged_results.csv               # All per-ligand terms merged
 │   ├── de_intersect_fs_go_terms.csv        # GO for DE ∩ FS gene set
 │   └── fs_only_go_terms.csv                # GO for FS \ DE gene set
+├── tables/
+│   ├── supp_nested_cv_main.csv             # Nested CV summary (main panel)
+│   ├── supp_nested_cv_no_flapa.csv         # Nested CV summary (no Fla-PA)
+│   ├── table2_feature_set_benchmark.csv    # Raw feature-set benchmark (long form)
+│   ├── table2_formatted.csv                # Publication Table 2 (mean ± SD grid)
+│   └── table2.tex                          # Publication Table 2 (booktabs LaTeX)
 ├── feature_analysis/
 │   └── gene_frequency_table.csv            # Gene selection frequency across 1000 runs
 ├── models/                                 # Deployed main-panel models
@@ -239,10 +251,12 @@ MATseq/
 │   ├── preprocessing.py       
 │   ├── feature_engineering.py 
 │   ├── model_training.py      
+│   ├── make_tables.py          # Formats raw pipeline CSVs into publication tables
 │   ├── prediction.py          
 │   ├── pydeseq2.py           
 │   ├── visualization.py       
 │   └── go_term_analysis.py    
+├── scripts/            # Standalone helper/exploratory scripts (PCA comparisons, figure composition)
 ├── data/               
 │   ├── go_terms_support/      
 │   │   ├── go-basic.obo                                                        # (required)

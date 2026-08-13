@@ -248,7 +248,7 @@ def run_go_analysis(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     csv_path = output_dir / f"{analysis_name}_go_terms.csv"
-    go_df.to_csv(csv_path)
+    go_df.to_csv(csv_path, index=False)
     print(f"GO table saved: {csv_path}")
 
     return go_df
@@ -360,7 +360,7 @@ def merge_go_tables(
         output_dir = Path(__file__).parent.parent / "results" / "go_terms"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / output_filename
-    merged_df.to_csv(output_path)
+    merged_df.to_csv(output_path, index=False)
     print(f"Saved merged GO table to {output_path}")
 
     return merged_df

@@ -299,7 +299,7 @@ class DESeq2:
             }
 
             res_output = self.output_dir / f"{ligand_name}_deseq2_results.csv"
-            res.to_csv(res_output)
+            res.to_csv(res_output, index_label="gene")
             print(f"Saved results to {res_output}")
 
             self.de_genes.update(sigs.index)

@@ -5,7 +5,6 @@ __version__ = "0.1.0"
 # Import commonly used functions and classes
 from .preprocessing import (
     prepare_counts,
-    write_count_summary,
     load_featurecounts,
     filter_low_read_samples,
     label_samples,
@@ -18,7 +17,12 @@ from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 from .feature_engineering import (
     LibraryLengthNormalizer,
     ColumnSelector,
-    FeatureSelector,
+    feature_pipeline,
+    preprocessing_pipeline,
+    selected_with_importance,
+    write_selected_gene_tables,
+    mutual_information,
+    forest_kmeans,
 )
 
 from .model_training import (
@@ -28,14 +32,9 @@ from .model_training import (
 )
 
 from .config import (
-    CUSTOM_PALETTE_6,
-    CUSTOM_PALETTE_8,
     CUSTOM_PALETTE_9,
-    CLASS_ORDER_MAIN_LIGANDS,
-    CLASS_ORDER_ADDITIONAL_LIGANDS,
-    CLASS_ORDER_BACTERIA_LIGANDS,
     SUBSET_PALETTES,
-    SUBSET_CLASS_ORDERS,
+    CLASS_ORDER,
     DESEQ2_CONFIG,
     FEATURE_SELECTION_CONFIG,
     MODEL_FACTORY_CONFIG,
@@ -44,7 +43,7 @@ from .config import (
     LIGAND_ALIASES,
     MAIN_LIGANDS,
     ADDITIONAL_LIGANDS,
-    BACTERIA_LIGANDS,
+    BACTERIAL_LIGANDS,
 )
 
 from .pydeseq2 import (
@@ -53,10 +52,10 @@ from .pydeseq2 import (
 )
 
 from .visualization import (
-    plot_gene_expression_by_class,
-    plot_feature_count_analysis,
+    plot_mutual_information,
+    plot_forest_ari_sweep,
     plot_venn,
-    plot_pca_pandas,
+    plot_pca,
     plot_volcano,
     plot_heatmap,
     plot_pca_deseq2,
@@ -76,14 +75,9 @@ from .prediction import ModelPredictor
 
 __all__ = [
     # Configuration
-    "CUSTOM_PALETTE_6",
-    "CUSTOM_PALETTE_8",
     "CUSTOM_PALETTE_9",
-    "CLASS_ORDER_MAIN_LIGANDS",
-    "CLASS_ORDER_ADDITIONAL_LIGANDS",
-    "CLASS_ORDER_BACTERIA_LIGANDS",
     "SUBSET_PALETTES",
-    "SUBSET_CLASS_ORDERS",
+    "CLASS_ORDER",
     "DESEQ2_CONFIG",
     "FEATURE_SELECTION_CONFIG",
     "MODEL_FACTORY_CONFIG",
@@ -92,10 +86,9 @@ __all__ = [
     "LIGAND_ALIASES",
     "MAIN_LIGANDS",
     "ADDITIONAL_LIGANDS",
-    "BACTERIA_LIGANDS",
+    "BACTERIAL_LIGANDS",
     # Preprocessing
     "prepare_counts",
-    "write_count_summary",
     "load_featurecounts",
     "filter_low_read_samples",
     "label_samples",
@@ -105,7 +98,12 @@ __all__ = [
     # Feature engineering
     "LibraryLengthNormalizer",
     "ColumnSelector",
-    "FeatureSelector",
+    "feature_pipeline",
+    "preprocessing_pipeline",
+    "selected_with_importance",
+    "write_selected_gene_tables",
+    "mutual_information",
+    "forest_kmeans",
     # Model training
     "ModelFactory",
     "ModelTrainer",
@@ -115,11 +113,11 @@ __all__ = [
     "DESeq2DataProcessor",
     "DESeq2",
     # Visualization
-    "plot_gene_expression_by_class",
-    "plot_feature_count_analysis",
+    "plot_mutual_information",
+    "plot_forest_ari_sweep",
     "plot_venn",
     "plot_tlr_hek_blue",
-    "plot_pca_pandas",
+    "plot_pca",
     "plot_volcano",
     "plot_heatmap",
     "plot_pca_deseq2",

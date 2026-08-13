@@ -13,10 +13,10 @@
     "n_cpus": 42
   },
   "feature_selection": {
-    "k_best": 4548,
-    "n_estimators": 100,
+    "k_best": 5132,
+    "n_estimators": 300,
     "max_depth": 5,
-    "max_features": 500
+    "max_features": 50
   },
   "model_training": {
     "random_state": 42
@@ -48,7 +48,7 @@
       "MPLA",
       "Pam2"
     ],
-    "bacteria_ligands": [
+    "bacterial_ligands": [
       "negative_control",
       "LPS",
       "HK E.coli",
@@ -56,12 +56,19 @@
     ]
   },
   "class_order_for_plotting": {
-    "main_ligands": [
+    "train_ligands": [
       "negative_control",
       "LPS",
       "Pam3",
       "R848",
       "PGN",
+      "Fla-PA"
+    ],
+    "test_ligands": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
       "Fla-PA"
     ],
     "additional_ligands": [
@@ -75,7 +82,7 @@
       "MPLA",
       "Pam2"
     ],
-    "bacteria_ligands": [
+    "bacterial_ligands": [
       "negative_control",
       "LPS",
       "Pam3",
@@ -84,9 +91,24 @@
       "Fla-PA",
       "HK E.coli",
       "HK S.aureus"
+    ],
+    "main_ligands": [
+      "negative_control",
+      "LPS",
+      "Pam3",
+      "R848",
+      "PGN",
+      "Fla-PA"
     ]
   },
   "colors": {
+    "palette_5": [
+      "#1f77b4",
+      "#ff7f0e",
+      "#2ca02c",
+      "#d62728",
+      "#17becf"
+    ],
     "palette_6": [
       "#1f77b4",
       "#ff7f0e",
@@ -118,9 +140,10 @@
     ]
   },
   "subset_palettes": {
-    "main_ligands": "palette_6",
+    "test_ligands": "palette_5",
+    "train_ligands": "palette_6",
     "additional_ligands": "palette_9",
-    "bacteria_ligands": "palette_8"
+    "bacterial_ligands": "palette_8"
   },
   "forest_selection_grid": {
     "n_estimators": [
@@ -136,14 +159,15 @@
     ],
     "n_selected": [
       50,
-      70,
-      90,
-      110,
-      130,
+      100,
       150,
-      200,
+      250,
       300,
-      500
+      400,
+      500,
+      550,
+      600,
+      700
     ]
   },
   "hyperparameter_grids": {
@@ -224,10 +248,5 @@
     "work_dir": "~/MATseq/results",
     "genome_dir": "/home/t.afanasyeva/reference_genome/GRCh38_GCA_000001405.15",
     "threads": 42
-  },
-  "test": {
-    "name": "7086",
-    "sample_dir": "~/MATseq/data/raw_7086_test",
-    "work_dir": "~/MATseq/results/test_7086"
   }
 }

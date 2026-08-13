@@ -4,19 +4,20 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from .config import (
     get_featurecounts_dir,
     LIGAND_ALIASES,
     MAIN_LIGANDS,
     ADDITIONAL_LIGANDS,
-    BACTERIA_LIGANDS,
+    BACTERIAL_LIGANDS,
 )
 
 _SUBSET_LIGANDS = {
     "main_ligands": MAIN_LIGANDS,
     "additional_ligands": ADDITIONAL_LIGANDS,
-    "bacteria_ligands": BACTERIA_LIGANDS,
+    "bacterial_ligands": BACTERIAL_LIGANDS,
 }
 
 
@@ -35,7 +36,7 @@ def load_featurecounts(featurecounts_dir: str | Path | None = None) -> pd.DataFr
         raise ValueError(f"No .txt files found in {data_dir}")
 
     per_sample = []
-    for f in files:
+    for f in tqdm(files, desc="Processing feature counts"):
         df = pd.read_csv(f, sep="\t", comment="#", skiprows=1, index_col=0)
         last_col = df.columns[-1]
         per_sample.append(df.loc[:, [last_col]].rename(columns={last_col: f.stem}))
@@ -65,23 +66,12 @@ def label_samples(counts: pd.DataFrame) -> pd.Series:
 def prepare_counts(
     featurecounts_dir: str | Path | None = None,
     min_reads: float = 1_000_000.0,
-) -> tuple[pd.DataFrame, pd.Series]:
-    """Load featureCounts, filter low-read samples, derive labels."""
+) -> pd.DataFrame:
+    """Load featureCounts, filter low-read samples, and append labels."""
     counts = load_featurecounts(featurecounts_dir)
     counts = filter_low_read_samples(counts, min_reads=min_reads)
     labels = label_samples(counts)
-    return counts, labels
-
-
-def write_count_summary(
-    counts: pd.DataFrame, labels: pd.Series, output_dir: str | Path
-) -> Path:
-    """Write a (samples × genes + label) summary CSV."""
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / "MATseq_count_summary.csv"
-    counts.assign(label=labels).to_csv(path)
-    return path
+    return counts.assign(label=labels)
 
 
 def extract_subset(
