@@ -10,8 +10,7 @@ import seaborn as sns
 from sklearn.metrics import classification_report, confusion_matrix
 
 from .model_training import ModelTrainer, ModelFactory, make_score
-from .config import CLASS_ORDER
-from .visualization import plot_probability_heatmap, subset_display, order_labels
+from .visualization import order_labels
 
 
 class ModelPredictor:
@@ -26,7 +25,7 @@ class ModelPredictor:
         self.y_test = None
 
     def predict_samples(
-        self, X_test: pd.DataFrame, y_test: np.ndarray, sample_names: np.ndarray
+        self, X_test: pd.DataFrame, y_test: pd.Series, sample_names: np.ndarray
     ) -> Dict[str, pd.DataFrame]:
         """Predict labels for test samples using all trained models.
         """
@@ -58,23 +57,7 @@ class ModelPredictor:
 
         return predictions_dict
 
-    def save_predictions(self, output_dir: Path):
-        """Save predictions to CSV files.
-        """
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        for model_name, pred_df in self.predictions.items():
-            output_path = output_dir / f"{model_name}_predictions.csv"
-            pred_df.to_csv(output_path, index=False)
-            print(f"Saved predictions to {output_path}")
-
-        for model_name, proba_df in self.probabilities.items():
-            output_path = output_dir / f"{model_name}_probabilities.csv"
-            proba_df.to_csv(output_path)
-            print(f"Saved probabilities to {output_path}")
-
-    def evaluate(self, output_dir: Path, subset: str = "main_ligands") -> pd.DataFrame:
+    def evaluate(self, output_dir: Path, subset: str = "train_ligands") -> pd.DataFrame:
         """Score predictions against true labels
         """
         if self.y_test is None:
@@ -83,17 +66,17 @@ class ModelPredictor:
         rows = []
         for model_name, pred_df in self.predictions.items():
             y_pred = pred_df["prediction"].to_numpy()
-            rows.append({"model": model_name, **make_score(y_test, y_pred)})
+            rows.append({"model": model_name, **make_score(self.y_test, y_pred)})
 
-            labels = order_labels(set(y_test) | set(y_pred), subset)
+            labels = order_labels(set(self.y_test) | set(y_pred), subset)
             report = classification_report(
-                y_test, y_pred, labels=labels, zero_division=0, output_dict=True
+                self.y_test, y_pred, labels=labels, zero_division=0, output_dict=True
             )
             pd.DataFrame(report).transpose().to_csv(
                 output_dir / f"{model_name}_classification_report.csv"
             )
 
-            cm = confusion_matrix(y_test, y_pred, labels=labels, normalize="true")
+            cm = confusion_matrix(self.y_test, y_pred, labels=labels, normalize="true")
             pd.DataFrame(cm, index=labels, columns=labels).to_csv(
                 output_dir / f"{model_name}_confusion_matrix.csv"
             )
@@ -105,24 +88,4 @@ class ModelPredictor:
         summary.to_csv(output_dir / "test_scores_summary.csv", index=False)
         print(f"Saved scores to {output_dir / 'test_scores_summary.csv'}")
         return summary
-
-    def create_probability_heatmaps(
-        self, output_dir: Path, subset: str = "main_ligands", all_controls: bool = False
-    ):
-        """Create heatmap visualizations of prediction probabilities.
-        """
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        class_order = CLASS_ORDER.get(subset, CLASS_ORDER["main_ligands"])
-
-        for model_name, proba_df in self.probabilities.items():
-            output_path = plot_probability_heatmap(
-                proba_df, class_order,
-                title=f"{model_name} Prediction Probabilities {subset_display(subset)}",
-                true_labels=self.true_labels, all_controls=all_controls,
-                output_dir=output_dir,
-                filename=f"{model_name}_probabilities_heatmap.png",
-            )
-            print(f"Saved heatmap to {output_path}")
 

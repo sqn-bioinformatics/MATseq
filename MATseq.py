@@ -40,9 +40,11 @@ from src import (
     plot_mutual_information,
     plot_forest_ari_sweep,
     plot_pca,
+    plot_probability_heatmap,
     plot_tlr_hek_blue,
     plot_venn,
     prepare_counts,
+    subset_display,
 )
 from src.config import (
     FOREST_SELECTION_GRID,
@@ -111,7 +113,7 @@ def run_pipeline(
     snakemake: str | None = None,
     fastq_dir: Path | None = None,
     genome_dir: Path | None = None,
-) -> dict | None:
+) -> None:
     RESULTS_DIR.mkdir(exist_ok=True, parents=True)
 
     print("=" * 80)
@@ -140,7 +142,6 @@ def run_pipeline(
     count_df = prepare_counts()
     count_df.to_csv(counts_dir / "MATseq_count_summary.csv")
     batch_specs = {"main_dataset": "7128", "external_test": "7086"}
-    TEST_BATCH = batch_specs["external_test"]
 
     for split, batch in batch_specs.items():
         df = count_df.loc[count_df.index.str.contains(f"_{batch}_", regex=False)]
@@ -313,7 +314,7 @@ def run_pipeline(
     print("\n--- STEP 5: BEST PARMETER DETERMINATION WITH NESTED CV ---")
     model_dir = RESULTS_DIR / "models"
     model_dir.mkdir(parents=True, exist_ok=True)
-    model_dir_wo = RESULTS_DIR / "models_noflapa"
+    model_dir_wo = RESULTS_DIR / "models" / "no_flapa"
     model_dir_wo.mkdir(parents=True, exist_ok=True)
     tables_dir = RESULTS_DIR / "nested_cv"
     tables_dir.mkdir(parents=True, exist_ok=True)
@@ -332,7 +333,6 @@ def run_pipeline(
         output_dir=hp_dir,
         outer_cv=5,
         inner_cv=3,
-        eval_name="main_ligands",
     )
     trainer.save_models(model_dir)
 
@@ -348,7 +348,6 @@ def run_pipeline(
         output_dir=hp_dir_wo,
         outer_cv=5,
         inner_cv=3,
-        eval_name="main_ligands_no_flapa",
     )
     trainer_wo.save_models(model_dir_wo)
 
@@ -372,6 +371,23 @@ def run_pipeline(
         primary_gs: selected_genes,
         "de_overlap": overlap_genes,
         "union_stable_de": union_genes,
+    }
+    fs_wo = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(
+        transform="pandas"
+    )
+    fs_wo.fit(X_wo, y_wo)
+    fs_wo_ranked = selected_with_importance(fs_wo)
+    fs_genes_wo = set(fs_wo_ranked["gene"])
+    de_genes_wo = {
+        gene
+        for ligand_name, result in deseq2_train.results.items()
+        if ligand_name != "Fla-PA"
+        for gene in result["significant"].index
+    }
+    genesets_wo = {
+        primary_gs: sorted(fs_genes_wo),
+        "de_overlap": sorted(fs_genes_wo & de_genes_wo),
+        "union_stable_de": sorted(fs_genes_wo | de_genes_wo),
     }
 
     y_enc = trainer.label_encoder.transform(
@@ -410,11 +426,12 @@ def run_pipeline(
 
         base_wo = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
         trained_wo = {}
+        genes_wo = genesets_wo[gene_set]
         for name in all_models:
             pipe_wo = SkPipeline(
                 [
                     *preprocessing_pipeline().steps,
-                    ("select_genes", ColumnSelector(genes)),
+                    ("select_genes", ColumnSelector(genes_wo)),
                     ("clf", clone(base_wo[name])),
                 ]
             ).set_output(transform="pandas")
@@ -437,23 +454,34 @@ def run_pipeline(
         geneset_trainers_wo[gene_set].save_models(geneset_model_dir_wo / gene_set)
 
     print("\n--- STEP 7: VALIDATION ON TEST SET ---")
-    val_dir = RESULTS_DIR / "validation" / TEST_BATCH
-    val_dir_wo = RESULTS_DIR / "validation" / f"{TEST_BATCH}_no_flapa"
+    val_dir = RESULTS_DIR / "validation" / "test_set"
+    val_dir_wo = RESULTS_DIR / "validation" / "test_set_no_flapa"
     validation_tables_dir = RESULTS_DIR / "validation"
     validation_tables_dir.mkdir(parents=True, exist_ok=True)
 
     validation_rows = []
     for gene_set, gene_trainer in geneset_trainers.items():
-        out_dir = val_dir / gene_set / "main_ligands"
+        out_dir = val_dir / gene_set / "test_ligands"
+        out_dir.mkdir(parents=True, exist_ok=True)
         predictor = ModelPredictor(gene_trainer)
         predictor.predict_samples(
             X_test, sample_names=X_test.index.to_numpy(), y_test=y_test
         )
-        predictor.save_predictions(out_dir)
-        summary = predictor.evaluate(out_dir, subset="main_ligands")
-        predictor.create_probability_heatmaps(
-            out_dir, subset="main_ligands", all_controls=True
-        )
+        for model_name, pred_df in predictor.predictions.items():
+            pred_df.to_csv(out_dir / f"{model_name}_predictions.csv", index=False)
+        for model_name, proba_df in predictor.probabilities.items():
+            proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
+        summary = predictor.evaluate(out_dir, subset="test_ligands")
+        class_order = CLASS_ORDER.get("test_ligands", CLASS_ORDER["test_ligands"])
+
+        for model_name, proba_df in predictor.probabilities.items():
+            plot_probability_heatmap(
+                proba_df, class_order,
+                title=f"{model_name} Prediction Probabilities {subset_display('test_ligands')}",
+                true_labels=predictor.y_test, all_controls=True,
+                output_dir=out_dir,
+                filename=f"{model_name}_probabilities_heatmap.png",
+            )
         summary.insert(0, "gene_set", gene_set)
         validation_rows.append(summary)
 
@@ -461,22 +489,31 @@ def run_pipeline(
     external_perf_csv = validation_tables_dir / "external_validation_performance.csv"
     external_perf_df.to_csv(external_perf_csv, index=False)
 
-
     flapa_mask_ext = y_test != "Fla-PA"
     X_test_wo, y_test_wo = X_test[flapa_mask_ext], y_test[flapa_mask_ext]
     validation_wo_rows = []
     
     for gene_set, gene_trainer in geneset_trainers_wo.items():
-        out_dir_wo = val_dir_wo / gene_set / "main_ligands"
+        out_dir_wo = val_dir_wo / gene_set / "test_ligands"
+        out_dir_wo.mkdir(parents=True, exist_ok=True)
         predictor_wo = ModelPredictor(gene_trainer)
         predictor_wo.predict_samples(
             X_test_wo, sample_names=X_test_wo.index.to_numpy(), y_test=y_test_wo
         )
-        predictor_wo.save_predictions(out_dir_wo)
-        summary_wo = predictor_wo.evaluate(out_dir_wo, subset="main_ligands")
-        predictor_wo.create_probability_heatmaps(
-            out_dir_wo, subset="main_ligands", all_controls=True
-        )
+        for model_name, pred_df in predictor_wo.predictions.items():
+            pred_df.to_csv(out_dir_wo / f"{model_name}_predictions.csv", index=False)
+        for model_name, proba_df in predictor_wo.probabilities.items():
+            proba_df.to_csv(out_dir_wo / f"{model_name}_probabilities.csv")
+        summary_wo = predictor_wo.evaluate(out_dir_wo, subset="test_ligands")
+        class_order_wo = CLASS_ORDER.get("test_ligands", CLASS_ORDER["test_ligands"])
+        for model_name, proba_df in predictor_wo.probabilities.items():
+            plot_probability_heatmap(
+                proba_df, class_order_wo,
+                title=f"{model_name} Prediction Probabilities {subset_display('test_ligands')}",
+                true_labels=predictor_wo.y_test, all_controls=True,
+                output_dir=out_dir_wo,
+                filename=f"{model_name}_probabilities_heatmap.png",
+            )
         summary_wo.insert(0, "gene_set", gene_set)
         validation_wo_rows.append(summary_wo)
     
@@ -487,7 +524,7 @@ def run_pipeline(
     external_perf_wo_df.to_csv(external_perf_wo_csv, index=False)
 
 
-    print("\n--- STEP 8: PREDICTIONS ---")
+    print("\n--- STEP 8: PREDICTIONS ON OTHER LIGANDS---")
     predictions_dir = RESULTS_DIR / "predictions"
     predictions_dir.mkdir(parents=True, exist_ok=True)
     predictions_dir_wo = RESULTS_DIR / "predictions" / "no_flapa"
@@ -505,13 +542,27 @@ def run_pipeline(
             gene_trainer = trainers[gene_set]
             for subset_key, (X_end, y_end) in endpoint_subsets.items():
                 out_dir = base_dir / gene_set / subset_key
+                out_dir.mkdir(parents=True, exist_ok=True)
                 predictor = ModelPredictor(gene_trainer)
                 predictor.predict_samples(
                     X_end, sample_names=X_end.index.to_numpy(), y_test=y_end
                 )
-                predictor.save_predictions(out_dir)
+                for model_name, pred_df in predictor.predictions.items():
+                    pred_df.to_csv(
+                        out_dir / f"{model_name}_predictions.csv", index=False
+                    )
+                for model_name, proba_df in predictor.probabilities.items():
+                    proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
                 predictor.evaluate(out_dir, subset=subset_key)
-                predictor.create_probability_heatmaps(out_dir, subset=subset_key)
+                class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
+                for model_name, proba_df in predictor.probabilities.items():
+                    plot_probability_heatmap(
+                        proba_df, class_order_end,
+                        title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
+                        true_labels=predictor.y_test, all_controls=False,
+                        output_dir=out_dir,
+                        filename=f"{model_name}_probabilities_heatmap.png",
+                    )
 
     print("\n--- STEP 9: TLR VISUALIZATION ---")
     tlr2_df, tlr4_df, flapa_data = load_tlr_data(
@@ -526,16 +577,8 @@ def run_pipeline(
     print("=" * 80)
     print(f"Results saved to: {RESULTS_DIR.absolute()}")
 
-    return {
-        "selected_genes": selected_genes,
-        "models": trainer,
-        "models_wo_flapa": trainer_wo,
-        "geneset_trainers": geneset_trainers,
-        "geneset_trainers_wo": geneset_trainers_wo,
-    }
 
-
-def main() -> dict | None:
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="MAT-seq analysis pipeline with full publication analysis"
     )

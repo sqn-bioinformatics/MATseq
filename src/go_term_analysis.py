@@ -5,7 +5,6 @@ import shutil
 import pandas as pd
 from pathlib import Path
 from collections import namedtuple
-from functools import lru_cache
 from typing import Dict, Any, List
 
 
@@ -32,12 +31,6 @@ def _get_data_dir() -> Path:
 
 def _parse_geneid2nt(gene_file: Path) -> Dict[int, Any]:
     """Parse NCBI gene result file to namedtuple dictionary.
-
-    Args:
-        gene_file: Path to gene_result_ncbi_human_proteincoding.txt.
-
-    Returns:
-        Dictionary mapping GeneID to namedtuple with gene info.
     """
     ntncbi = namedtuple(
         "ntncbi",
@@ -86,21 +79,9 @@ def _parse_geneid2nt(gene_file: Path) -> Dict[int, Any]:
 
 def initialize_go(data_dir: Path = None) -> tuple:
     """Initialize GO enrichment analysis objects.
-
     Loads GO ontology, gene associations, and creates enrichment study object.
-    Memoized per data_dir so the ~42k-term ontology loads once per process.
-
-    Args:
-        data_dir: Directory containing GO data files.
-
-    Returns:
-        Tuple of (goeaobj, geneid_symbol_mapper) for GO enrichment analysis.
     """
-    return _initialize_go_cached(data_dir or _get_data_dir())
-
-
-@lru_cache(maxsize=None)
-def _initialize_go_cached(data_dir: Path) -> tuple:
+    data_dir = data_dir or _get_data_dir()
     print("Initializing GO terms...")
 
     gene2go_file = data_dir / "gene2go"
@@ -161,14 +142,6 @@ def _initialize_go_cached(data_dir: Path) -> tuple:
 
 def generate_go_table(genes: set, goeaobj, geneid_symbol_mapper: dict) -> pd.DataFrame:
     """Generate GO enrichment table for a set of gene symbols.
-
-    Args:
-        genes: Set of gene symbol strings.
-        goeaobj: GO enrichment study object.
-        geneid_symbol_mapper: Dictionary mapping gene symbols to gene IDs.
-
-    Returns:
-        DataFrame with GO enrichment results.
     """
     genes_list = [str(g) for g in genes]
     sigs_ids = [
@@ -227,17 +200,6 @@ def run_go_analysis(
     geneid_symbol_mapper: dict = None,
 ) -> pd.DataFrame:
     """Run GO enrichment analysis and save results to CSV.
-
-    Args:
-        genes: Set of gene symbol strings.
-        analysis_name: Name for output files.
-        output_dir: Directory for output CSV.
-        data_dir: Directory containing GO data files.
-        goeaobj: Pre-initialized GO enrichment object (avoids re-initialization).
-        geneid_symbol_mapper: Pre-built gene symbol to ID mapping.
-
-    Returns:
-        DataFrame with GO enrichment results.
     """
     if goeaobj is None or geneid_symbol_mapper is None:
         goeaobj, geneid_symbol_mapper = initialize_go(data_dir)
@@ -262,16 +224,6 @@ def create_fs_de_go_table(
     output_dir: Path = None,
 ) -> tuple:
     """Create GO tables for de intersect fs and fs-only gene sets.
-
-    Args:
-        de_genes: Set of differentially expressed gene symbols.
-        fs_genes: Set of feature-selected gene symbols.
-        goeaobj: Pre-initialized GO enrichment object.
-        geneid_symbol_mapper: Pre-built gene symbol to ID mapping.
-        output_dir: Directory for output files. Defaults to results/go_terms.
-
-    Returns:
-        Tuple of (go_df_intersect, go_df_fs_only) DataFrames.
     """
     if goeaobj is None or geneid_symbol_mapper is None:
         goeaobj, geneid_symbol_mapper = initialize_go()
@@ -329,14 +281,6 @@ def merge_go_tables(
     output_filename: str = "GO_merged_results.csv",
 ) -> pd.DataFrame:
     """Merge GO enrichment results from multiple ligand analyses.
-
-    Args:
-        go_files: List of paths to GO result CSV files.
-        output_dir: Directory for output files. Defaults to results/go_terms.
-        output_filename: Name for merged output file.
-
-    Returns:
-        Merged DataFrame with all GO terms.
     """
     if not go_files:
         raise ValueError("No GO files provided")

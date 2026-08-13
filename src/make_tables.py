@@ -86,8 +86,6 @@ def _condition_genes(trainer, condition, X_tr, y_tr, fold_seed, de_config,
             padj_threshold=de_config["padj_threshold"],
             log2fc_threshold=de_config["log2fc_threshold"],
             n_cpus=de_config["n_cpus"],
-            cache=None,
-            force_recompute=True,
             name=f"table2_fold{fold_seed}",
         )
         deseq.run_analysis(
@@ -126,7 +124,7 @@ def benchmark_feature_set_conditions(
     outer_cv=5,
     inner_cv=3,
     scoring="f1_macro",
-    subset="main_ligands",
+    subset="train_ligands",
     negative_control="negative_control",
 ):
     """Leakage-free nested-CV benchmark across feature-set conditions (Table 2).
@@ -240,13 +238,13 @@ DESEQ2_STATS = ["baseMean", "log2FoldChange", "lfcSE", "stat", "pvalue", "padj"]
 # "<file_key>_deseq2_results.csv" inside differential_gene_expression/<subset_dir>/;
 # column_suffix is what every stat column in that block is suffixed with, so the
 # LPS block is explicitly labelled (previously it was left unsuffixed). LPS is
-# taken from the main_ligands run; bacterial aliases map to HKEB/HKSA.
+# taken from the train_ligands run; bacterial aliases map to HKEB/HKSA.
 S1_LIGAND_ORDER = [
-    ("main_ligands", "Fla-PA", "Fla-PA"),
-    ("main_ligands", "LPS", "LPS"),
-    ("main_ligands", "PGN", "PGN"),
-    ("main_ligands", "R848", "R848"),
-    ("main_ligands", "Pam3", "Pam3"),
+    ("train_ligands", "Fla-PA", "Fla-PA"),
+    ("train_ligands", "LPS", "LPS"),
+    ("train_ligands", "PGN", "PGN"),
+    ("train_ligands", "R848", "R848"),
+    ("train_ligands", "Pam3", "Pam3"),
     ("additional_ligands", "LTA", "LTA"),
     ("additional_ligands", "MPLA", "MPLA"),
     ("additional_ligands", "Pam2", "Pam2"),
@@ -257,11 +255,11 @@ S1_LIGAND_ORDER = [
 # Per-ligand GO files merged into S2 (the five main-ligand classes), given as
 # (subset_dir, file_key, ligand_label).
 S2_LIGAND_ORDER = [
-    ("main_ligands", "Fla-PA", "Fla-PA"),
-    ("main_ligands", "LPS", "LPS"),
-    ("main_ligands", "PGN", "PGN"),
-    ("main_ligands", "R848", "R848"),
-    ("main_ligands", "Pam3", "Pam3"),
+    ("train_ligands", "Fla-PA", "Fla-PA"),
+    ("train_ligands", "LPS", "LPS"),
+    ("train_ligands", "PGN", "PGN"),
+    ("train_ligands", "R848", "R848"),
+    ("train_ligands", "Pam3", "Pam3"),
 ]
 
 # Human-readable labels for the S4 by-condition GO table, mapped to the raw

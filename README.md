@@ -213,7 +213,7 @@ results/
 │   └── supplementary/
 │       └── tlr_hek_blue.png
 ├── validation/{test_name}/                 # External test batch (e.g. 7086)
-│   ├── main_ligands/
+│   ├── test_ligands/
 │   │   ├── {model}_predictions.csv
 │   │   ├── {model}_probabilities.csv
 │   │   └── {model}_probabilities_heatmap.png
@@ -223,10 +223,10 @@ results/
     │   ├── {model}_predictions.csv
     │   ├── {model}_probabilities.csv
     │   └── {model}_probabilities_heatmap.png
-    ├── bacteria_ligands/
-    └── main_ligands_no_flapa/              # No-Fla-PA model predictions
+    ├── bacterial_ligands/
+    └── no_flapa/                          # No-Fla-Pa model predictions
         ├── additional_ligands/
-        └── bacteria_ligands/
+        └── bacterial_ligands/
 ```
 
 ## Project Structure
