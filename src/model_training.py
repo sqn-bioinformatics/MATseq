@@ -1,14 +1,11 @@
 """Model training, evaluation, and prediction for multiclass classification."""
 
 import json
-import shutil
-import tempfile
 import numpy as np
 import pandas as pd
 import pickle
 from pathlib import Path
 from typing import Dict, Optional
-from joblib import Memory
 from sklearn.svm import LinearSVC
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.calibration import CalibratedClassifierCV
@@ -32,8 +29,7 @@ from sklearn.model_selection import (
 )
 from sklearn.base import clone
 
-from .feature_engineering import feature_pipeline
-from .config import FEATURE_SELECTION_CONFIG, CLASS_ORDER
+from .feature_engineering import preprocessing_pipeline
 
 
 def make_score(y_test, y_pred) -> dict:
@@ -152,14 +148,7 @@ class ModelTrainer:
         return output_dir
 
     def _build_tuning_pipeline(self, model, fold_seed: int) -> SkPipeline:
-        fs = feature_pipeline(
-            **FEATURE_SELECTION_CONFIG, random_state=fold_seed
-        )
-        # The FS steps are identical across all clf hyperparameter combos in a
-        # fold; caching them means SelectKBest/ExtraTrees run once per fold, not
-        # once per grid point.
-        memory = getattr(self, "_memory", None)
-        return SkPipeline([*fs.steps, ("clf", clone(model))], memory=memory)
+        return SkPipeline([*preprocessing_pipeline().steps, ("clf", clone(model))])
 
     @staticmethod
     def _fit_kwargs(model_name: str, y) -> dict:
@@ -176,7 +165,6 @@ class ModelTrainer:
         outer_cv: int = 5,
         inner_cv: int = 3,
         scoring: str = "f1_macro",
-        eval_name: Optional[str] = None,
     ) -> pd.DataFrame:
         """Nested CV tuning + deployment refit.
         """
@@ -185,11 +173,6 @@ class ModelTrainer:
         inner_results_dir.mkdir(parents=True, exist_ok=True)
         fig_dir = output_dir.parent / "figures" / "model_evaluation"
         fig_dir.mkdir(parents=True, exist_ok=True)
-
-        memory_dir = tempfile.mkdtemp(prefix="matseq_fs_cache_")
-        self._memory = Memory(location=memory_dir, verbose=0)
-
-        prefix = f"{eval_name}_" if eval_name else ""
 
         y_array = y.values if isinstance(y, pd.Series) else y
         self.label_encoder.fit(y_array)
@@ -289,12 +272,9 @@ class ModelTrainer:
 
         oof_frames = []
         pooled_rows = []
-        _subset_key = (eval_name or "main_ligands").split("_no_flapa")[0]
-        if _subset_key not in CLASS_ORDER:
-            _subset_key = "main_ligands"
         from .visualization import order_labels
 
-        class_names = order_labels(self.label_encoder.classes_, _subset_key)
+        class_names = order_labels(self.label_encoder.classes_, "train_ligands")
         for model_name in self.models:
             df = pd.DataFrame(pooled[model_name])
             y_true_dec = self.decode_predictions(df["true_enc"].to_numpy())
@@ -313,7 +293,6 @@ class ModelTrainer:
                         "pred_label": y_pred_dec,
                         "outer_fold": df["outer_fold"],
                         "model": model_name,
-                        "subset": eval_name or "",
                     }
                 )
             )
@@ -323,22 +302,21 @@ class ModelTrainer:
                 zero_division=0, output_dict=True,
             )
             pd.DataFrame(report).transpose().to_csv(
-                output_dir / f"{prefix}{model_name}_classification_report.csv"
+                output_dir / f"{model_name}_classification_report.csv"
             )
 
             cm = confusion_matrix(
                 y_true_dec, y_pred_dec, labels=class_names, normalize="true"
             )
             pd.DataFrame(cm, index=class_names, columns=class_names).to_csv(
-                fig_dir / f"{prefix}{model_name}_confusion_matrix.csv"
+                fig_dir / f"{model_name}_confusion_matrix.csv"
             )
             self._save_confusion_matrix(
                 cm, class_names, model_name, fig_dir,
-                subset=eval_name or "main_ligands"is th, file_prefix=prefix,
             )
 
         pd.concat(oof_frames, ignore_index=True).to_csv(
-            output_dir / f"{prefix}oof_predictions.csv", index=False
+            output_dir / "oof_predictions.csv", index=False
         )
 
         pooled_df = pd.DataFrame(pooled_rows)
@@ -352,9 +330,6 @@ class ModelTrainer:
         with open(output_dir / "selected_params.json", "w") as f:
             json.dump(selected_params, f, indent=2, default=str)
         print(f"Selected params saved: {output_dir / 'selected_params.json'}")
-
-        self._memory = None
-        shutil.rmtree(memory_dir, ignore_errors=True)
 
         self.nested_cv_summary_ = summary
         self.selected_params_ = selected_params
@@ -401,7 +376,7 @@ class ModelTrainer:
 
     def _save_confusion_matrix(
         self, cm, class_names, model: str, output_dir: Path,
-        subset: str = "main_ligands", file_prefix: str = "",
+        subset: str = "train_ligands", file_prefix: str = "",
     ) -> None:
         """Save a confusion matrix (delegates to visualization)."""
         from .visualization import plot_confusion_matrix, confusion_title

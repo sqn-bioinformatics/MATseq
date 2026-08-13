@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-from functools import lru_cache
 from typing import Any
 
 
@@ -42,7 +41,6 @@ def _find_config_path() -> Path:
             return path
     return candidates[0]
 
-@lru_cache
 def _load_config() -> dict[str, Any]:
     config_path = _find_config_path()
     try:

@@ -5,10 +5,13 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from sklearn.base import clone
+from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import Pipeline as SkPipeline
 from sklearn.utils.class_weight import compute_sample_weight
 from tqdm import tqdm
@@ -26,6 +29,9 @@ from src import (
     MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
     DESeq2,
+    assemble_supplementary_tables,
+    format_table2,
+    make_score,
     mutual_information,
     feature_pipeline,
     forest_kmeans,
@@ -40,9 +46,11 @@ from src import (
     plot_mutual_information,
     plot_forest_ari_sweep,
     plot_pca,
+    plot_probability_heatmap,
     plot_tlr_hek_blue,
     plot_venn,
     prepare_counts,
+    subset_display,
 )
 from src.config import (
     FOREST_SELECTION_GRID,
@@ -111,7 +119,7 @@ def run_pipeline(
     snakemake: str | None = None,
     fastq_dir: Path | None = None,
     genome_dir: Path | None = None,
-) -> dict | None:
+) -> None:
     RESULTS_DIR.mkdir(exist_ok=True, parents=True)
 
     print("=" * 80)
@@ -140,7 +148,6 @@ def run_pipeline(
     count_df = prepare_counts()
     count_df.to_csv(counts_dir / "MATseq_count_summary.csv")
     batch_specs = {"main_dataset": "7128", "external_test": "7086"}
-    TEST_BATCH = batch_specs["external_test"]
 
     for split, batch in batch_specs.items():
         df = count_df.loc[count_df.index.str.contains(f"_{batch}_", regex=False)]
@@ -310,19 +317,12 @@ def run_pipeline(
         tables_dir / "selected_vs_de_overlap_table.csv", index=False
     )
  
-    print("\n--- STEP 5: BEST PARMETER DETERMINATION WITH NESTED CV ---")
+    print("\n--- STEP 5: GRID SEARCH FOR BEST PARAMETERS (ALL GENES) ---")
     model_dir = RESULTS_DIR / "models"
     model_dir.mkdir(parents=True, exist_ok=True)
-    model_dir_wo = RESULTS_DIR / "models_noflapa"
-    model_dir_wo.mkdir(parents=True, exist_ok=True)
-    tables_dir = RESULTS_DIR / "nested_cv"
-    tables_dir.mkdir(parents=True, exist_ok=True)
     hp_dir = RESULTS_DIR / "hyperparameter_tuning"
     hp_dir.mkdir(parents=True, exist_ok=True)
-    hp_dir_wo = RESULTS_DIR / "hyperparameter_tuning_no_flapa"
-    hp_dir_wo.mkdir(parents=True, exist_ok=True)
 
-    # Include the Fla-Pa class
     models = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
     trainer = ModelTrainer(X_train, y_train, models=models, **MODEL_TRAINING_CONFIG)
     trainer.tune_nested(
@@ -332,162 +332,191 @@ def run_pipeline(
         output_dir=hp_dir,
         outer_cv=5,
         inner_cv=3,
-        eval_name="main_ligands",
     )
-    trainer.save_models(model_dir)
-
-    # Exclude the Fla-Pa class to check if training improves
-    flapa_mask = y_train != "Fla-PA"
-    X_wo, y_wo = X_train[flapa_mask], y_train[flapa_mask]
-    models_wo = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
-    trainer_wo = ModelTrainer(X_wo, y_wo, models=models_wo, **MODEL_TRAINING_CONFIG)
-    trainer_wo.tune_nested(
-        X_wo,
-        y_wo,
-        param_grids=HYPERPARAMETER_GRIDS,
-        output_dir=hp_dir_wo,
-        outer_cv=5,
-        inner_cv=3,
-        eval_name="main_ligands_no_flapa",
-    )
-    trainer_wo.save_models(model_dir_wo)
-
-    all_models = trainer.nested_cv_summary_["model"].tolist()
     tuned_params = trainer.selected_params_
-    tuned_params_wo = trainer_wo.selected_params_
 
-    trainer.nested_cv_summary_.to_csv(tables_dir / "supp_nested_cv_main.csv", index=False)
-    trainer_wo.nested_cv_summary_.to_csv(
-        tables_dir / "supp_nested_cv_no_flapa.csv", index=False
-    )
-    
-    print("\n--- STEP 6: REFIT THE MODELS WITH BEST PARAMETERS ON GENESETS  ---")
-    geneset_model_dir = RESULTS_DIR / "models"
-    geneset_model_dir.mkdir(parents=True, exist_ok=True)
-    geneset_model_dir_wo = RESULTS_DIR / "models" / "no_flapa"
-    geneset_model_dir_wo.mkdir(parents=True, exist_ok=True)
+    print("\n--- STEP 6: NESTED CV ACROSS GENE-SET CONDITIONS ---")
+    tables_dir = RESULTS_DIR / "tables"
+    tables_dir.mkdir(parents=True, exist_ok=True)
 
     primary_gs = primary_geneset_name()
-    genesets = {
-        primary_gs: selected_genes,
-        "de_overlap": overlap_genes,
-        "union_stable_de": union_genes,
+    rng = np.random.default_rng(MODEL_TRAINING_CONFIG.get("random_state", 42))
+    random_genes = sorted(
+        rng.choice(
+            np.asarray(X_train.columns),
+            size=min(len(selected_genes), X_train.shape[1]),
+            replace=False,
+        ).tolist()
+    )
+    gene_set_conditions = {
+        "all_genes": None,
+        "feature_selection": selected_genes,
+        "fs_plus_de": union_genes,
+        "random_selected": random_genes,
     }
 
     y_enc = trainer.label_encoder.transform(
         y_train.values if isinstance(y_train, pd.Series) else y_train
     )
-    y_enc_wo = trainer_wo.label_encoder.transform(
+    outer = StratifiedKFold(n_splits=5, shuffle=True, random_state=trainer.random_state)
+    folds = [
+        (X_train.iloc[tr], X_train.iloc[te], y_enc[tr], y_enc[te])
+        for tr, te in outer.split(np.arange(len(X_train)), y_enc)
+    ]
+    metric_keys = ["accuracy", "balanced_accuracy", "precision", "recall", "f1", "f1_weighted"]
+    table2_rows = []
+    for condition, genes in gene_set_conditions.items():
+        print(f"\n===== CONDITION: {condition} =====", flush=True)
+        for model_name, model in trainer.models.items():
+            params = tuned_params.get(model_name, {}).get("chosen_params", {})
+            per_fold = {k: [] for k in metric_keys}
+            fit_seconds = []
+            n_genes = []
+            pooled_true, pooled_pred = [], []
+            for X_tr, X_te, y_tr, y_te in folds:
+                n_genes.append(X_train.shape[1] if genes is None else len(genes))
+                steps = list(preprocessing_pipeline().steps)
+                if genes is not None:
+                    steps.append(("select_genes", ColumnSelector(genes)))
+                steps.append(("clf", clone(model)))
+                pipe = SkPipeline(steps).set_output(transform="pandas")
+                pipe.set_params(**params)
+                fit_kwargs = (
+                    {"clf__sample_weight": compute_sample_weight("balanced", y_tr)}
+                    if model_name == "XGBoost"
+                    else {}
+                )
+                start = time.perf_counter()
+                pipe.fit(X_tr, y_tr, **fit_kwargs)
+                fit_seconds.append(time.perf_counter() - start)
+                y_pred = pipe.predict(X_te)
+                scores = make_score(y_te, y_pred)
+                for k in metric_keys:
+                    per_fold[k].append(scores[k])
+                pooled_true.extend(y_te.tolist())
+                pooled_pred.extend(y_pred.tolist())
+            row = {
+                "condition": condition, "model": model_name,
+                "n_genes_mean": float(np.mean(n_genes)),
+                "fit_seconds_mean": float(np.mean(fit_seconds)),
+                "fit_seconds_std": float(np.std(fit_seconds, ddof=1)),
+            }
+            for k in metric_keys:
+                row[f"{k}_mean"] = float(np.mean(per_fold[k]))
+                row[f"{k}_std"] = float(np.std(per_fold[k], ddof=1))
+            row["pooled_f1"] = make_score(pooled_true, pooled_pred)["f1"]
+            table2_rows.append(row)
+            print(f"  [{model_name}] f1={row['f1_mean']:.3f}±{row['f1_std']:.3f} "
+                  f"acc={row['accuracy_mean']:.3f}±{row['accuracy_std']:.3f}", flush=True)
+            pd.DataFrame(table2_rows).to_csv(
+                tables_dir / "table2_feature_set_benchmark.csv", index=False
+            )
+
+    print("\n--- STEP 7: REFIT DEPLOYMENT MODELS (FEATURE-SELECTED GENES) ---")
+    for model_name, model in trainer.models.items():
+        steps = [
+            *preprocessing_pipeline().steps,
+            ("select_genes", ColumnSelector(selected_genes)),
+            ("clf", clone(model)),
+        ]
+        pipe = SkPipeline(steps).set_output(transform="pandas")
+        pipe.set_params(**tuned_params.get(model_name, {}).get("chosen_params", {}))
+        fit_kwargs = (
+            {"clf__sample_weight": compute_sample_weight("balanced", y_enc)}
+            if model_name == "XGBoost"
+            else {}
+        )
+        pipe.fit(X_train, y_enc, **fit_kwargs)
+        trainer.trained_models[model_name] = pipe
+    trainer.save_models(model_dir / primary_gs)
+
+    model_dir_wo = RESULTS_DIR / "models_noflapa"
+    model_dir_wo.mkdir(parents=True, exist_ok=True)
+    flapa_mask = y_train != "Fla-PA"
+    X_wo, y_wo = X_train[flapa_mask], y_train[flapa_mask]
+    trainer_wo = ModelTrainer(
+        X_wo, y_wo, models=ModelFactory.create_models(**MODEL_FACTORY_CONFIG),
+        **MODEL_TRAINING_CONFIG,
+    )
+    y_enc_wo = trainer_wo.label_encoder.fit_transform(
         y_wo.values if isinstance(y_wo, pd.Series) else y_wo
     )
-
-    geneset_trainers = {}
-    geneset_trainers_wo = {}
-    for gene_set, genes in genesets.items():
-        base = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
-        trained = {}
-        for name in all_models:
-            pipe = SkPipeline(
-                [
-                    *preprocessing_pipeline().steps,
-                    ("select_genes", ColumnSelector(genes)),
-                    ("clf", clone(base[name])),
-                ]
-            ).set_output(transform="pandas")
-            params = tuned_params.get(name, {}).get("chosen_params", {})
-            pipe.set_params(**params)
-            fit_kwargs = (
-                {"clf__sample_weight": compute_sample_weight("balanced", y_enc)}
-                if name == "XGBoost"
-                else {}
-            )
-            pipe.fit(X_train, y_enc, **fit_kwargs)
-            trained[name] = pipe
-
-        geneset_trainers[gene_set] = ModelTrainer.from_trained_models(
-            trained, trainer.label_encoder
+    for model_name, model in trainer_wo.models.items():
+        steps = [
+            *preprocessing_pipeline().steps,
+            ("select_genes", ColumnSelector(selected_genes)),
+            ("clf", clone(model)),
+        ]
+        pipe_wo = SkPipeline(steps).set_output(transform="pandas")
+        pipe_wo.set_params(**tuned_params.get(model_name, {}).get("chosen_params", {}))
+        fit_kwargs_wo = (
+            {"clf__sample_weight": compute_sample_weight("balanced", y_enc_wo)}
+            if model_name == "XGBoost"
+            else {}
         )
+        pipe_wo.fit(X_wo, y_enc_wo, **fit_kwargs_wo)
+        trainer_wo.trained_models[model_name] = pipe_wo
+    trainer_wo.save_models(model_dir_wo / primary_gs)
 
-        base_wo = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
-        trained_wo = {}
-        for name in all_models:
-            pipe_wo = SkPipeline(
-                [
-                    *preprocessing_pipeline().steps,
-                    ("select_genes", ColumnSelector(genes)),
-                    ("clf", clone(base_wo[name])),
-                ]
-            ).set_output(transform="pandas")
-            params_wo = tuned_params_wo.get(name, {}).get("chosen_params", {})
-            pipe_wo.set_params(**params_wo)
-            fit_kwargs_wo = (
-                {"clf__sample_weight": compute_sample_weight("balanced", y_enc_wo)}
-                if name == "XGBoost"
-                else {}
-            )
-            pipe_wo.fit(X_wo, y_enc_wo, **fit_kwargs_wo)
-            trained_wo[name] = pipe_wo
-
-        geneset_trainers_wo[gene_set] = ModelTrainer.from_trained_models(
-            trained_wo, trainer_wo.label_encoder
-        )
-
-    for gene_set, gene_trainer in geneset_trainers.items():
-        gene_trainer.save_models(geneset_model_dir / gene_set)
-        geneset_trainers_wo[gene_set].save_models(geneset_model_dir_wo / gene_set)
-
-    print("\n--- STEP 7: VALIDATION ON TEST SET ---")
-    val_dir = RESULTS_DIR / "validation" / TEST_BATCH
-    val_dir_wo = RESULTS_DIR / "validation" / f"{TEST_BATCH}_no_flapa"
+    print("\n--- STEP 8: VALIDATION ON TEST SET ---")
+    val_dir = RESULTS_DIR / "validation" / "test_set"
+    val_dir_wo = RESULTS_DIR / "validation" / "test_set_no_flapa"
     validation_tables_dir = RESULTS_DIR / "validation"
     validation_tables_dir.mkdir(parents=True, exist_ok=True)
 
-    validation_rows = []
-    for gene_set, gene_trainer in geneset_trainers.items():
-        out_dir = val_dir / gene_set / "main_ligands"
-        predictor = ModelPredictor(gene_trainer)
-        predictor.predict_samples(
-            X_test, sample_names=X_test.index.to_numpy(), y_test=y_test
+    out_dir = val_dir / primary_gs / "test_ligands"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    predictor = ModelPredictor(trainer)
+    predictor.predict_samples(
+        X_test, sample_names=X_test.index.to_numpy(), y_test=y_test
+    )
+    for model_name, pred_df in predictor.predictions.items():
+        pred_df.to_csv(out_dir / f"{model_name}_predictions.csv", index=False)
+    for model_name, proba_df in predictor.probabilities.items():
+        proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
+    summary = predictor.evaluate(out_dir, subset="test_ligands")
+    class_order = CLASS_ORDER.get("test_ligands", CLASS_ORDER["test_ligands"])
+    for model_name, proba_df in predictor.probabilities.items():
+        plot_probability_heatmap(
+            proba_df, class_order,
+            title=f"{model_name} Prediction Probabilities {subset_display('test_ligands')}",
+            true_labels=predictor.y_test, all_controls=True,
+            output_dir=out_dir,
+            filename=f"{model_name}_probabilities_heatmap.png",
         )
-        predictor.save_predictions(out_dir)
-        summary = predictor.evaluate(out_dir, subset="main_ligands")
-        predictor.create_probability_heatmaps(
-            out_dir, subset="main_ligands", all_controls=True
-        )
-        summary.insert(0, "gene_set", gene_set)
-        validation_rows.append(summary)
-
-    external_perf_df = pd.concat(validation_rows, ignore_index=True)
+    summary.insert(0, "gene_set", primary_gs)
     external_perf_csv = validation_tables_dir / "external_validation_performance.csv"
-    external_perf_df.to_csv(external_perf_csv, index=False)
-
+    summary.to_csv(external_perf_csv, index=False)
 
     flapa_mask_ext = y_test != "Fla-PA"
     X_test_wo, y_test_wo = X_test[flapa_mask_ext], y_test[flapa_mask_ext]
-    validation_wo_rows = []
-    
-    for gene_set, gene_trainer in geneset_trainers_wo.items():
-        out_dir_wo = val_dir_wo / gene_set / "main_ligands"
-        predictor_wo = ModelPredictor(gene_trainer)
-        predictor_wo.predict_samples(
-            X_test_wo, sample_names=X_test_wo.index.to_numpy(), y_test=y_test_wo
+    out_dir_wo = val_dir_wo / primary_gs / "test_ligands"
+    out_dir_wo.mkdir(parents=True, exist_ok=True)
+    predictor_wo = ModelPredictor(trainer_wo)
+    predictor_wo.predict_samples(
+        X_test_wo, sample_names=X_test_wo.index.to_numpy(), y_test=y_test_wo
+    )
+    for model_name, pred_df in predictor_wo.predictions.items():
+        pred_df.to_csv(out_dir_wo / f"{model_name}_predictions.csv", index=False)
+    for model_name, proba_df in predictor_wo.probabilities.items():
+        proba_df.to_csv(out_dir_wo / f"{model_name}_probabilities.csv")
+    summary_wo = predictor_wo.evaluate(out_dir_wo, subset="test_ligands")
+    class_order_wo = CLASS_ORDER.get("test_ligands", CLASS_ORDER["test_ligands"])
+    for model_name, proba_df in predictor_wo.probabilities.items():
+        plot_probability_heatmap(
+            proba_df, class_order_wo,
+            title=f"{model_name} Prediction Probabilities {subset_display('test_ligands')}",
+            true_labels=predictor_wo.y_test, all_controls=True,
+            output_dir=out_dir_wo,
+            filename=f"{model_name}_probabilities_heatmap.png",
         )
-        predictor_wo.save_predictions(out_dir_wo)
-        summary_wo = predictor_wo.evaluate(out_dir_wo, subset="main_ligands")
-        predictor_wo.create_probability_heatmaps(
-            out_dir_wo, subset="main_ligands", all_controls=True
-        )
-        summary_wo.insert(0, "gene_set", gene_set)
-        validation_wo_rows.append(summary_wo)
-    
-    external_perf_wo_df = pd.concat(validation_wo_rows, ignore_index=True)
+    summary_wo.insert(0, "gene_set", primary_gs)
     external_perf_wo_csv = (
         validation_tables_dir / "external_validation_no_flapa_performance.csv"
     )
-    external_perf_wo_df.to_csv(external_perf_wo_csv, index=False)
+    summary_wo.to_csv(external_perf_wo_csv, index=False)
 
-
-    print("\n--- STEP 8: PREDICTIONS ---")
+    print("\n--- STEP 9: PREDICTIONS ON OTHER LIGANDS---")
     predictions_dir = RESULTS_DIR / "predictions"
     predictions_dir.mkdir(parents=True, exist_ok=True)
     predictions_dir_wo = RESULTS_DIR / "predictions" / "no_flapa"
@@ -497,45 +526,108 @@ def run_pipeline(
         "bacterial_ligands": (X_bact, y_bact),
     }
 
-    for trainers, base_dir in (
-        (geneset_trainers, predictions_dir),
-        (geneset_trainers_wo, predictions_dir_wo),
+    for gene_trainer, base_dir in (
+        (trainer, predictions_dir),
+        (trainer_wo, predictions_dir_wo),
     ):
-        for gene_set in (primary_gs, "de_overlap"):
-            gene_trainer = trainers[gene_set]
-            for subset_key, (X_end, y_end) in endpoint_subsets.items():
-                out_dir = base_dir / gene_set / subset_key
-                predictor = ModelPredictor(gene_trainer)
-                predictor.predict_samples(
-                    X_end, sample_names=X_end.index.to_numpy(), y_test=y_end
+        for subset_key, (X_end, y_end) in endpoint_subsets.items():
+            out_dir = base_dir / primary_gs / subset_key
+            out_dir.mkdir(parents=True, exist_ok=True)
+            predictor = ModelPredictor(gene_trainer)
+            predictor.predict_samples(
+                X_end, sample_names=X_end.index.to_numpy(), y_test=y_end
+            )
+            for model_name, pred_df in predictor.predictions.items():
+                pred_df.to_csv(
+                    out_dir / f"{model_name}_predictions.csv", index=False
                 )
-                predictor.save_predictions(out_dir)
-                predictor.evaluate(out_dir, subset=subset_key)
-                predictor.create_probability_heatmaps(out_dir, subset=subset_key)
+            for model_name, proba_df in predictor.probabilities.items():
+                proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
+            predictor.evaluate(out_dir, subset=subset_key)
+            class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
+            for model_name, proba_df in predictor.probabilities.items():
+                plot_probability_heatmap(
+                    proba_df, class_order_end,
+                    title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
+                    true_labels=predictor.y_test, all_controls=False,
+                    output_dir=out_dir,
+                    filename=f"{model_name}_probabilities_heatmap.png",
+                )
 
-    print("\n--- STEP 9: TLR VISUALIZATION ---")
+    print("\n--- STEP 10: TLR VISUALIZATION ---")
     tlr2_df, tlr4_df, flapa_data = load_tlr_data(
         data_dir=Path(__file__).parent / "data" / "supplementary_data"
     )
     plot_tlr_hek_blue(tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png")
 
-    print("\n--- STEP 10: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
+    print("\n--- STEP 11: NO-FLA-PA NESTED CV ACROSS GENE-SET CONDITIONS ---")
+    nested_cv_dir = RESULTS_DIR / "nested_cv"
+    nested_cv_dir.mkdir(parents=True, exist_ok=True)
+
+    outer_wo = StratifiedKFold(n_splits=5, shuffle=True, random_state=trainer_wo.random_state)
+    folds_wo = [
+        (X_wo.iloc[tr], X_wo.iloc[te], y_enc_wo[tr], y_enc_wo[te])
+        for tr, te in outer_wo.split(np.arange(len(X_wo)), y_enc_wo)
+    ]
+    no_flapa_rows = []
+    for condition, genes in gene_set_conditions.items():
+        print(f"\n===== CONDITION: {condition} =====", flush=True)
+        for model_name, model in trainer_wo.models.items():
+            params = tuned_params.get(model_name, {}).get("chosen_params", {})
+            per_fold = {k: [] for k in metric_keys}
+            fit_seconds = []
+            n_genes = []
+            pooled_true, pooled_pred = [], []
+            for X_tr, X_te, y_tr, y_te in folds_wo:
+                n_genes.append(X_wo.shape[1] if genes is None else len(genes))
+                steps = list(preprocessing_pipeline().steps)
+                if genes is not None:
+                    steps.append(("select_genes", ColumnSelector(genes)))
+                steps.append(("clf", clone(model)))
+                pipe = SkPipeline(steps).set_output(transform="pandas")
+                pipe.set_params(**params)
+                fit_kwargs = (
+                    {"clf__sample_weight": compute_sample_weight("balanced", y_tr)}
+                    if model_name == "XGBoost"
+                    else {}
+                )
+                start = time.perf_counter()
+                pipe.fit(X_tr, y_tr, **fit_kwargs)
+                fit_seconds.append(time.perf_counter() - start)
+                y_pred = pipe.predict(X_te)
+                scores = make_score(y_te, y_pred)
+                for k in metric_keys:
+                    per_fold[k].append(scores[k])
+                pooled_true.extend(y_te.tolist())
+                pooled_pred.extend(y_pred.tolist())
+            row = {
+                "condition": condition, "model": model_name,
+                "n_genes_mean": float(np.mean(n_genes)),
+                "fit_seconds_mean": float(np.mean(fit_seconds)),
+                "fit_seconds_std": float(np.std(fit_seconds, ddof=1)),
+            }
+            for k in metric_keys:
+                row[f"{k}_mean"] = float(np.mean(per_fold[k]))
+                row[f"{k}_std"] = float(np.std(per_fold[k], ddof=1))
+            row["pooled_f1"] = make_score(pooled_true, pooled_pred)["f1"]
+            no_flapa_rows.append(row)
+            print(f"  [{model_name}] f1={row['f1_mean']:.3f}±{row['f1_std']:.3f} "
+                  f"acc={row['accuracy_mean']:.3f}±{row['accuracy_std']:.3f}", flush=True)
+            pd.DataFrame(no_flapa_rows).to_csv(
+                nested_cv_dir / "supp_nested_cv_no_flapa.csv", index=False
+            )
+
+    print("\n--- STEP 12: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
+    format_table2(tables_dir / "table2_feature_set_benchmark.csv", output_dir=tables_dir)
+    assemble_supplementary_tables(RESULTS_DIR, tables_dir)
 
     print("\n" + "=" * 80)
     print("PIPELINE COMPLETED SUCCESSFULLY")
     print("=" * 80)
     print(f"Results saved to: {RESULTS_DIR.absolute()}")
 
-    return {
-        "selected_genes": selected_genes,
-        "models": trainer,
-        "models_wo_flapa": trainer_wo,
-        "geneset_trainers": geneset_trainers,
-        "geneset_trainers_wo": geneset_trainers_wo,
-    }
 
-
-def main() -> dict | None:
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="MAT-seq analysis pipeline with full publication analysis"
     )

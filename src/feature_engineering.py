@@ -45,8 +45,6 @@ class ColumnSelector(BaseEstimator, TransformerMixin):
     """Keep a fixed set of named columns"""
 
     def __init__(self, genes):
-        # Stored unchanged: sklearn's clone() rejects estimators whose
-        # __init__ modifies a parameter, which GridSearchCV relies on.
         self.genes = genes
 
     def fit(self, X, y=None):
@@ -132,14 +130,15 @@ def mutual_information(
     """
     X_pre = fitted_pipeline[:-2].transform(X)
     print(f"  Ranking {X_pre.shape[1]} genes over {len(seeds)} seeds")
-    mi_mean, per_run_elbows = _mi_elbow_ranking(X_pre, y, seeds)
+    mi_mean, per_run_elbows, curves = _mi_elbow_ranking(X_pre, y, seeds)
     mi_sorted = np.sort(mi_mean)[::-1]
+    scores = {"rank": np.arange(1, len(mi_sorted) + 1), "mi_sorted": mi_sorted}
+    for seed, curve in zip(seeds, curves):
+        scores[f"mi_sorted_seed_{seed}"] = np.sort(curve)[::-1]
     return {
         "mi_elbow": elbow_index(mi_sorted),
         "per_run_elbows": per_run_elbows,
-        "scores": pd.DataFrame(
-            {"rank": np.arange(1, len(mi_sorted) + 1), "mi_sorted": mi_sorted}
-        ),
+        "scores": pd.DataFrame(scores),
     }
 
 def elbow_index(scores) -> int:
@@ -157,9 +156,6 @@ def elbow_index(scores) -> int:
 
 def _mi_elbow_ranking(X_pre, y, seeds: Sequence[int] = SEEDS):
     """Per-seed MI; returns the gene-wise mean MI and the per-seed elbows.
-
-    mutual_info_classif is single-threaded and each seed is independent, so
-    the seeds run as separate processes.
     """
     curves = list(
         tqdm(
@@ -174,7 +170,7 @@ def _mi_elbow_ranking(X_pre, y, seeds: Sequence[int] = SEEDS):
         )
     )
     per_run_elbows = [elbow_index(np.sort(mi)[::-1]) for mi in curves]
-    return np.mean(curves, axis=0), per_run_elbows
+    return np.mean(curves, axis=0), per_run_elbows, curves
 
 def best_forest_row(scan: pd.DataFrame) -> pd.Series:
     """Scan row with the highest mean ARI."""
@@ -190,7 +186,6 @@ def best_forest_cell(scan: pd.DataFrame) -> pd.DataFrame:
     ]
     return cell.sort_values("n_selected")
 
-
 def plateau_gene_count(
     scan: pd.DataFrame,
     tol: float = None,
@@ -201,8 +196,7 @@ def plateau_gene_count(
     A gene count qualifies when its mean ARI and those of the next
     ``min_run - 1`` gene counts all sit within ``tol`` of the best mean ARI.
     ``tol`` defaults to the typical seed-to-seed spread, so "as good as the
-    best" means "indistinguishable from it given the seed noise". Falls back
-    to the argmax gene count when no run qualifies.
+    best" means "indistinguishable from it given the seed noise".
     """
     cell = best_forest_cell(scan)
     means = cell["ari_mean"].to_numpy()

@@ -20,7 +20,6 @@ from .feature_engineering import (
     feature_pipeline,
     preprocessing_pipeline,
     selected_with_importance,
-    write_selected_gene_tables,
     mutual_information,
     forest_kmeans,
 )
@@ -60,6 +59,8 @@ from .visualization import (
     plot_heatmap,
     plot_pca_deseq2,
     plot_go,
+    plot_probability_heatmap,
+    subset_display,
 )
 
 from .go_term_analysis import (
@@ -72,6 +73,8 @@ from .go_term_analysis import (
 
 # Prediction and model comparison
 from .prediction import ModelPredictor
+
+from .make_tables import format_table2, assemble_supplementary_tables
 
 __all__ = [
     # Configuration
@@ -101,7 +104,6 @@ __all__ = [
     "feature_pipeline",
     "preprocessing_pipeline",
     "selected_with_importance",
-    "write_selected_gene_tables",
     "mutual_information",
     "forest_kmeans",
     # Model training
@@ -122,6 +124,8 @@ __all__ = [
     "plot_heatmap",
     "plot_pca_deseq2",
     "plot_go",
+    "plot_probability_heatmap",
+    "subset_display",
     # GO term analysis
     "initialize_go",
     "generate_go_table",
@@ -130,4 +134,7 @@ __all__ = [
     "create_fs_de_go_table",
     # Prediction and model comparison
     "ModelPredictor",
+    # Manuscript tables
+    "format_table2",
+    "assemble_supplementary_tables",
 ]
