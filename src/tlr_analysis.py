@@ -8,25 +8,11 @@ import matplotlib.pyplot as plt
 
 def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     """Load TLR2 (Pam3) and TLR4 (LPS) data from supplementary tables.
-
-    Args:
-        data_dir: Path to the supplementary_data directory.
-                  Defaults to data/supplementary_data relative to project root.
-
-    Returns:
-        Tuple of (tlr2_df, tlr4_df, fla_pa_data) where fla_pa_data contains
-        Fla-PA measurements for each TLR.
     """
     if data_dir is None:
         data_dir = Path(__file__).parent.parent / "data" / "supplementary_data"
 
     data_dir = Path(data_dir)
-    if not data_dir.exists():
-        raise FileNotFoundError(f"Data directory not found: {data_dir}")
-    for fname in ("Supplementary_Table_5.csv", "Supplementary_Table_6.csv"):
-        if not (data_dir / fname).exists():
-            raise FileNotFoundError(f"Missing {fname} in {data_dir}")
-
     tlr4_raw = pd.read_csv(data_dir / "Supplementary_Table_5.csv")
     tlr4_lps = tlr4_raw[tlr4_raw["OD630nm_LPS_Replicate1"].notna()]
     tlr4_df = pd.DataFrame(
@@ -37,9 +23,8 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
             ].mean(axis=1),
         }
     )
-
     tlr4_fla = tlr4_raw[tlr4_raw["OD630nm_Fla-PA_Replicate1"].notna()].iloc[0]
-
+    
     tlr2_raw = pd.read_csv(data_dir / "Supplementary_Table_6.csv")
     tlr2_pam = tlr2_raw[tlr2_raw["OD630nm_Pam3_Replicate1"].notna()]
     tlr2_df = pd.DataFrame(
@@ -50,7 +35,6 @@ def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, di
             ].mean(axis=1),
         }
     )
-
     tlr2_fla = tlr2_raw[tlr2_raw["OD630nm_Fla-PA_Replicate1"].notna()].iloc[0]
 
     flapa_data = {
@@ -84,22 +68,7 @@ def plot_tlr_panel(
     xlim: tuple = (0.01, 100),
 ):
     """Plot a single TLR dose-response panel with optional Fla-PA bar.
-
-    Args:
-        ax_main: Main axis for dose-response curve.
-        ax_bar: Axis for Fla-PA bar.
-        df: DataFrame with concentration and Average columns.
-        conc_col: Name of concentration column.
-        fla_pa_val: Fla-PA average value (None to skip bar).
-        xlabel: X-axis label.
-        title: Plot title.
-        label: Legend label for curve.
-        color: Curve color.
-        xlim: X-axis limits as (min, max).
     """
-    assert conc_col in df.columns, f"Column '{conc_col}' not found in DataFrame"
-    assert "Average" in df.columns, "Column 'Average' not found in DataFrame"
-
     df_plot = df[df[conc_col] > 0].copy()
 
     x = df_plot[conc_col].values
@@ -148,16 +117,6 @@ def plot_tlr_hek_blue(
     output_filename: str = "TLR_HEK_Blue.png",
 ) -> Path:
     """Create TLR2/TLR4 dose-response plots with Fla-PA bar.
-
-    Args:
-        tlr2_df: DataFrame with TLR2 data (Concentration_ng_mL, Average).
-        tlr4_df: DataFrame with TLR4 data (Concentration_EU_mL, Average).
-        fla_pa_data: Dictionary with Fla-PA measurements for each TLR.
-        output_path: Directory to save plot.
-        output_filename: Output file name.
-
-    Returns:
-        Path to saved figure.
     """
     fig, axes = plt.subplots(
         2, 2, figsize=(10, 10), gridspec_kw={"width_ratios": [4, 1]}
@@ -199,10 +158,8 @@ def plot_tlr_hek_blue(
     output_path.mkdir(parents=True, exist_ok=True)
 
     save_path = output_path / output_filename
-    try:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        print(f"Plot saved as '{save_path}'")
-    finally:
-        plt.close()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    print(f"Plot saved as '{save_path}'")
+    plt.close()
 
     return save_path

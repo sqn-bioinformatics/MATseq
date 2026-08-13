@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Tuple, List, Optional
+from typing import Tuple
 from anndata import AnnData
 from pydeseq2.dds import DeseqDataSet
 from pydeseq2.ds import DeseqStats
@@ -15,10 +15,6 @@ from .go_term_analysis import (
     generate_go_table,
     merge_go_tables,
 )
-from .cache import PipelineCache
-
-
-
 class DataProcessor:
     """Process raw count data and perform DESeq2 analysis."""
 
@@ -28,19 +24,9 @@ class DataProcessor:
         sample_labels: pd.Series,
         classes: list[str],
         n_cpus: int,
-        cache: Optional[PipelineCache] = None,
-        force_recompute: bool = False,
         name: str = None,
     ):
         """Initialize data processor.
-
-        Args:
-            raw_counts: DataFrame with gene counts (samples as rows, genes as columns).
-            sample_labels: Series with sample class labels.
-            classes: List of class labels to compare (must be 2 for comparison).
-            n_cpus: Number of CPUs for parallel processing.
-            cache: PipelineCache instance for disk-based caching.
-            force_recompute: Skip cache and recompute.
         """
         if not isinstance(raw_counts, pd.DataFrame):
             raise TypeError(f"raw_counts must be DataFrame, got {type(raw_counts)}")
@@ -59,18 +45,10 @@ class DataProcessor:
         self.sample_labels = sample_labels
         self.classes = classes
         self.n_cpus = n_cpus
-        self.cache = cache
-        self.force_recompute = force_recompute
         self.name = name
 
     def prepare_metadata(self) -> pd.DataFrame:
         """Prepare metadata for DESeq2 analysis.
-
-        Returns:
-            DataFrame with metadata (condition column) indexed by sample names.
-
-        Raises:
-            ValueError: If invalid class configuration.
         """
         if len(self.classes) != 2:
             raise ValueError(
@@ -106,9 +84,6 @@ class DataProcessor:
 
     def make_dds(self) -> AnnData:
         """Create and run DESeq2 analysis.
-
-        Returns:
-            AnnData object with DESeq2 results.
         """
         metadata = self.prepare_metadata()
         counts = self.raw_counts.loc[metadata.index].copy()
@@ -135,29 +110,6 @@ class DataProcessor:
         padj_threshold: float = 0.05,
         log2fc_threshold: float = 2.0,
     ) -> Tuple[AnnData, pd.DataFrame, pd.DataFrame]:
-        """Calculate differential expression statistics.
-
-        Args:
-            padj_threshold: Adjusted p-value threshold for significance.
-            log2fc_threshold: Log2 fold-change threshold.
-
-        Returns:
-            Tuple of (dds, results_df, significant_genes_df).
-        """
-        class_key = "_".join(self.classes)
-        cache_name = f"deseq2_{class_key}"
-        cache_params = {
-            "subset": self.name,
-            "padj": padj_threshold,
-            "log2fc": log2fc_threshold
-        }
-
-        if self.cache is not None and not self.force_recompute:
-            cached = self.cache.get(cache_name, cache_params)
-            if cached is not None:
-                print(f"Loading DESeq2 results for {class_key} from cache...")
-                return cached
-
         dds = self.make_dds()
 
         tested_level = self.classes[0].replace("_", "-")
@@ -182,12 +134,7 @@ class DataProcessor:
                 f"Warning: No significant genes found (padj < {padj_threshold}, |log2FC| > {log2fc_threshold})"
             )
 
-        result = (dds, res, sigs)
-
-        if self.cache is not None:
-            self.cache.set(cache_name, result, cache_params, f"DESeq2 {class_key}")
-
-        return result
+        return dds, res, sigs
 
 
 class DESeq2:
@@ -199,21 +146,9 @@ class DESeq2:
         padj_threshold: float = 0.05,
         log2fc_threshold: float = 2.0,
         n_cpus: int = 42,
-        cache: Optional[PipelineCache] = None,
-        force_recompute: bool = False,
         name: str = None,
     ):
         """Initialize analysis pipeline.
-
-        Args:
-            raw_counts: DataFrame with gene counts (samples as rows, genes as columns).
-            sample_labels: Series with sample class labels.
-            output_dir: Directory for output files. Defaults to results/differential_gene_expression.
-            padj_threshold: Adjusted p-value threshold for significance.
-            log2fc_threshold: Log2 fold-change threshold.
-            n_cpus: Number of CPUs for parallel processing.
-            cache: PipelineCache instance for disk-based caching.
-            force_recompute: Skip cache and recompute.
         """
 
         if len(raw_counts) != len(sample_labels):
@@ -227,8 +162,6 @@ class DESeq2:
         self.padj_threshold = padj_threshold
         self.log2fc_threshold = log2fc_threshold
         self.n_cpus = n_cpus
-        self.cache = cache
-        self.force_recompute = force_recompute
         self.name = name
 
         results = Path.cwd() / "results"
@@ -259,13 +192,6 @@ class DESeq2:
         self, class_list: list[str], negative_control: str = "negative_control"
     ) -> dict:
         """Run DESeq2 analysis for all class pairs with negative control.
-
-        Args:
-            class_list: List of ligand classes to analyze.
-            negative_control: Name of negative control class.
-
-        Returns:
-            Dictionary with results for each ligand.
         """
         present = set(self.sample_labels.unique())
         filtered_list = [
@@ -282,8 +208,6 @@ class DESeq2:
                 sample_labels=self.sample_labels,
                 classes=class_pair,
                 n_cpus=self.n_cpus,
-                cache=self.cache,
-                force_recompute=self.force_recompute,
                 name=self.name,
             )
 
@@ -324,12 +248,6 @@ class DESeq2:
         self, ligand_name: str, dds: AnnData, res: pd.DataFrame, sigs: pd.DataFrame
     ):
         """Generate visualization figures for analysis.
-
-        Args:
-            ligand_name: Name of ligand for filenames.
-            dds: DESeq2 AnnData object.
-            res: Full results DataFrame.
-            sigs: Significant genes DataFrame.
         """
         plot_volcano(res, ligand_name, output_path=self.figures_dir)
         plot_heatmap(dds, sigs, ligand_name, output_path=self.figures_dir)
@@ -354,16 +272,8 @@ class DESeq2:
         return self._goeaobj, self._geneid_symbol_mapper
 
     def _go_table(self, ligand_name: str, genes: set) -> pd.DataFrame:
-        params = {"genes": sorted(str(g) for g in genes)}
-        df = None
-        if self.cache is not None and not self.force_recompute:
-            df = self.cache.get("go_table", params)
-        if df is None:
-            goeaobj, mapper = self.get_go_objects()
-            df = generate_go_table(set(genes), goeaobj, mapper)
-            if self.cache is not None:
-                self.cache.set("go_table", df, params, f"GO {ligand_name}")
-        return df
+        goeaobj, mapper = self.get_go_objects()
+        return generate_go_table(set(genes), goeaobj, mapper)
 
     def get_de_genes(self):
         """Return set of all differentially expressed genes."""

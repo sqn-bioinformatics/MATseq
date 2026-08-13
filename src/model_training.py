@@ -29,7 +29,8 @@ from sklearn.model_selection import (
 )
 from sklearn.base import clone
 
-from .feature_engineering import preprocessing_pipeline
+from .feature_engineering import feature_pipeline
+from .config import FEATURE_SELECTION_CONFIG
 
 
 def make_score(y_test, y_pred) -> dict:
@@ -148,7 +149,10 @@ class ModelTrainer:
         return output_dir
 
     def _build_tuning_pipeline(self, model, fold_seed: int) -> SkPipeline:
-        return SkPipeline([*preprocessing_pipeline().steps, ("clf", clone(model))])
+        fs = feature_pipeline(
+            **FEATURE_SELECTION_CONFIG, random_state=fold_seed
+        )
+        return SkPipeline([*fs.steps, ("clf", clone(model))])
 
     @staticmethod
     def _fit_kwargs(model_name: str, y) -> dict:

@@ -36,6 +36,194 @@ Raw inputs consumed (relative to the results directory, except S5/S6):
 from pathlib import Path
 
 import pandas as pd
+from sklearn.base import clone
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.pipeline import Pipeline as SkPipeline
+
+from .config import CLASS_ORDER, FEATURE_SELECTION_CONFIG
+from .feature_engineering import ColumnSelector, feature_pipeline, preprocessing_pipeline
+from .model_training import make_score
+
+# ----------------------------------------------------------------------------
+# Table 2: feature-set ablation under leakage-free nested CV
+# ----------------------------------------------------------------------------
+def _condition_genes(trainer, condition, X_tr, y_tr, fold_seed, de_config,
+                     subset, negative_control):
+    """Derive the gene list for one condition on the OUTER-TRAINING fold only.
+
+    Returns None for 'all_genes' (no column subsetting); otherwise a list of
+    gene names frozen for this fold's inner tuning and outer-test scoring.
+    """
+    if condition == "all_genes":
+        return None
+
+    if condition == "feature_selection":
+        fs = feature_pipeline(
+            **FEATURE_SELECTION_CONFIG, random_state=fold_seed
+        ).set_output(transform="pandas")
+        fs.fit(X_tr, y_tr)
+        return list(fs.get_feature_names_out())
+
+    if condition == "random_selected":
+        rng = np.random.default_rng(fold_seed)
+        k = FEATURE_SELECTION_CONFIG["max_features"]
+        cols = np.asarray(X_tr.columns)
+        return sorted(rng.choice(cols, size=min(k, len(cols)), replace=False).tolist())
+
+    if condition == "fs_plus_de":
+        from .pydeseq2 import DESeq2  # local import: avoids any import cycle
+        fs = feature_pipeline(
+            **FEATURE_SELECTION_CONFIG, random_state=fold_seed
+        ).set_output(transform="pandas")
+        fs.fit(X_tr, y_tr)
+        fs_genes = set(fs.get_feature_names_out())
+        # DE genes from DESeq2 on the raw training counts of THIS fold only.
+        y_tr_lab = pd.Series(trainer.decode_predictions(y_tr), index=X_tr.index)
+        deseq = DESeq2(
+            raw_counts=X_tr,
+            sample_labels=y_tr_lab,
+            padj_threshold=de_config["padj_threshold"],
+            log2fc_threshold=de_config["log2fc_threshold"],
+            n_cpus=de_config["n_cpus"],
+            name=f"table2_fold{fold_seed}",
+        )
+        deseq.run_analysis(
+            CLASS_ORDER[subset], negative_control=negative_control
+        )
+        de_genes = {str(g) for g in deseq.get_de_genes()}
+        union = sorted(fs_genes | (de_genes & set(map(str, X_tr.columns))))
+        return union
+
+    raise ValueError(f"unknown condition: {condition}")
+
+def _frozen_geneset_pipeline(model, gene_list):
+    """preprocessing -> [ColumnSelector] -> clf, matching STEP 4b deployment
+    order. XGBoost/RandomForest internal n_jobs forced to 1 so
+    GridSearchCV(n_jobs=-1) owns all parallelism (avoids 48x48 thread
+    oversubscription that stalled all_genes XGBoost)."""
+    clf = clone(model)
+    try:
+        clf.set_params(n_jobs=1)
+    except (ValueError, TypeError):
+        pass
+    steps = list(preprocessing_pipeline().steps)
+    if gene_list is not None:
+        steps.append(("select_genes", ColumnSelector(gene_list)))
+    steps.append(("clf", clf))
+    return SkPipeline(steps).set_output(transform="pandas")
+
+def benchmark_feature_set_conditions(
+    trainer,
+    X,
+    y,
+    param_grids,
+    output_dir,
+    de_config,
+    conditions=("all_genes", "feature_selection", "fs_plus_de", "random_selected"),
+    outer_cv=5,
+    inner_cv=3,
+    scoring="f1_macro",
+    subset="train_ligands",
+    negative_control="negative_control",
+):
+    """Leakage-free nested-CV benchmark across feature-set conditions (Table 2).
+
+    For each condition the gene set is derived on the outer-training fold only
+    (see _condition_genes), frozen, then the inner 3-fold GridSearchCV tunes
+    only classifier hyperparameters on that frozen set; the outer-test fold is
+    scored once. Preprocessing (library-size norm, log1p, scaling) is refit in
+    every fit. mean/std are taken across the outer folds (n=outer_cv).
+
+    Writes long-form output_dir/table2_feature_set_benchmark.csv with columns:
+    condition, model, n_genes_mean, and {metric}_{mean,std} for accuracy,
+    precision, recall, f1. Returns that DataFrame.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    y_array = y.values if isinstance(y, pd.Series) else y
+    trainer.label_encoder.fit(y_array)
+    y_encoded = trainer.label_encoder.transform(y_array)
+
+    min_class_count = np.bincount(y_encoded).min()
+    if outer_cv > min_class_count:
+        raise ValueError(
+            f"outer_cv={outer_cv} exceeds smallest class count={min_class_count}"
+        )
+
+    outer = StratifiedKFold(
+        n_splits=outer_cv, shuffle=True, random_state=trainer.random_state
+    )
+    fold_seeds = np.random.SeedSequence(trainer.random_state).generate_state(outer_cv)
+    metric_keys = ["accuracy", "precision", "recall", "f1"]
+    rows = []
+
+    # Materialize the outer folds and their train/test slices once; reused
+    # across every condition and model (the split is deterministic).
+    folds = []
+    for fold_idx, (train_idx, test_idx) in enumerate(
+        outer.split(np.arange(len(X)), y_encoded)
+    ):
+        folds.append(
+            (
+                X.iloc[train_idx], X.iloc[test_idx],
+                y_encoded[train_idx], y_encoded[test_idx],
+            )
+        )
+
+    for cond in conditions:
+        print(f"\n===== CONDITION: {cond} =====", flush=True)
+        # Gene set is data-dependent, so derive once per outer fold and reuse
+        # across all models within that fold.
+        fold_genes = {}
+        for fold_idx, (X_tr, _, y_tr, _) in enumerate(folds):
+            genes = _condition_genes(
+                    trainer,
+                cond, X_tr, y_tr, int(fold_seeds[fold_idx]),
+                de_config, subset, negative_control,
+            )
+            fold_genes[fold_idx] = genes
+            print(f"  fold {fold_idx}: n_genes="
+                  f"{'all' if genes is None else len(genes)}", flush=True)
+
+        for model_name, model in trainer.models.items():
+            per_fold = {k: [] for k in metric_keys}
+            n_genes = []
+            for fold_idx, (X_tr, X_te, y_tr, y_te) in enumerate(folds):
+                genes = fold_genes[fold_idx]
+                n_genes.append(X.shape[1] if genes is None else len(genes))
+                pipe = _frozen_geneset_pipeline(model, genes)
+                inner = StratifiedKFold(
+                    n_splits=inner_cv, shuffle=True,
+                    random_state=int(fold_seeds[fold_idx]),
+                )
+                gs = GridSearchCV(
+                    pipe, param_grids[model_name], cv=inner,
+                    scoring=scoring, n_jobs=-1, refit=True,
+                )
+                gs.fit(X_tr, y_tr, **trainer._fit_kwargs(model_name, y_tr))
+                scores = make_score(y_te, gs.best_estimator_.predict(X_te))
+                for k in metric_keys:
+                    per_fold[k].append(scores[k])
+            row = {"condition": cond, "model": model_name,
+                   "n_genes_mean": float(np.mean(n_genes))}
+            for k in metric_keys:
+                row[f"{k}_mean"] = float(np.mean(per_fold[k]))
+                row[f"{k}_std"] = float(np.std(per_fold[k], ddof=1))
+            rows.append(row)
+            print(f"  [{model_name}] f1={row['f1_mean']:.3f}±{row['f1_std']:.3f} "
+                  f"acc={row['accuracy_mean']:.3f}±{row['accuracy_std']:.3f}",
+                  flush=True)
+            # persist incrementally so a wall-clock cutoff still yields data
+            pd.DataFrame(rows).to_csv(
+                output_dir / "table2_feature_set_benchmark.csv", index=False
+            )
+
+    df = pd.DataFrame(rows)
+    df.to_csv(output_dir / "table2_feature_set_benchmark.csv", index=False)
+    print(f"\nBenchmark saved: {output_dir / 'table2_feature_set_benchmark.csv'}",
+          flush=True)
+    return df
 
 from .feature_engineering import best_forest_cell
 
