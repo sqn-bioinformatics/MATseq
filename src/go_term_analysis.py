@@ -137,7 +137,8 @@ def _initialize_go_cached(data_dir: Path) -> tuple:
 
     obodag = GODag(str(obo_file))
     genes = Gene2GoReader(str(gene2go_file), taxids=[9606])
-    ns2assoc = genes.get_ns2assc()
+    # Restrict enrichment to Biological Process; FDR is then corrected within BP only.
+    ns2assoc = {"BP": genes.get_ns2assc()["BP"]}
 
     geneid2nt = _parse_geneid2nt(gene_file)
 

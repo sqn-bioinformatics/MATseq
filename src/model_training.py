@@ -35,7 +35,7 @@ from sklearn.base import clone
 import matplotlib.pyplot as plt
 
 from .feature_engineering import FeatureSelector
-from .config import FEATURE_SELECTION_CONFIG
+from .config import FEATURE_SELECTION_CONFIG, SUBSET_CLASS_ORDERS, order_labels
 
 
 def make_score(y_test, y_pred) -> dict:
@@ -358,7 +358,10 @@ class ModelTrainer:
 
         oof_frames = []
         pooled_rows = []
-        class_names = list(self.label_encoder.classes_)
+        _subset_key = (eval_name or "main_ligands").split("_no_flapa")[0]
+        if _subset_key not in SUBSET_CLASS_ORDERS:
+            _subset_key = "main_ligands"
+        class_names = order_labels(self.label_encoder.classes_, _subset_key)
         for model_name in self.models:
             df = pd.DataFrame(pooled[model_name])
             y_true_dec = self.decode_predictions(df["true_enc"].to_numpy())
@@ -399,7 +402,8 @@ class ModelTrainer:
                 fig_dir / f"{prefix}{model_name}_confusion_matrix_normalized.csv"
             )
             self._save_confusion_matrix(
-                cm_norm, class_names, f"{prefix}{model_name}", fig_dir
+                cm_norm, class_names, model_name, fig_dir,
+                subset=eval_name or "main_ligands", file_prefix=prefix,
             )
 
         pd.concat(oof_frames, ignore_index=True).to_csv(
@@ -421,6 +425,8 @@ class ModelTrainer:
         self._memory = None
         shutil.rmtree(memory_dir, ignore_errors=True)
 
+        self.nested_cv_summary_ = summary
+        self.selected_params_ = selected_params
         return summary
 
     def _select_and_refit(
@@ -460,27 +466,27 @@ class ModelTrainer:
         return selected
 
     def _save_confusion_matrix(
-        self, cm_norm, class_names, name: str, output_dir: Path
+        self, cm_norm, class_names, model: str, output_dir: Path,
+        subset: str = "main_ligands", file_prefix: str = "",
     ) -> None:
-        fig, ax = plt.subplots(figsize=(8, 8))
-        ConfusionMatrixDisplay(cm_norm, display_labels=class_names).plot(
-            ax=ax,
-            xticks_rotation="vertical",
-            colorbar=False,
-            values_format=".0%",
+        """Save a Nature-style confusion matrix (delegates to visualization)."""
+        from .visualization import save_confusion_matrix
+
+        save_path = save_confusion_matrix(
+            cm_norm, class_names, model, subset, output_dir,
+            filename=f"Confusion_Matrix_{file_prefix}{model}.png",
         )
+        print(f"Figure saved: {save_path}")
 
-        ax.set_title(f"Confusion Matrix {name}")
-        plt.tight_layout()
-
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        save_path = output_dir / f"Confusion_Matrix_{name}.png"
-        try:
-            plt.savefig(save_path, dpi=300, bbox_inches="tight")
-            print(f"Figure saved: {save_path}")
-        finally:
-            plt.close()
+    @classmethod
+    def from_trained_models(cls, trained_models: Dict, label_encoder) -> "ModelTrainer":
+        """Build a trainer around already-fitted models, bypassing __init__ validation."""
+        trainer = cls.__new__(cls)
+        trainer.trained_models = trained_models
+        trainer.label_encoder = label_encoder
+        trainer.X = None
+        trainer.y = None
+        return trainer
 
     @classmethod
     def load_models(cls, model_dir: Path) -> "ModelTrainer":
@@ -505,10 +511,5 @@ class ModelTrainer:
             with open(model_file, "rb") as f:
                 trained_models[model_name] = pickle.load(f)
 
-        trainer = cls.__new__(cls)
-        trainer.trained_models = trained_models
-        trainer.label_encoder = label_encoder
-        trainer.X = None
-        trainer.y = None
         print(f"Models loaded from {model_dir}")
-        return trainer
+        return cls.from_trained_models(trained_models, label_encoder)

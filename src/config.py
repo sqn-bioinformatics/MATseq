@@ -118,11 +118,71 @@ SUBSET_CLASS_ORDERS = {
     "bacteria_ligands": CLASS_ORDER_BACTERIA_LIGANDS,
 }
 
+
+def order_labels(present, subset="main_ligands"):
+    order = SUBSET_CLASS_ORDERS.get(subset, SUBSET_CLASS_ORDERS["main_ligands"])
+    present = list(present)
+    ordered = [c for c in order if c in present]
+    return ordered + [c for c in present if c not in ordered]
+CLASS_DISPLAY_NAMES = {
+    "negative_control": "Negative Control",
+}
+SUBSET_DISPLAY_NAMES = {
+    "main_ligands": "Training Ligands",
+    "main_ligands_no_flapa": "Training Ligands (w/o Fla-PA)",
+    "additional_ligands": "Additional Ligands",
+    "bacteria_ligands": "Bacterial Ligands",
+    "external_test": "Test Ligands",
+    "no_flapa": "w/o Fla-PA",
+}
+
+
+def display_label(label):
+    """Human-readable form of a single class label (no underscores)."""
+    if label in CLASS_DISPLAY_NAMES:
+        return CLASS_DISPLAY_NAMES[label]
+    return str(label).replace("_", " ")
+
+
+def display_labels(labels):
+    """Human-readable forms of an iterable of class labels."""
+    return [display_label(x) for x in labels]
+
+
+def subset_display(subset):
+    """Human-readable subset/panel name (e.g. main_ligands -> 'Training Ligands')."""
+    if subset in SUBSET_DISPLAY_NAMES:
+        return SUBSET_DISPLAY_NAMES[subset]
+    return str(subset).replace("_", " ").title()
+
+
+def confusion_title(model, subset):
+    """Figure title in the '<Model> Confusion Matrix <Subset>' format."""
+    return f"{model} Confusion Matrix {subset_display(subset)}"
+
+
 DESEQ2_CONFIG = _config["deseq2"]
 FEATURE_SELECTION_CONFIG = _config["feature_selection"]
+FOREST_SELECTION_GRID = _config["forest_selection_grid"]
 MODEL_FACTORY_CONFIG = _config["model_factory"]
 MODEL_TRAINING_CONFIG = _config["model_training"]
 HYPERPARAMETER_GRIDS = _config["hyperparameter_grids"]
+
+
+def update_config(updates: dict) -> None:
+    """Merge updates into config.json's feature_selection block and write it back."""
+    config_path = _find_config_path()
+    with config_path.open() as f:
+        config = json.load(f)
+    config.setdefault("feature_selection", {}).update(updates)
+    with config_path.open("w") as f:
+        json.dump(config, f, indent=2)
+    FEATURE_SELECTION_CONFIG.update(updates)
+
+
+def primary_geneset_name() -> str:
+    """Geneset key for the full tuned selection, e.g. 'selected_130' (= n_selected)."""
+    return f"selected_{FEATURE_SELECTION_CONFIG['max_features']}"
 
 if FEATURE_SELECTION_CONFIG["k_best"] < FEATURE_SELECTION_CONFIG["max_features"]:
     raise ValueError(

@@ -1229,6 +1229,27 @@ files = [
 ]
 
 [[package]]
+name = "kneed"
+version = "0.8.6"
+description = "Knee-point detection in Python"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "kneed-0.8.6-py3-none-any.whl", hash = "sha256:3412e7b70bce07717386d24fab37f0f985968d1b85ea0c749a6b98caccaf65ec"},
+    {file = "kneed-0.8.6.tar.gz", hash = "sha256:65b22727c623661701f15edf057f2e6c73e2b1ad4e68cd9ca4291675c318b5ef"},
+]
+
+[package.dependencies]
+numpy = ">=1.14.2"
+scipy = ">=1.0.0"
+
+[package.extras]
+docs = ["mkdocs-jupyter (>=0.24)", "mkdocs-material (>=9.5)", "mkdocstrings[python] (>=0.24)"]
+plot = ["matplotlib (>=2.2.5)"]
+testing = ["matplotlib (>=2.2.5)", "pytest (>=5.0.1)", "pytest-cov (>=3.0.0)"]
+
+[[package]]
 name = "llvmlite"
 version = "0.47.0"
 description = "lightweight wrapper around basic LLVM functionality"
@@ -3451,4 +3472,4 @@ pyyaml = ">=6.0,<7.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "61087b3b6a1575a237adace62dc889c0c8cc60a31017b8a0116ba6de4923cd9c"
+content-hash = "0f55453fb36b53a315da56825db12513431c1cb9787098e15e6d26b7fb58d6be"

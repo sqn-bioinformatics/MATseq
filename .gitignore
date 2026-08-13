@@ -64,5 +64,6 @@ cache/
 
 #ignore documentation
 /paper/
+*.txt
 
 

@@ -17,8 +17,8 @@ from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 
 from .feature_engineering import (
     LibraryLengthNormalizer,
+    ColumnSelector,
     FeatureSelector,
-    VennDiagramGenerator,
 )
 
 from .model_training import (
@@ -55,6 +55,7 @@ from .pydeseq2 import (
 from .visualization import (
     plot_gene_expression_by_class,
     plot_feature_count_analysis,
+    plot_venn,
     plot_pca_pandas,
     plot_volcano,
     plot_heatmap,
@@ -103,6 +104,7 @@ __all__ = [
     "load_tlr_data",
     # Feature engineering
     "LibraryLengthNormalizer",
+    "ColumnSelector",
     "FeatureSelector",
     # Model training
     "ModelFactory",
@@ -115,6 +117,7 @@ __all__ = [
     # Visualization
     "plot_gene_expression_by_class",
     "plot_feature_count_analysis",
+    "plot_venn",
     "plot_tlr_hek_blue",
     "plot_pca_pandas",
     "plot_volcano",
@@ -127,8 +130,6 @@ __all__ = [
     "run_go_analysis",
     "merge_go_tables",
     "create_fs_de_go_table",
-    # Feature analysis
-    "VennDiagramGenerator",
     # Prediction and model comparison
     "ModelPredictor",
 ]
