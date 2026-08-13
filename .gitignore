@@ -18,11 +18,11 @@ config.txt
 #ignore snakemake logs
 /.snakemake
 
-#ignore pickled model
-BaggingClassifier.joblib
-
 #ignore results directory contents 
 /results/**
+
+#ignore scripts directory contents
+/scripts/**
 
 #ignore Python cache files
 __pycache__/
@@ -40,8 +40,7 @@ __pycache__/
 #ignore temporary files
 *.tmp
 *.bak
-pipeline_output.log
-example.docx
+
 
 #ignore environment files
 .env
@@ -52,18 +51,20 @@ venv/
 #ignore data files
 /data/*
 
-#ignore markdown files
-*.md
-
-#ignore claude cache
-/.claude
 
 #ignore misc caches
 cache/
 /cache
+/.claude
+/.codex
 
 #ignore documentation
-/paper/
+paper/*
 *.txt
+*.md
 
+#ignore back ups
+*.bak*
 
+#ignore scripts
+scripts/*
