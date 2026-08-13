@@ -22,11 +22,10 @@ CLASS_DISPLAY_NAMES = {
     "negative_control": "Negative Control",
 }
 SUBSET_DISPLAY_NAMES = {
-    "main_ligands": "Training Ligands",
-    "main_ligands_no_flapa": "Training Ligands (w/o Fla-PA)",
+    "train_ligands": "Training Ligands",
+    "test_ligands": "Test Ligands",
     "additional_ligands": "Additional Ligands",
     "bacterial_ligands": "Bacterial Ligands",
-    "external_test": "Test Ligands",
     "no_flapa": "w/o Fla-PA",
 }
 
@@ -42,7 +41,7 @@ def display_labels(labels):
     return [display_label(x) for x in labels]
 
 def subset_display(subset):
-    """Human-readable subset/panel name (e.g. main_ligands -> 'Training Ligands')."""
+    """Human-readable subset/panel name (e.g. train_ligands -> 'Training Ligands')."""
     if subset in SUBSET_DISPLAY_NAMES:
         return SUBSET_DISPLAY_NAMES[subset]
     return str(subset).replace("_", " ").title()
@@ -51,8 +50,8 @@ def confusion_title(model, subset):
     """Figure title in the '<Model> Confusion Matrix <Subset>' format."""
     return f"{model} Confusion Matrix {subset_display(subset)}"
 
-def order_labels(present, subset="main_ligands"):
-    order = CLASS_ORDER.get(subset, CLASS_ORDER["main_ligands"])
+def order_labels(present, subset="train_ligands"):
+    order = CLASS_ORDER.get(subset, CLASS_ORDER["train_ligands"])
     present = list(present)
     ordered = [c for c in order if c in present]
     return ordered + [c for c in present if c not in ordered]
@@ -60,11 +59,6 @@ def order_labels(present, subset="main_ligands"):
 
 def _savefig_with_arrow_fallback(save_path, **kwargs):
     """Save the current figure, retrying without adjust_text connector arrows.
-
-    adjustText 0.8 with matplotlib >= 3.x can emit a degenerate FancyArrowPatch
-    (text left at its anchor, so posA ~= posB) whose path cannot be clipped,
-    raising StopIteration inside the draw call at savefig time. The connectors
-    are cosmetic, so on that failure we drop them and re-save.
     """
     try:
         plt.savefig(save_path, **kwargs)
@@ -230,9 +224,6 @@ def plot_probability_heatmap(proba_df, class_order, ax=None, title=None,
 def assemble_panel_collage(panels, output_path, ncols=3, panel_size=5.0,
                            title=None):
     """Compose an N-panel collage from a list of draw callables.
-
-    Each entry in ``panels`` is a callable ``fn(ax)`` that renders one panel on
-    the Axes it is given. Panels are laid out row-major into ceil(N/ncols) rows.
     """
     n = len(panels)
     nrows = int(np.ceil(n / ncols))
@@ -370,10 +361,7 @@ def plot_forest_ari_sweep(
 def draw_pca(ax, X_reduced, label_values, palette=None,
              hue_order=None, with_sample_names=False, sample_names=None,
              equal_aspect=True, title=None, marker_size=80):
-    """Render a 2-component PCA scatter on ``ax`` (equal aspect by default).
-
-    Legend entries are display-cleaned (no underscores). ``X_reduced`` is the
-    Nx2 PCA-projected array; ``label_values`` the per-sample class labels.
+    """Render a 2-component PCA scatter on ``ax``.
     """
     sns.scatterplot(
         x=X_reduced[:, 0],
@@ -432,19 +420,6 @@ def plot_pca(
     equal_aspect: bool = False,
 ) -> Path:
     """Create PCA visualization for pandas DataFrame data.
-
-    Args:
-        name: Name for output file.
-        X: DataFrame with features (samples as rows).
-        labels: DataFrame with 'label' column or array with labels.
-        with_sample_names: If True, add sample name labels.
-        output_filename: Output file name.
-        palette: Color palette.
-        hue_order: Order of classes for legend.
-        equal_aspect: If True, equal x/y scaling (no axis stretching).
-
-    Returns:
-        Path to saved figure.
     """
     label_values = (
         labels["label"].to_numpy() if isinstance(labels, pd.DataFrame) else labels
@@ -508,16 +483,6 @@ def plot_volcano(
     output_filename: str = None,
 ) -> Path:
     """Create volcano plot showing differentially expressed genes.
-
-    Args:
-        res: DataFrame with DESeq2 results.
-        analysis_name: Name for title and output file.
-        log2foldchange: Threshold for log2 fold change.
-        output_path: Directory to save plot.
-        output_filename: Output file name.
-
-    Returns:
-        Path to saved figure.
     """
     grapher = res.assign(
         padj_log=res["padj"].apply(
@@ -556,8 +521,8 @@ def plot_volcano(
     )
 
     ax.axhline(1.3, color="black", linestyle="--", linewidth=1)
-    ax.axvline(2, color="black", linestyle="--", linewidth=1)
-    ax.axvline(-2, color="black", linestyle="--", linewidth=1)
+    ax.axvline(log2foldchange, color="black", linestyle="--", linewidth=1)
+    ax.axvline(-log2foldchange, color="black", linestyle="--", linewidth=1)
 
     texts = []
     for i, row in annotation_subset.iterrows():
@@ -617,17 +582,6 @@ def plot_heatmap(
     output_filename: str = None,
 ) -> Path:
     """Create hierarchical clustering heatmap of significant genes.
-
-    Args:
-        dds: DESeq2 AnnData object.
-        sigs: DataFrame with significant genes.
-        analysis_name: Name for title and output file.
-        num_top_sig: Number of top genes to plot, or "all".
-        output_path: Directory to save plot.
-        output_filename: Output file name.
-
-    Returns:
-        Path to saved figure.
     """
     if num_top_sig != "all":
         sigs = sigs.sort_values("padj")[:num_top_sig]
@@ -729,16 +683,6 @@ def plot_pca_deseq2(
     output_filename: str = None,
 ) -> Path:
     """Create PCA visualization from DESeq2 results.
-
-    Args:
-        dds: DESeq2 AnnData object.
-        analysis_name: Name for title and output file.
-        with_text: If True, add sample name labels.
-        output_path: Directory to save plot.
-        output_filename: Output file name.
-
-    Returns:
-        Path to saved figure.
     """
     dds_copy = dds.copy()
     sc.tl.pca(dds_copy, n_comps=2)
@@ -790,15 +734,6 @@ def plot_go(
     output_filename: str = None,
 ) -> Path:
     """Create horizontal bar plot of GO enrichment terms.
-
-    Args:
-        go_df: DataFrame with GO enrichment results (from generate_go_table or CSV).
-        title: Plot title.
-        output_path: Directory to save plot.
-        output_filename: Output file name.
-
-    Returns:
-        Path to saved figure.
     """
     if go_df.empty:
         raise ValueError("No GO enrichment terms to plot")

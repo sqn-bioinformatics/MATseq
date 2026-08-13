@@ -45,8 +45,6 @@ class ColumnSelector(BaseEstimator, TransformerMixin):
     """Keep a fixed set of named columns"""
 
     def __init__(self, genes):
-        # Stored unchanged: sklearn's clone() rejects estimators whose
-        # __init__ modifies a parameter, which GridSearchCV relies on.
         self.genes = genes
 
     def fit(self, X, y=None):
@@ -157,9 +155,6 @@ def elbow_index(scores) -> int:
 
 def _mi_elbow_ranking(X_pre, y, seeds: Sequence[int] = SEEDS):
     """Per-seed MI; returns the gene-wise mean MI and the per-seed elbows.
-
-    mutual_info_classif is single-threaded and each seed is independent, so
-    the seeds run as separate processes.
     """
     curves = list(
         tqdm(
@@ -190,7 +185,6 @@ def best_forest_cell(scan: pd.DataFrame) -> pd.DataFrame:
     ]
     return cell.sort_values("n_selected")
 
-
 def plateau_gene_count(
     scan: pd.DataFrame,
     tol: float = None,
@@ -201,8 +195,7 @@ def plateau_gene_count(
     A gene count qualifies when its mean ARI and those of the next
     ``min_run - 1`` gene counts all sit within ``tol`` of the best mean ARI.
     ``tol`` defaults to the typical seed-to-seed spread, so "as good as the
-    best" means "indistinguishable from it given the seed noise". Falls back
-    to the argmax gene count when no run qualifies.
+    best" means "indistinguishable from it given the seed noise".
     """
     cell = best_forest_cell(scan)
     means = cell["ari_mean"].to_numpy()

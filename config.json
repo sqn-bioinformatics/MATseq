@@ -3,7 +3,6 @@
     "data_dir": "~/MATseq/data",
     "go_terms_support_dir": "~/MATseq/data/go_terms_support",
     "results_dir": "~/MATseq/results",
-    "cache_dir": "~/MATseq/results/cache",
     "figures_dir": "~/MATseq/results/figures",
     "featurecounts_dir": "~/MATseq/results/featurecounts"
   },
@@ -91,14 +90,6 @@
       "Fla-PA",
       "HK E.coli",
       "HK S.aureus"
-    ],
-    "main_ligands": [
-      "negative_control",
-      "LPS",
-      "Pam3",
-      "R848",
-      "PGN",
-      "Fla-PA"
     ]
   },
   "colors": {
