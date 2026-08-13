@@ -16,7 +16,7 @@ import scanpy as sc
 
 from .preprocessing import normalize_rpm
 from .config import CLASS_ORDER
-from .feature_engineering import best_forest_cell, plateau_gene_count
+from .feature_engineering import best_forest_cell, best_forest_row
 
 CLASS_DISPLAY_NAMES = {
     "negative_control": "Negative Control",
@@ -292,8 +292,6 @@ def plot_mutual_information(
     fig, ax1 = plt.subplots(figsize=(8, 5))
     scores = result["scores"]
     ax1.plot(scores["rank"], scores["mi_sorted"], label="mutual information")
-    for e in per_run_elbows:
-        ax1.axvline(e, color="C1", ls=":", alpha=0.6)
     ax1.axvline(
         mi_elbow, color="C0", ls="--", label=f"MI elbow (mean {mi_elbow})"
     )
@@ -326,7 +324,7 @@ def plot_forest_ari_sweep(
     gene_counts = cell["n_selected"].to_numpy()
     means = cell["ari_mean"].to_numpy()
     if selected is None:
-        selected = plateau_gene_count(scan)
+        selected = int(best_forest_row(scan)["n_selected"])
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
     ax.scatter(
