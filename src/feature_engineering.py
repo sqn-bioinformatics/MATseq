@@ -130,14 +130,15 @@ def mutual_information(
     """
     X_pre = fitted_pipeline[:-2].transform(X)
     print(f"  Ranking {X_pre.shape[1]} genes over {len(seeds)} seeds")
-    mi_mean, per_run_elbows = _mi_elbow_ranking(X_pre, y, seeds)
+    mi_mean, per_run_elbows, curves = _mi_elbow_ranking(X_pre, y, seeds)
     mi_sorted = np.sort(mi_mean)[::-1]
+    scores = {"rank": np.arange(1, len(mi_sorted) + 1), "mi_sorted": mi_sorted}
+    for seed, curve in zip(seeds, curves):
+        scores[f"mi_sorted_seed_{seed}"] = np.sort(curve)[::-1]
     return {
         "mi_elbow": elbow_index(mi_sorted),
         "per_run_elbows": per_run_elbows,
-        "scores": pd.DataFrame(
-            {"rank": np.arange(1, len(mi_sorted) + 1), "mi_sorted": mi_sorted}
-        ),
+        "scores": pd.DataFrame(scores),
     }
 
 def elbow_index(scores) -> int:
@@ -169,7 +170,7 @@ def _mi_elbow_ranking(X_pre, y, seeds: Sequence[int] = SEEDS):
         )
     )
     per_run_elbows = [elbow_index(np.sort(mi)[::-1]) for mi in curves]
-    return np.mean(curves, axis=0), per_run_elbows
+    return np.mean(curves, axis=0), per_run_elbows, curves
 
 def best_forest_row(scan: pd.DataFrame) -> pd.Series:
     """Scan row with the highest mean ARI."""

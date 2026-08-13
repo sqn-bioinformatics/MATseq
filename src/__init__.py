@@ -74,6 +74,8 @@ from .go_term_analysis import (
 # Prediction and model comparison
 from .prediction import ModelPredictor
 
+from .make_tables import format_table2, assemble_supplementary_tables
+
 __all__ = [
     # Configuration
     "CUSTOM_PALETTE_9",
@@ -132,4 +134,7 @@ __all__ = [
     "create_fs_de_go_table",
     # Prediction and model comparison
     "ModelPredictor",
+    # Manuscript tables
+    "format_table2",
+    "assemble_supplementary_tables",
 ]
