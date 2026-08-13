@@ -1,5 +1,3 @@
-"""Genomic visualization functions."""
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -237,11 +235,6 @@ def assemble_panel_collage(panels, output_path, ncols=3, panel_size=5.0,
         ax.axis("off")
     if title:
         fig.suptitle(title, fontsize=15, y=1.0)
-    # Panels are fixed square boxes. The gutter is widened (wspace) so the PCA
-    # panel's legend, anchored just outside its top-right corner, clears the
-    # neighbouring confusion matrix without truncating any class name. hspace is
-    # opened up so the per-class tick labels + "Predicted class" title on the
-    # top row's confusion matrices clear the bottom row's panel titles.
     fig.subplots_adjust(wspace=0.45, hspace=0.35,
                         left=0.04, right=0.98, top=0.93, bottom=0.05)
     output_path = Path(output_path)

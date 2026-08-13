@@ -185,30 +185,6 @@ def best_forest_cell(scan: pd.DataFrame) -> pd.DataFrame:
     ]
     return cell.sort_values("n_selected")
 
-def plateau_gene_count(
-    scan: pd.DataFrame,
-    tol: float = None,
-    min_run: int = 3,
-) -> int:
-    """Smallest gene count starting a stable high plateau in mean ARI.
-
-    A gene count qualifies when its mean ARI and those of the next
-    ``min_run - 1`` gene counts all sit within ``tol`` of the best mean ARI.
-    ``tol`` defaults to the typical seed-to-seed spread, so "as good as the
-    best" means "indistinguishable from it given the seed noise".
-    """
-    cell = best_forest_cell(scan)
-    means = cell["ari_mean"].to_numpy()
-    counts = cell["n_selected"].to_numpy()
-    if tol is None:
-        tol = float(cell["ari_std"].mean())
-
-    above = means >= means.max() - tol
-    for i in range(len(counts) - min_run + 1):
-        if above[i : i + min_run].all():
-            return int(counts[i])
-    return int(counts[means.argmax()])
-
 def forest_kmeans(
     fitted_pipeline: Pipeline,
     X: pd.DataFrame,
@@ -286,4 +262,4 @@ def forest_kmeans(
         "n_selected": int(best_row["n_selected"]),
         "ari": float(best_row["ari_mean"]),
     }
-    return {"best": best, "scan": scan, "plateau": plateau_gene_count(scan)}
+    return {"best": best, "scan": scan}

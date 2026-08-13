@@ -4,228 +4,41 @@ The modelling code (MATseq.py -> src/model_training.py, src/pydeseq2.py,
 src/go_term_analysis.py) writes *raw* per-ligand / per-condition CSVs of
 computed numbers. This module is the single place that reshapes those raw
 outputs into the final, correctly-named manuscript tables. No numbers are
-produced here except the Table 2 benchmark — otherwise only selection, joining,
-column naming and formatting, so a table can be re-assembled or re-styled
-without re-running the pipeline.
+produced here: only selection, joining, column naming and formatting, so a
+table can be re-assembled or re-styled without re-running the pipeline.
 
 Two groups of functions:
 
-1. Main-text Table 2 — ``benchmark_feature_set_conditions`` runs the nested-CV
-   feature-set ablation and writes
-   results/tables/table2_feature_set_benchmark.csv, long-form with columns
-   condition, model, n_genes_mean, {accuracy,precision,recall,f1}_{mean,std};
-   ``format_table2`` turns that CSV into the manuscript table.
+1. Main-text Table 2 -- ``format_table2`` reads the nested-CV summary written by
+   MATseq.py at results/nested_cv/supp_nested_cv_main.csv and turns it into the
+   manuscript table.
 
-2. Supplementary Tables S1-S4 — ``assemble_supplementary_table_{1..4}`` and the
+2. Supplementary Tables S1-S12 -- ``assemble_supplementary_table_{1..12}`` and the
    convenience wrapper ``assemble_supplementary_tables``. These read the raw
    DESeq2 / GO / feature-selection CSVs and emit the named Supplementary_Table_N
    files. Assembling them here (rather than by hand) fixes three long-standing
    naming problems at source:
-     * S1's LPS block was unlabelled — every per-ligand block is now suffixed,
+     * S1's LPS block was unlabelled -- every per-ligand block is now suffixed,
        including ``_LPS``, and the gene column is named ``gene``.
-     * S2/S4 carried a stray ``Unnamed: 0`` index — all writes use index=False.
-     * the gene identifier column was unnamed on read-back — set explicitly.
+     * S2/S4 carried a stray ``Unnamed: 0`` index -- all writes use index=False.
+     * the gene identifier column was unnamed on read-back -- set explicitly.
 
 Raw inputs consumed (relative to the results directory):
+     Table 2: nested_cv/supp_nested_cv_main.csv
      S1: differential_gene_expression/<subset>/<ligand>_deseq2_results.csv
      S2: go_terms/<subset>/<ligand>_go_terms.csv   (per-ligand GO)
-     S3: feature_selection/selected_vs_de_overlap_table.csv  (gene, in_de),
+     S3: fs_de_genesets/selected_vs_de_overlap_table.csv  (gene, in_de),
          ordered by feature-selection importance rank
      S4: go_terms/de_intersect_fs_go_terms.csv, go_terms/fs_only_go_terms.csv
+     S5-S6: ../data/supplementary_data/Supplementary_Table_{5,6}.csv
+     S7: feature_selection/mutual_information.csv
+     S8: feature_selection/forest_kmeans.csv
+     S9-S10: nested_cv/supp_nested_cv_{main,no_flapa}.csv
+     S11-S12: validation/external_validation{,_no_flapa}_performance.csv
 """
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
-from sklearn.base import clone
-from sklearn.model_selection import GridSearchCV, StratifiedKFold
-from sklearn.pipeline import Pipeline as SkPipeline
-
-from .config import CLASS_ORDER, FEATURE_SELECTION_CONFIG
-from .feature_engineering import ColumnSelector, feature_pipeline, preprocessing_pipeline
-from .model_training import make_score
-
-# ----------------------------------------------------------------------------
-# Table 2: feature-set ablation under leakage-free nested CV
-# ----------------------------------------------------------------------------
-def _condition_genes(trainer, condition, X_tr, y_tr, fold_seed, de_config,
-                     subset, negative_control):
-    """Derive the gene list for one condition on the OUTER-TRAINING fold only.
-
-    Returns None for 'all_genes' (no column subsetting); otherwise a list of
-    gene names frozen for this fold's inner tuning and outer-test scoring.
-    """
-    if condition == "all_genes":
-        return None
-
-    if condition == "feature_selection":
-        fs = feature_pipeline(
-            **FEATURE_SELECTION_CONFIG, random_state=fold_seed
-        ).set_output(transform="pandas")
-        fs.fit(X_tr, y_tr)
-        return list(fs.get_feature_names_out())
-
-    if condition == "random_selected":
-        rng = np.random.default_rng(fold_seed)
-        k = FEATURE_SELECTION_CONFIG["max_features"]
-        cols = np.asarray(X_tr.columns)
-        return sorted(rng.choice(cols, size=min(k, len(cols)), replace=False).tolist())
-
-    if condition == "fs_plus_de":
-        from .pydeseq2 import DESeq2  # local import: avoids any import cycle
-        fs = feature_pipeline(
-            **FEATURE_SELECTION_CONFIG, random_state=fold_seed
-        ).set_output(transform="pandas")
-        fs.fit(X_tr, y_tr)
-        fs_genes = set(fs.get_feature_names_out())
-        # DE genes from DESeq2 on the raw training counts of THIS fold only.
-        y_tr_lab = pd.Series(trainer.decode_predictions(y_tr), index=X_tr.index)
-        deseq = DESeq2(
-            raw_counts=X_tr,
-            sample_labels=y_tr_lab,
-            padj_threshold=de_config["padj_threshold"],
-            log2fc_threshold=de_config["log2fc_threshold"],
-            n_cpus=de_config["n_cpus"],
-            name=f"table2_fold{fold_seed}",
-        )
-        deseq.run_analysis(
-            CLASS_ORDER[subset], negative_control=negative_control
-        )
-        de_genes = {str(g) for g in deseq.get_de_genes()}
-        union = sorted(fs_genes | (de_genes & set(map(str, X_tr.columns))))
-        return union
-
-    raise ValueError(f"unknown condition: {condition}")
-
-def _frozen_geneset_pipeline(model, gene_list):
-    """preprocessing -> [ColumnSelector] -> clf, matching STEP 4b deployment
-    order. XGBoost/RandomForest internal n_jobs forced to 1 so
-    GridSearchCV(n_jobs=-1) owns all parallelism (avoids 48x48 thread
-    oversubscription that stalled all_genes XGBoost)."""
-    clf = clone(model)
-    try:
-        clf.set_params(n_jobs=1)
-    except (ValueError, TypeError):
-        pass
-    steps = list(preprocessing_pipeline().steps)
-    if gene_list is not None:
-        steps.append(("select_genes", ColumnSelector(gene_list)))
-    steps.append(("clf", clf))
-    return SkPipeline(steps).set_output(transform="pandas")
-
-def benchmark_feature_set_conditions(
-    trainer,
-    X,
-    y,
-    param_grids,
-    output_dir,
-    de_config,
-    conditions=("all_genes", "feature_selection", "fs_plus_de", "random_selected"),
-    outer_cv=5,
-    inner_cv=3,
-    scoring="f1_macro",
-    subset="train_ligands",
-    negative_control="negative_control",
-):
-    """Leakage-free nested-CV benchmark across feature-set conditions (Table 2).
-
-    For each condition the gene set is derived on the outer-training fold only
-    (see _condition_genes), frozen, then the inner 3-fold GridSearchCV tunes
-    only classifier hyperparameters on that frozen set; the outer-test fold is
-    scored once. Preprocessing (library-size norm, log1p, scaling) is refit in
-    every fit. mean/std are taken across the outer folds (n=outer_cv).
-
-    Writes long-form output_dir/table2_feature_set_benchmark.csv with columns:
-    condition, model, n_genes_mean, and {metric}_{mean,std} for accuracy,
-    precision, recall, f1. Returns that DataFrame.
-    """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    y_array = y.values if isinstance(y, pd.Series) else y
-    trainer.label_encoder.fit(y_array)
-    y_encoded = trainer.label_encoder.transform(y_array)
-
-    min_class_count = np.bincount(y_encoded).min()
-    if outer_cv > min_class_count:
-        raise ValueError(
-            f"outer_cv={outer_cv} exceeds smallest class count={min_class_count}"
-        )
-
-    outer = StratifiedKFold(
-        n_splits=outer_cv, shuffle=True, random_state=trainer.random_state
-    )
-    fold_seeds = np.random.SeedSequence(trainer.random_state).generate_state(outer_cv)
-    metric_keys = ["accuracy", "precision", "recall", "f1"]
-    rows = []
-
-    # Materialize the outer folds and their train/test slices once; reused
-    # across every condition and model (the split is deterministic).
-    folds = []
-    for fold_idx, (train_idx, test_idx) in enumerate(
-        outer.split(np.arange(len(X)), y_encoded)
-    ):
-        folds.append(
-            (
-                X.iloc[train_idx], X.iloc[test_idx],
-                y_encoded[train_idx], y_encoded[test_idx],
-            )
-        )
-
-    for cond in conditions:
-        print(f"\n===== CONDITION: {cond} =====", flush=True)
-        # Gene set is data-dependent, so derive once per outer fold and reuse
-        # across all models within that fold.
-        fold_genes = {}
-        for fold_idx, (X_tr, _, y_tr, _) in enumerate(folds):
-            genes = _condition_genes(
-                    trainer,
-                cond, X_tr, y_tr, int(fold_seeds[fold_idx]),
-                de_config, subset, negative_control,
-            )
-            fold_genes[fold_idx] = genes
-            print(f"  fold {fold_idx}: n_genes="
-                  f"{'all' if genes is None else len(genes)}", flush=True)
-
-        for model_name, model in trainer.models.items():
-            per_fold = {k: [] for k in metric_keys}
-            n_genes = []
-            for fold_idx, (X_tr, X_te, y_tr, y_te) in enumerate(folds):
-                genes = fold_genes[fold_idx]
-                n_genes.append(X.shape[1] if genes is None else len(genes))
-                pipe = _frozen_geneset_pipeline(model, genes)
-                inner = StratifiedKFold(
-                    n_splits=inner_cv, shuffle=True,
-                    random_state=int(fold_seeds[fold_idx]),
-                )
-                gs = GridSearchCV(
-                    pipe, param_grids[model_name], cv=inner,
-                    scoring=scoring, n_jobs=-1, refit=True,
-                )
-                gs.fit(X_tr, y_tr, **trainer._fit_kwargs(model_name, y_tr))
-                scores = make_score(y_te, gs.best_estimator_.predict(X_te))
-                for k in metric_keys:
-                    per_fold[k].append(scores[k])
-            row = {"condition": cond, "model": model_name,
-                   "n_genes_mean": float(np.mean(n_genes))}
-            for k in metric_keys:
-                row[f"{k}_mean"] = float(np.mean(per_fold[k]))
-                row[f"{k}_std"] = float(np.std(per_fold[k], ddof=1))
-            rows.append(row)
-            print(f"  [{model_name}] f1={row['f1_mean']:.3f}±{row['f1_std']:.3f} "
-                  f"acc={row['accuracy_mean']:.3f}±{row['accuracy_std']:.3f}",
-                  flush=True)
-            # persist incrementally so a wall-clock cutoff still yields data
-            pd.DataFrame(rows).to_csv(
-                output_dir / "table2_feature_set_benchmark.csv", index=False
-            )
-
-    df = pd.DataFrame(rows)
-    df.to_csv(output_dir / "table2_feature_set_benchmark.csv", index=False)
-    print(f"\nBenchmark saved: {output_dir / 'table2_feature_set_benchmark.csv'}",
-          flush=True)
-    return df
-
 
 # ----------------------------------------------------------------------------
 # Supplementary table configuration
@@ -275,8 +88,7 @@ S4_CONDITIONS = [
 GO_COLUMNS = ["GO", "term", "class", "raw_pvalue", "fdr",
               "n_genes", "n_study", "ratio_in_study", "gene_symbols"]
 
-# Display order and human-readable labels; label text is filled from the
-# actual n_genes in the data so 450/958 never drift out of sync with config.
+# Display order and human-readable labels for legacy condition-shaped inputs.
 CONDITION_ORDER = ["all_genes", "feature_selection", "fs_plus_de", "random_selected"]
 CONDITION_LABELS = {
     "all_genes": "All genes",
@@ -286,9 +98,30 @@ CONDITION_LABELS = {
 }
 MODEL_ORDER = ["LinearSVC", "SGDClassifier", "LogisticRegression",
                "RandomForest", "XGBoost"]
-# Column metrics in ML-paper order; (raw key, display header).
 METRICS = [("accuracy", "Accuracy"), ("f1", "F1"),
            ("precision", "Precision"), ("recall", "Recall")]
+TABLE2_COLUMNS = ["Condition", "Model", "Accuracy", "F1", "Precision", "Recall",
+                  "Training time"]
+SUPP_TABLE_7_COLUMNS = ["gene_rank", "MI_seed_1043", "MI_seed_3669",
+                        "MI_seed_6360", "MI_mean"]
+SUPP_TABLE_8_COLUMNS = ["n_selected_genes", "ARI_seed_1043", "ARI_seed_3669",
+                        "ARI_seed_6360", "ARI_mean", "ARI_std"]
+SUPP_TABLE_9_COLUMNS = ["model", "accuracy_mean", "accuracy_std",
+                        "balanced_accuracy_mean", "balanced_accuracy_std",
+                        "f1_mean", "f1_std", "f1_weighted_mean",
+                        "f1_weighted_std", "pooled_f1"]
+SUPP_TABLE_10_COLUMNS = ["model", "accuracy_mean", "accuracy_std",
+                         "balanced_accuracy_mean", "balanced_accuracy_std",
+                         "precision_mean", "precision_std", "recall_mean",
+                         "recall_std", "f1_mean", "f1_std",
+                         "f1_weighted_mean", "f1_weighted_std",
+                         "inner_best_score_mean", "inner_best_score_std",
+                         "pooled_accuracy", "pooled_balanced_accuracy",
+                         "pooled_precision", "pooled_recall", "pooled_f1",
+                         "pooled_f1_weighted"]
+SUPP_TABLE_VALIDATION_COLUMNS = ["gene_set", "model", "accuracy",
+                                 "balanced_accuracy", "precision", "recall",
+                                 "f1", "f1_weighted"]
 
 
 def _cell(mean, std):
@@ -307,42 +140,71 @@ def format_table2(
     output_dir=None,
     bold_scope="column",
 ):
-    """Reshape the raw benchmark CSV into the formatted Table 2.
+    """Format the MATseq.py nested-CV summary into Table 2.
 
     Args:
-        raw_csv: path to table2_feature_set_benchmark.csv.
+        raw_csv: path to results/nested_cv/supp_nested_cv_main.csv.
         output_dir: where to write outputs (defaults to the CSV's directory).
         bold_scope: 'column' bolds the single best mean per metric across the
-            whole table; 'group' bolds the best per metric within each condition.
+            table; for legacy condition-shaped input, 'group' bolds the best per
+            metric within each condition.
 
     Writes:
-        table2_formatted.csv  — plain 'mean ± SD' cells, ** around bolded cells.
-        table2.tex            — booktabs LaTeX, \\textbf{} on bolded cells.
-    Returns the formatted (long) DataFrame that backs both outputs.
+        table2_formatted.csv  -- plain 'mean ± SD' cells, ** around bolded cells.
+        Table_2.xlsx          -- Excel table with the same columns as the paper example.
+        table2.tex            -- booktabs LaTeX, \textbf{} on bolded cells.
+    Returns the formatted DataFrame that backs both outputs.
     """
     raw_csv = Path(raw_csv)
     df = pd.read_csv(raw_csv)
-    output_dir = Path(output_dir) if output_dir else raw_csv.parent
+    if output_dir:
+        output_dir = Path(output_dir)
+    elif raw_csv.parent.name == "nested_cv":
+        output_dir = raw_csv.parent.parent / "tables"
+    else:
+        output_dir = raw_csv.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    df["condition"] = pd.Categorical(df["condition"], CONDITION_ORDER, ordered=True)
-    present_models = [m for m in MODEL_ORDER if m in set(df["model"])]
-    df["model"] = pd.Categorical(df["model"], present_models, ordered=True)
-    df = df.sort_values(["condition", "model"]).reset_index(drop=True)
+    required = ["model"]
+    for key, _ in METRICS:
+        required.extend([f"{key}_mean", f"{key}_std"])
+    missing = [col for col in required if col not in df.columns]
+    if missing:
+        raise ValueError(f"Table 2 input is missing columns: {missing}")
 
-    # Which cell is best per metric (higher = better for all four metrics).
+    has_condition = "condition" in df.columns
+    if not has_condition:
+        df.insert(0, "condition", "feature_selection")
+        has_condition = True
+    model_categories = [m for m in MODEL_ORDER if m in set(df["model"])]
+    model_categories.extend(sorted(set(df["model"]) - set(model_categories)))
+    df["model"] = pd.Categorical(df["model"], model_categories, ordered=True)
+    if has_condition:
+        df["condition"] = pd.Categorical(
+            df["condition"], CONDITION_ORDER, ordered=True
+        )
+        df = df.sort_values(["condition", "model"]).reset_index(drop=True)
+    else:
+        df = df.sort_values("model").reset_index(drop=True)
+
     best_mask = {}
     for key, _ in METRICS:
         col = f"{key}_mean"
-        if bold_scope == "group":
-            best_mask[key] = df.groupby("condition", observed=True)[col].transform("max")
+        if bold_scope == "group" and has_condition:
+            best_mask[key] = df.groupby("condition", observed=True)[col].transform(
+                "max"
+            )
         else:
             best_mask[key] = pd.Series(df[col].max(), index=df.index)
 
     rows = []
     for _, r in df.iterrows():
-        row = {"Condition": _condition_label(r["condition"], r.get("n_genes_mean")),
-               "Model": r["model"]}
+        row = {"Model": r["model"]}
+        if has_condition:
+            row = {
+                "Condition": _condition_label(r["condition"], r.get("n_genes_mean")),
+                "Model": r["model"],
+            }
         for key, header in METRICS:
             txt = _cell(r[f"{key}_mean"], r[f"{key}_std"])
             is_best = abs(r[f"{key}_mean"] - best_mask[key].iloc[r.name]) < 1e-9
@@ -351,57 +213,74 @@ def format_table2(
         rows.append(row)
     fmt = pd.DataFrame(rows)
 
-    # Blank repeated condition labels so each group prints its label once.
+    fmt["Training time"] = ""
+    time_cols = ["Training time", "training_time", "training_time_seconds"]
+    for time_col in time_cols:
+        if time_col in df.columns:
+            fmt["Training time"] = df[time_col].fillna("").astype(str).values
+            break
+
     display = fmt.copy()
     display["Condition"] = display["Condition"].mask(
         display["Condition"].duplicated(), ""
     )
-    cols = ["Condition", "Model"] + [h for _, h in METRICS]
-    display[cols].to_csv(output_dir / "table2_formatted.csv", index=False)
+    display[TABLE2_COLUMNS].to_csv(output_dir / "table2_formatted.csv", index=False)
+    display[TABLE2_COLUMNS].to_excel(output_dir / "Table_2.xlsx", index=False)
 
     _write_latex(fmt, output_dir / "table2.tex")
     return fmt
 
 
 def _write_latex(fmt, out_path):
-    headers = [h for _, h in METRICS]
+    headers = [h for _, h in METRICS] + ["Training time"]
+    has_condition = "Condition" in fmt.columns
     lines = [
         r"\begin{table}[t]",
         r"\centering",
-        r"\caption{Classification performance under leakage-free nested "
-        r"cross-validation across feature-set conditions. Cells show mean $\pm$ "
-        r"standard deviation across the five outer folds; the best value per "
-        r"metric is in bold.}",
+        r"\caption{Classification performance from MATseq.py nested "
+        r"cross-validation. Cells show mean $\pm$ standard deviation across "
+        r"the five outer folds; the best value per metric is in bold.}",
         r"\label{tab:table2}",
-        r"\begin{tabular}{ll" + "c" * len(headers) + "}",
+        r"\begin{tabular}{" + ("ll" if has_condition else "l")
+        + "c" * len(headers) + "}",
         r"\toprule",
-        "Condition & Model & " + " & ".join(headers) + r" \\",
+        (("Condition & " if has_condition else "") + "Model & "
+         + " & ".join(headers) + r" \\"),
         r"\midrule",
     ]
     prev_cond = None
     for _, r in fmt.iterrows():
-        if prev_cond is not None and r["Condition"] != prev_cond:
-            lines.append(r"\midrule")
-        cond = r["Condition"] if r["Condition"] != prev_cond else ""
         cells = []
         for _, header in METRICS:
             v = r[header]
             if v.startswith("**") and v.endswith("**"):
                 v = r"\textbf{" + v.strip("*") + "}"
             cells.append(v.replace("±", r"$\pm$"))
-        lines.append(f"{cond} & {r['Model']} & " + " & ".join(cells) + r" \\")
-        prev_cond = r["Condition"]
+        cells.append(str(r.get("Training time", "")))
+        if has_condition:
+            if prev_cond is not None and r["Condition"] != prev_cond:
+                lines.append(r"\midrule")
+            cond = r["Condition"] if r["Condition"] != prev_cond else ""
+            lines.append(
+                f"{cond} & {r['Model']} & " + " & ".join(cells) + r" \\"
+            )
+            prev_cond = r["Condition"]
+        else:
+            lines.append(f"{r['Model']} & " + " & ".join(cells) + r" \\")
     lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
     Path(out_path).write_text("\n".join(lines) + "\n")
 
 
 # ============================================================================
-# Supplementary tables S1-S4
+# Supplementary tables S1-S12
 # ============================================================================
 def _read_go_table(path):
-    """Read a raw GO CSV, dropping the leading unnamed index column."""
-    df = pd.read_csv(path, index_col=0)
-    return df.reset_index(drop=True)
+    """Read a raw GO CSV, dropping a leading unnamed index column if present."""
+    df = pd.read_csv(path)
+    unnamed = [c for c in df.columns if str(c).startswith("Unnamed:")]
+    if unnamed:
+        df = df.drop(columns=unnamed)
+    return df
 
 
 def assemble_supplementary_table_1(results_dir, output_dir=None,
@@ -469,7 +348,7 @@ def assemble_supplementary_table_3(results_dir, output_dir=None,
                                    include_rank=True):
     """Assemble the selected-genes table (S3).
 
-    Reads feature_selection/selected_vs_de_overlap_table.csv (columns
+    Reads fs_de_genesets/selected_vs_de_overlap_table.csv (columns
     ``gene``, ``in_de`` and, from the current pipeline, ``rank`` and
     ``importance``) and emits ``Gene`` and ``Differentially_Expressed``.
     When the source carries a ``rank`` column the rows are ordered by
@@ -480,7 +359,10 @@ def assemble_supplementary_table_3(results_dir, output_dir=None,
     Returns the assembled DataFrame.
     """
     results_dir = Path(results_dir)
-    fpath = results_dir / "feature_selection" / "selected_vs_de_overlap_table.csv"
+    fpath = results_dir / "fs_de_genesets" / "selected_vs_de_overlap_table.csv"
+    if not fpath.exists():
+        legacy_path = results_dir / "feature_selection" / "selected_vs_de_overlap_table.csv"
+        fpath = legacy_path
     if not fpath.exists():
         raise FileNotFoundError(f"S3: missing feature-selection file {fpath}")
     src = pd.read_csv(fpath)
@@ -529,8 +411,161 @@ def assemble_supplementary_table_4(results_dir, output_dir=None,
     return merged
 
 
+def assemble_supplementary_table_5(results_dir, output_dir=None,
+                                   filename="Supplementary_Table_5.csv"):
+    """Assemble the TLR4 reporter assay source table (S5)."""
+    results_dir = Path(results_dir)
+    fpath = results_dir.parent / "data" / "supplementary_data" / filename
+    if not fpath.exists():
+        fpath = Path("data") / "supplementary_data" / filename
+    if not fpath.exists():
+        raise FileNotFoundError(f"S5: missing TLR table {fpath}")
+    out = pd.read_csv(fpath).rename(
+        columns={"Concentration_(EU_mL)": "Concentration_LPS_(eq_mL)"}
+    )
+    out_dir = Path(output_dir) if output_dir else results_dir / "tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_dir / filename, index=False)
+    return out
+
+
+def assemble_supplementary_table_6(results_dir, output_dir=None,
+                                   filename="Supplementary_Table_6.csv"):
+    """Assemble the TLR2 reporter assay source table (S6)."""
+    results_dir = Path(results_dir)
+    fpath = results_dir.parent / "data" / "supplementary_data" / filename
+    if not fpath.exists():
+        fpath = Path("data") / "supplementary_data" / filename
+    if not fpath.exists():
+        raise FileNotFoundError(f"S6: missing TLR table {fpath}")
+    out = pd.read_csv(fpath).rename(
+        columns={"Concentration_(ng_mL)": "Concentration_Pam3_(ng_mL)"}
+    )
+    out_dir = Path(output_dir) if output_dir else results_dir / "tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_dir / filename, index=False)
+    return out
+
+
+def assemble_supplementary_table_7(results_dir, output_dir=None,
+                                   filename="Supplementary_Table_7.csv"):
+    """Assemble the mutual-information curve table (S7)."""
+    results_dir = Path(results_dir)
+    fpath = results_dir / "feature_selection" / "mutual_information.csv"
+    if not fpath.exists():
+        raise FileNotFoundError(f"S7: missing mutual-information file {fpath}")
+    src = pd.read_csv(fpath)
+    out = pd.DataFrame(index=src.index)
+    out["gene_rank"] = src["rank"] if "rank" in src.columns else range(1, len(src) + 1)
+    for col in SUPP_TABLE_7_COLUMNS[1:4]:
+        raw_col = col.replace("MI_seed_", "mi_seed_")
+        out[col] = src[raw_col] if raw_col in src.columns else pd.NA
+    out["MI_mean"] = src["mi_sorted"] if "mi_sorted" in src.columns else src.get("MI_mean")
+    out = out[SUPP_TABLE_7_COLUMNS]
+    out_dir = Path(output_dir) if output_dir else results_dir / "tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_dir / filename, index=False)
+    return out
+
+
+def assemble_supplementary_table_8(results_dir, output_dir=None,
+                                   filename="Supplementary_Table_8.csv"):
+    """Assemble the forest/KMeans ARI scan table (S8)."""
+    results_dir = Path(results_dir)
+    fpath = results_dir / "feature_selection" / "forest_kmeans.csv"
+    if not fpath.exists():
+        raise FileNotFoundError(f"S8: missing forest/KMeans file {fpath}")
+    src = pd.read_csv(fpath)
+    if {"n_estimators", "max_depth", "ari_mean"}.issubset(src.columns):
+        best = src.loc[src["ari_mean"].idxmax()]
+        src = src[
+            (src["n_estimators"] == best["n_estimators"])
+            & (src["max_depth"] == best["max_depth"])
+        ]
+    src = src.sort_values("n_selected").reset_index(drop=True)
+    out = pd.DataFrame({"n_selected_genes": src["n_selected"]})
+    for col in SUPP_TABLE_8_COLUMNS[1:4]:
+        raw_col = col.replace("ARI_seed_", "ari_seed_")
+        out[col] = src[raw_col] if raw_col in src.columns else pd.NA
+    out["ARI_mean"] = src["ari_mean"]
+    out["ARI_std"] = src["ari_std"]
+    out = out[SUPP_TABLE_8_COLUMNS]
+    out_dir = Path(output_dir) if output_dir else results_dir / "tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_dir / filename, index=False)
+    return out
+
+
+def assemble_supplementary_table_9(results_dir, output_dir=None,
+                                   filename="Supplementary_Table_9.csv"):
+    """Assemble the main-panel nested-CV summary table (S9)."""
+    results_dir = Path(results_dir)
+    fpath = results_dir / "nested_cv" / "supp_nested_cv_main.csv"
+    if not fpath.exists():
+        fpath = results_dir / "tables" / "supp_nested_cv_main.csv"
+    if not fpath.exists():
+        raise FileNotFoundError(f"S9: missing nested-CV summary {fpath}")
+    src = pd.read_csv(fpath)
+    out = src.reindex(columns=SUPP_TABLE_9_COLUMNS)
+    out_dir = Path(output_dir) if output_dir else results_dir / "tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_dir / filename, index=False)
+    return out
+
+
+def assemble_supplementary_table_10(results_dir, output_dir=None,
+                                    filename="Supplementary_Table_10.csv"):
+    """Assemble the no-Fla-PA nested-CV summary table (S10)."""
+    results_dir = Path(results_dir)
+    fpath = results_dir / "nested_cv" / "supp_nested_cv_no_flapa.csv"
+    if not fpath.exists():
+        fpath = results_dir / "tables" / "supp_nested_cv_no_flapa.csv"
+    if not fpath.exists():
+        raise FileNotFoundError(f"S10: missing nested-CV summary {fpath}")
+    src = pd.read_csv(fpath)
+    out = src.reindex(columns=SUPP_TABLE_10_COLUMNS)
+    out_dir = Path(output_dir) if output_dir else results_dir / "tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_dir / filename, index=False)
+    return out
+
+
+def assemble_supplementary_table_11(results_dir, output_dir=None,
+                                    filename="Supplementary_Table_11.csv"):
+    """Assemble the external-validation performance table (S11)."""
+    results_dir = Path(results_dir)
+    fpath = results_dir / "validation" / "external_validation_performance.csv"
+    if not fpath.exists():
+        fpath = results_dir / "tables" / "external_validation_performance.csv"
+    if not fpath.exists():
+        raise FileNotFoundError(f"S11: missing validation summary {fpath}")
+    src = pd.read_csv(fpath)
+    out = src.reindex(columns=SUPP_TABLE_VALIDATION_COLUMNS)
+    out_dir = Path(output_dir) if output_dir else results_dir / "tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_dir / filename, index=False)
+    return out
+
+
+def assemble_supplementary_table_12(results_dir, output_dir=None,
+                                    filename="Supplementary_Table_12.csv"):
+    """Assemble the no-Fla-PA external-validation performance table (S12)."""
+    results_dir = Path(results_dir)
+    fpath = results_dir / "validation" / "external_validation_no_flapa_performance.csv"
+    if not fpath.exists():
+        fpath = results_dir / "tables" / "external_validation_no_flapa_performance.csv"
+    if not fpath.exists():
+        raise FileNotFoundError(f"S12: missing validation summary {fpath}")
+    src = pd.read_csv(fpath)
+    out = src.reindex(columns=SUPP_TABLE_VALIDATION_COLUMNS)
+    out_dir = Path(output_dir) if output_dir else results_dir / "tables"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out.to_csv(out_dir / filename, index=False)
+    return out
+
+
 def assemble_supplementary_tables(results_dir, output_dir=None):
-    """Regenerate Supplementary Tables S1-S4 from raw pipeline outputs.
+    """Regenerate Supplementary Tables S1-S12 from raw pipeline outputs.
 
     Returns a dict mapping table name to the assembled DataFrame.
     """
@@ -539,6 +574,14 @@ def assemble_supplementary_tables(results_dir, output_dir=None):
         "S2": assemble_supplementary_table_2(results_dir, output_dir),
         "S3": assemble_supplementary_table_3(results_dir, output_dir),
         "S4": assemble_supplementary_table_4(results_dir, output_dir),
+        "S5": assemble_supplementary_table_5(results_dir, output_dir),
+        "S6": assemble_supplementary_table_6(results_dir, output_dir),
+        "S7": assemble_supplementary_table_7(results_dir, output_dir),
+        "S8": assemble_supplementary_table_8(results_dir, output_dir),
+        "S9": assemble_supplementary_table_9(results_dir, output_dir),
+        "S10": assemble_supplementary_table_10(results_dir, output_dir),
+        "S11": assemble_supplementary_table_11(results_dir, output_dir),
+        "S12": assemble_supplementary_table_12(results_dir, output_dir),
     }
 
 
@@ -550,6 +593,6 @@ if __name__ == "__main__":
         for name, df in tables.items():
             print(f"{name}: {df.shape}  cols={list(df.columns)[:6]}")
     else:
-        raw = sys.argv[1] if len(sys.argv) > 1 else "results/tables/table2_feature_set_benchmark.csv"
+        raw = sys.argv[1] if len(sys.argv) > 1 else "results/nested_cv/supp_nested_cv_main.csv"
         out = format_table2(raw)
-        print(out[["Condition", "Model"] + [h for _, h in METRICS]].to_string(index=False))
+        print(out[TABLE2_COLUMNS].to_string(index=False))

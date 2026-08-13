@@ -55,6 +55,8 @@ from src.config import (
     primary_geneset_name,
     update_config,
 )
+from src.compose_figures import compose_figures
+from src.make_tables import assemble_supplementary_tables, format_table2
 
 RESULTS_DIR = Path.cwd() / "results"
 
@@ -571,6 +573,16 @@ def run_pipeline(
     plot_tlr_hek_blue(tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png")
 
     print("\n--- STEP 10: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
+    manuscript_tables_dir = RESULTS_DIR / "tables"
+    manuscript_tables_dir.mkdir(parents=True, exist_ok=True)
+    composite_figures_dir = RESULTS_DIR / "tables"
+    composite_figures_dir.mkdir(parents=True, exist_ok=True)
+    format_table2(
+        RESULTS_DIR / "nested_cv" / "supp_nested_cv_main.csv",
+        output_dir=manuscript_tables_dir,
+    )
+    assemble_supplementary_tables(RESULTS_DIR, output_dir=manuscript_tables_dir)
+    compose_figures()
 
     print("\n" + "=" * 80)
     print("PIPELINE COMPLETED SUCCESSFULLY")
