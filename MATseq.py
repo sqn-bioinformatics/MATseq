@@ -194,13 +194,11 @@ def run_pipeline(
 
     pre_pipe = preprocessing_pipeline().set_output(transform="pandas")
     pre_pipe.fit(X_train, y_train)
-    
-    print(f"  Ranking {X_pre.shape[1]} genes over {len(seeds)} seeds")
+
     mi_result = mutual_information(pre_pipe, X_train, y_train)
     mi_elbow = mi_result["mi_elbow"]
     print(f"  MI elbow (mean curve): {mi_elbow} genes")
-    print(f"  Ranking {X_pre.shape[1]} genes by mutual information")
-    
+
     kmeans_result = forest_kmeans(
         pre_pipe,
         X_train,
@@ -383,7 +381,6 @@ def run_pipeline(
 
     print("\n--- STEP 8: VALIDATION ON TEST SET ---")
     val_dir = RESULTS_DIR / "validation" / "test_set"
-    val_dir_wo = RESULTS_DIR / "validation" / "test_set_no_flapa"
     validation_tables_dir = RESULTS_DIR / "validation"
     validation_tables_dir.mkdir(parents=True, exist_ok=True)
 
@@ -417,79 +414,37 @@ def run_pipeline(
     external_perf_csv = validation_tables_dir / "external_validation_performance.csv"
     external_perf_df.to_csv(external_perf_csv, index=False)
 
-    flapa_mask_ext = y_test != "Fla-PA"
-    X_test_wo, y_test_wo = X_test[flapa_mask_ext], y_test[flapa_mask_ext]
-    validation_wo_rows = []
-    
-    for gene_set, gene_trainer in geneset_trainers_wo.items():
-        out_dir_wo = val_dir_wo / gene_set / "test_ligands"
-        out_dir_wo.mkdir(parents=True, exist_ok=True)
-        predictor_wo = ModelPredictor(gene_trainer)
-        predictor_wo.predict_samples(
-            X_test_wo, sample_names=X_test_wo.index.to_numpy(), y_test=y_test_wo
-        )
-        for model_name, pred_df in predictor_wo.predictions.items():
-            pred_df.to_csv(out_dir_wo / f"{model_name}_predictions.csv", index=False)
-        for model_name, proba_df in predictor_wo.probabilities.items():
-            proba_df.to_csv(out_dir_wo / f"{model_name}_probabilities.csv")
-        summary_wo = predictor_wo.evaluate(out_dir_wo, subset="test_ligands")
-        class_order_wo = CLASS_ORDER.get("test_ligands", CLASS_ORDER["test_ligands"])
-        for model_name, proba_df in predictor_wo.probabilities.items():
-            plot_probability_heatmap(
-                proba_df, class_order_wo,
-                title=f"{model_name} Prediction Probabilities {subset_display('test_ligands')}",
-                true_labels=predictor_wo.y_test, all_controls=True,
-                output_dir=out_dir_wo,
-                filename=f"{model_name}_probabilities_heatmap.png",
-            )
-        summary_wo.insert(0, "gene_set", gene_set)
-        validation_wo_rows.append(summary_wo)
-    
-    external_perf_wo_df = pd.concat(validation_wo_rows, ignore_index=True)
-    external_perf_wo_csv = (
-        validation_tables_dir / "external_validation_no_flapa_performance.csv"
-    )
-    external_perf_wo_df.to_csv(external_perf_wo_csv, index=False)
-
     print("\n--- STEP 9: PREDICTIONS ON OTHER LIGANDS---")
     predictions_dir = RESULTS_DIR / "predictions"
     predictions_dir.mkdir(parents=True, exist_ok=True)
-    predictions_dir_wo = RESULTS_DIR / "predictions" / "no_flapa"
-    predictions_dir_wo.mkdir(parents=True, exist_ok=True)
     endpoint_subsets = {
         "additional_ligands": (X_other, y_other),
         "bacterial_ligands": (X_bact, y_bact),
     }
 
-    for trainers, base_dir in (
-        (geneset_trainers, predictions_dir),
-        (geneset_trainers_wo, predictions_dir_wo),
-    ):
-        for gene_set in (primary_gs, "de_overlap"):
-            gene_trainer = trainers[gene_set]
-            for subset_key, (X_end, y_end) in endpoint_subsets.items():
-                out_dir = base_dir / gene_set / subset_key
-                out_dir.mkdir(parents=True, exist_ok=True)
-                predictor = ModelPredictor(gene_trainer)
-                predictor.predict_samples(
-                    X_end, sample_names=X_end.index.to_numpy(), y_test=y_end
+    for gene_set in (primary_gs, "de_overlap"):
+        gene_trainer = geneset_trainers[gene_set]
+        for subset_key, (X_end, y_end) in endpoint_subsets.items():
+            out_dir = predictions_dir / gene_set / subset_key
+            out_dir.mkdir(parents=True, exist_ok=True)
+            predictor = ModelPredictor(gene_trainer)
+            predictor.predict_samples(
+                X_end, sample_names=X_end.index.to_numpy(), y_test=y_end
+            )
+            for model_name, pred_df in predictor.predictions.items():
+                pred_df.to_csv(out_dir / f"{model_name}_predictions.csv", index=False)
+            for model_name, proba_df in predictor.probabilities.items():
+                proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
+            predictor.evaluate(out_dir, subset=subset_key)
+            class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
+            for model_name, proba_df in predictor.probabilities.items():
+                plot_probability_heatmap(
+                    proba_df, class_order_end,
+                    title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
+                    true_labels=predictor.y_test, all_controls=False,
+                    output_dir=out_dir,
+                    filename=f"{model_name}_probabilities_heatmap.png",
                 )
-                for model_name, pred_df in predictor.predictions.items():
-                    pred_df.to_csv(
-                        out_dir / f"{model_name}_predictions.csv", index=False
-                    )
-                for model_name, proba_df in predictor.probabilities.items():
-                    proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
-                predictor.evaluate(out_dir, subset=subset_key)
-                class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
-                for model_name, proba_df in predictor.probabilities.items():
-                    plot_probability_heatmap(
-                        proba_df, class_order_end,
-                        title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
-                        true_labels=predictor.y_test, all_controls=False,
-                        output_dir=out_dir,
-                        filename=f"{model_name}_probabilities_heatmap.png",
-                    )
 
     print("\n--- STEP 10: TLR VISUALIZATION ---")
     tlr2_df, tlr4_df, flapa_data = load_tlr_data(
@@ -580,6 +535,67 @@ def run_pipeline(
         )
         gene_trainer_wo.save_models(model_dir_wo / gene_set)
         geneset_trainers_wo[gene_set] = gene_trainer_wo
+
+    val_dir_wo = RESULTS_DIR / "validation" / "test_set_no_flapa"
+    flapa_mask_ext = y_test != "Fla-PA"
+    X_test_wo, y_test_wo = X_test[flapa_mask_ext], y_test[flapa_mask_ext]
+    validation_wo_rows = []
+    for gene_set, gene_trainer in geneset_trainers_wo.items():
+        out_dir_wo = val_dir_wo / gene_set / "test_ligands"
+        out_dir_wo.mkdir(parents=True, exist_ok=True)
+        predictor_wo = ModelPredictor(gene_trainer)
+        predictor_wo.predict_samples(
+            X_test_wo, sample_names=X_test_wo.index.to_numpy(), y_test=y_test_wo
+        )
+        for model_name, pred_df in predictor_wo.predictions.items():
+            pred_df.to_csv(out_dir_wo / f"{model_name}_predictions.csv", index=False)
+        for model_name, proba_df in predictor_wo.probabilities.items():
+            proba_df.to_csv(out_dir_wo / f"{model_name}_probabilities.csv")
+        summary_wo = predictor_wo.evaluate(out_dir_wo, subset="test_ligands")
+        class_order_wo = CLASS_ORDER.get("test_ligands", CLASS_ORDER["test_ligands"])
+        for model_name, proba_df in predictor_wo.probabilities.items():
+            plot_probability_heatmap(
+                proba_df, class_order_wo,
+                title=f"{model_name} Prediction Probabilities {subset_display('test_ligands')}",
+                true_labels=predictor_wo.y_test, all_controls=True,
+                output_dir=out_dir_wo,
+                filename=f"{model_name}_probabilities_heatmap.png",
+            )
+        summary_wo.insert(0, "gene_set", gene_set)
+        validation_wo_rows.append(summary_wo)
+
+    external_perf_wo_df = pd.concat(validation_wo_rows, ignore_index=True)
+    external_perf_wo_df.to_csv(
+        validation_tables_dir / "external_validation_no_flapa_performance.csv",
+        index=False,
+    )
+
+    predictions_dir_wo = RESULTS_DIR / "predictions" / "no_flapa"
+    predictions_dir_wo.mkdir(parents=True, exist_ok=True)
+    for gene_set in (primary_gs, "de_overlap"):
+        gene_trainer = geneset_trainers_wo[gene_set]
+        for subset_key, (X_end, y_end) in endpoint_subsets.items():
+            out_dir = predictions_dir_wo / gene_set / subset_key
+            out_dir.mkdir(parents=True, exist_ok=True)
+            predictor = ModelPredictor(gene_trainer)
+            predictor.predict_samples(
+                X_end, sample_names=X_end.index.to_numpy(), y_test=y_end
+            )
+            for model_name, pred_df in predictor.predictions.items():
+                pred_df.to_csv(out_dir / f"{model_name}_predictions.csv", index=False)
+            for model_name, proba_df in predictor.probabilities.items():
+                proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
+            predictor.evaluate(out_dir, subset=subset_key)
+            class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
+            for model_name, proba_df in predictor.probabilities.items():
+                plot_probability_heatmap(
+                    proba_df, class_order_end,
+                    title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
+                    true_labels=predictor.y_test, all_controls=False,
+                    output_dir=out_dir,
+                    filename=f"{model_name}_probabilities_heatmap.png",
+                )
+
     print("\n" + "=" * 80)
     print("PIPELINE COMPLETED SUCCESSFULLY")
     print("=" * 80)

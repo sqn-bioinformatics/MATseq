@@ -2,19 +2,20 @@
 
 [[package]]
 name = "adjusttext"
-version = "0.8"
+version = "1.4.0"
 description = "Iteratively adjust text position in matplotlib plots to minimize overlaps"
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "adjustText-0.8-py3-none-any.whl", hash = "sha256:6da99f9d739c496f79346753a3fcadb6354d8d09699cde112fed46cfb837d271"},
-    {file = "adjustText-0.8.tar.gz", hash = "sha256:bb0682bb53abb626d6afc9c1db108ccb67f2c35ddc8d20ac6a802c756c07ee17"},
+    {file = "adjusttext-1.4.0-py3-none-any.whl", hash = "sha256:6febd6484c0d45c39a22f44b2c1f4a8cd01ef58fada565cab4b629c771df79b5"},
+    {file = "adjusttext-1.4.0.tar.gz", hash = "sha256:1f73860ced8cccce3f85ee6989ca133c2579b67a7453f63dbeb38f39bf123154"},
 ]
 
 [package.dependencies]
 matplotlib = "*"
 numpy = "*"
+scipy = "*"
 
 [[package]]
 name = "anndata"
@@ -3472,4 +3473,4 @@ pyyaml = ">=6.0,<7.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "0f55453fb36b53a315da56825db12513431c1cb9787098e15e6d26b7fb58d6be"
+content-hash = "9875ffe7673ea30e4c09b4f5f668f3e92c7405b6103677558bc9dc9dec878244"
