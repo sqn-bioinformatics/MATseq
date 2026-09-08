@@ -134,10 +134,10 @@ cached under `results/cache`; rerun with `--force-recompute` to ignore the cache
    - Writes per-fold and pooled out-of-fold metrics, confusion matrices, and `selected_params.json`
    - A second model set is trained on the main panel excluding Fla-PA
 
-4c. **Table 2 feature-set benchmark** (`ModelTrainer.benchmark_feature_set_conditions`)
-   - Re-runs the leakage-free nested CV (5 outer, 3 inner) for every model across four feature-set conditions: all genes, feature selection, feature selection + DE, and a randomly selected gene set of matching size
-   - The gene set for each condition is derived on the outer-training fold only (feature selection and DESeq2 re-run per fold), frozen, then scored once on the outer-test fold
-   - Writes the raw long-form `results/tables/table2_feature_set_benchmark.csv`; `src/make_tables.py` (`format_table2`) reshapes it into the publication table (`table2_formatted.csv` and `table2.tex`)
+4c. **Table 2 formatting** (`src/make_tables.py`)
+   - Uses the nested-CV summary produced by `MATseq.py` at `results/nested_cv/supp_nested_cv_main.csv`
+   - Formats existing model-performance metrics into the publication table (`results/tables/table2_formatted.csv`, `results/tables/Table_2.xlsx`, and `results/tables/table2.tex`)
+   - Does not run model training, feature selection, DESeq2, or any benchmark calls from `src/make_tables.py`
 
 5. **Model validation on external test batch**
    - Apply the deployed models to an independent sequencing batch (`test.work_dir/featurecounts`)
@@ -171,12 +171,14 @@ results/
 │   ├── GO_merged_results.csv               # All per-ligand terms merged
 │   ├── de_intersect_fs_go_terms.csv        # GO for DE ∩ FS gene set
 │   └── fs_only_go_terms.csv                # GO for FS \ DE gene set
-├── tables/
+├── nested_cv/
 │   ├── supp_nested_cv_main.csv             # Nested CV summary (main panel)
-│   ├── supp_nested_cv_no_flapa.csv         # Nested CV summary (no Fla-PA)
-│   ├── table2_feature_set_benchmark.csv    # Raw feature-set benchmark (long form)
+│   └── supp_nested_cv_no_flapa.csv         # Nested CV summary (no Fla-PA)
+├── tables/
 │   ├── table2_formatted.csv                # Publication Table 2 (mean ± SD grid)
-│   └── table2.tex                          # Publication Table 2 (booktabs LaTeX)
+│   ├── Table_2.xlsx                        # Publication Table 2 (Excel)
+│   ├── table2.tex                          # Publication Table 2 (booktabs LaTeX)
+│   └── Supplementary_Table_{1..12}.csv      # Publication supplementary tables
 ├── feature_analysis/
 │   └── gene_frequency_table.csv            # Gene selection frequency across 1000 runs
 ├── models/                                 # Deployed main-panel models

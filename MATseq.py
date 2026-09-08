@@ -61,6 +61,8 @@ from src.config import (
     primary_geneset_name,
     update_config,
 )
+from src.compose_figures import compose_figures
+from src.make_tables import assemble_supplementary_tables, format_table2
 
 RESULTS_DIR = Path.cwd() / "results"
 
@@ -617,66 +619,17 @@ def run_pipeline(
     )
     plot_tlr_hek_blue(tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png")
 
-    print("\n--- STEP 11: NO-FLA-PA NESTED CV ACROSS GENE-SET CONDITIONS ---")
-    nested_cv_dir = RESULTS_DIR / "nested_cv"
-    nested_cv_dir.mkdir(parents=True, exist_ok=True)
-
-    outer_wo = StratifiedKFold(n_splits=5, shuffle=True, random_state=trainer_wo.random_state)
-    folds_wo = [
-        (X_wo.iloc[tr], X_wo.iloc[te], y_enc_wo[tr], y_enc_wo[te])
-        for tr, te in outer_wo.split(np.arange(len(X_wo)), y_enc_wo)
-    ]
-    no_flapa_rows = []
-    for condition, genes in gene_set_conditions.items():
-        print(f"\n===== CONDITION: {condition} =====", flush=True)
-        for model_name, model in trainer_wo.models.items():
-            params = tuned_params.get(model_name, {}).get("chosen_params", {})
-            per_fold = {k: [] for k in metric_keys}
-            fit_seconds = []
-            n_genes = []
-            pooled_true, pooled_pred = [], []
-            for X_tr, X_te, y_tr, y_te in folds_wo:
-                n_genes.append(X_wo.shape[1] if genes is None else len(genes))
-                steps = list(preprocessing_pipeline().steps)
-                if genes is not None:
-                    steps.append(("select_genes", ColumnSelector(genes)))
-                steps.append(("clf", clone(model)))
-                pipe = SkPipeline(steps).set_output(transform="pandas")
-                pipe.set_params(**params)
-                fit_kwargs = (
-                    {"clf__sample_weight": compute_sample_weight("balanced", y_tr)}
-                    if model_name == "XGBoost"
-                    else {}
-                )
-                start = time.perf_counter()
-                pipe.fit(X_tr, y_tr, **fit_kwargs)
-                fit_seconds.append(time.perf_counter() - start)
-                y_pred = pipe.predict(X_te)
-                scores = make_score(y_te, y_pred)
-                for k in metric_keys:
-                    per_fold[k].append(scores[k])
-                pooled_true.extend(y_te.tolist())
-                pooled_pred.extend(y_pred.tolist())
-            row = {
-                "condition": condition, "model": model_name,
-                "n_genes_mean": float(np.mean(n_genes)),
-                "fit_seconds_mean": float(np.mean(fit_seconds)),
-                "fit_seconds_std": float(np.std(fit_seconds, ddof=1)),
-            }
-            for k in metric_keys:
-                row[f"{k}_mean"] = float(np.mean(per_fold[k]))
-                row[f"{k}_std"] = float(np.std(per_fold[k], ddof=1))
-            row["pooled_f1"] = make_score(pooled_true, pooled_pred)["f1"]
-            no_flapa_rows.append(row)
-            print(f"  [{model_name}] f1={row['f1_mean']:.3f}±{row['f1_std']:.3f} "
-                  f"acc={row['accuracy_mean']:.3f}±{row['accuracy_std']:.3f}", flush=True)
-            pd.DataFrame(no_flapa_rows).to_csv(
-                nested_cv_dir / "supp_nested_cv_no_flapa.csv", index=False
-            )
-
-    print("\n--- STEP 12: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
-    format_table2(tables_dir / "table2_feature_set_benchmark.csv", output_dir=tables_dir)
-    assemble_supplementary_tables(RESULTS_DIR, tables_dir)
+    print("\n--- STEP 10: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
+    manuscript_tables_dir = RESULTS_DIR / "tables"
+    manuscript_tables_dir.mkdir(parents=True, exist_ok=True)
+    composite_figures_dir = RESULTS_DIR / "tables"
+    composite_figures_dir.mkdir(parents=True, exist_ok=True)
+    format_table2(
+        RESULTS_DIR / "nested_cv" / "supp_nested_cv_main.csv",
+        output_dir=manuscript_tables_dir,
+    )
+    assemble_supplementary_tables(RESULTS_DIR, output_dir=manuscript_tables_dir)
+    compose_figures()
 
     print("\n" + "=" * 80)
     print("PIPELINE COMPLETED SUCCESSFULLY")
