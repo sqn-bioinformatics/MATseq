@@ -21,7 +21,7 @@ from sklearn.utils.validation import (
 
 from .preprocessing import normalize_rpm
 
-SEEDS = (4583, 4510, 467)
+SEEDS = (9419, 3374, 7796)
 
 
 def _record_input(estimator, X):
@@ -68,6 +68,7 @@ def preprocessing_pipeline() -> Pipeline:
         [
             ("normalise_for_library_size", LibraryLengthNormalizer()),
             ("log1p", FunctionTransformer(np.log1p, feature_names_out="one-to-one")),
+            ("standard_scale", StandardScaler()),
         ]
     )
 
@@ -105,11 +106,11 @@ def selected_with_importance(fitted_pipeline: Pipeline) -> pd.DataFrame:
     sfm = fitted_pipeline.named_steps["select_forest"]
     names_in = np.asarray(fitted_pipeline[:-1].get_feature_names_out())
     importances = np.asarray(sfm.estimator_.feature_importances_)
-    
+
     support = sfm.get_support()
     genes = names_in[support]
     gene_importances = importances[support]
-    
+
     order = np.argsort(gene_importances)[::-1]
     return pd.DataFrame(
         {
@@ -128,7 +129,6 @@ def mutual_information(
     """MI curve over all genes plus its elbow, on the fitted preprocessing.
     """
     X_pre = fitted_pipeline.transform(X)
-    print(f"  Ranking {X_pre.shape[1]} genes over {len(seeds)} seeds")
     mi_mean, per_run_elbows, curves = _mi_elbow_ranking(X_pre, y, seeds)
     mi_sorted = np.sort(mi_mean)[::-1]
     scores = {"rank": np.arange(1, len(mi_sorted) + 1), "mi_sorted": mi_sorted}
@@ -163,27 +163,13 @@ def _mi_elbow_ranking(X_pre, y, seeds: Sequence[int] = SEEDS):
                 for seed in seeds
             ),
             total=len(seeds),
-            desc="  Mutual information",
+            desc="Mutual information",
             unit="seed",
             dynamic_ncols=True,
         )
     )
     per_run_elbows = [elbow_index(np.sort(mi)[::-1]) for mi in curves]
     return np.mean(curves, axis=0), per_run_elbows, curves
-
-def best_forest_row(scan: pd.DataFrame) -> pd.Series:
-    """Scan row with the highest mean ARI."""
-    return scan.loc[scan["ari_mean"].idxmax()]
-
-
-def best_forest_cell(scan: pd.DataFrame) -> pd.DataFrame:
-    """Rows of the forest setting with the highest mean ARI, by gene count."""
-    best_row = best_forest_row(scan)
-    cell = scan[
-        (scan["n_estimators"] == best_row["n_estimators"])
-        & (scan["max_depth"] == best_row["max_depth"])
-    ]
-    return cell.sort_values("n_selected")
 
 def forest_kmeans(
     fitted_pipeline: Pipeline,
@@ -192,37 +178,31 @@ def forest_kmeans(
     grid: Dict,
     k_best: int,
     seeds: Sequence[int] = SEEDS,
+    random_state: int = 42,
 ) -> Dict:
     """Scan ExtraTrees settings by KMeans/ARI separation on the top k_best genes.
-
-    Each grid cell is scored once per seed, seeding both the ExtraTrees
-    ranking and the KMeans run, and ranked on the mean ARI across seeds.
     """
     X_pre = fitted_pipeline.transform(X)
-    print(f"  Ranking {X_pre.shape[1]} genes by mutual information for the scan")
     X_k = (
         SelectKBest(
-            partial(mutual_info_classif, random_state=seeds[0]),
-            k=min(k_best, X_pre.shape[1]),
+            partial(mutual_info_classif, random_state=random_state),
+            k=k_best,
         )
         .set_output(transform="pandas")
         .fit_transform(X_pre, y)
     )
-    counts = sorted({int(n) for n in grid["n_selected"] if n <= X_k.shape[1]})
-    if not counts:
-        counts = [X_k.shape[1]]
-    n_classes = len(np.unique(y))
 
-    cells = [
+    triplets = [
         (n_estimators, max_depth, seed)
         for n_estimators in grid["n_estimators"]
         for max_depth in grid["max_depth"]
         for seed in seeds
     ]
-
+    n_classes = len(np.unique(y))
     rows = defaultdict(list)
+
     for n_estimators, max_depth, seed in tqdm(
-        cells, desc="  Forest/k-means scan", unit="cell", dynamic_ncols=True
+        triplets, desc="  Forest/k-means scan", unit="cell", dynamic_ncols=True
     ):
         et = ExtraTreesClassifier(
             n_estimators=n_estimators,
@@ -231,7 +211,7 @@ def forest_kmeans(
         )
         et.fit(X_k, y)
         order = np.argsort(et.feature_importances_)[::-1]
-        for n_selected in counts:
+        for n_selected in grid["n_selected"]:
             cols = X_k.columns[order[:n_selected]]
             labels = KMeans(
                 n_clusters=n_classes, n_init=10, random_state=seed
@@ -255,7 +235,7 @@ def forest_kmeans(
         ]
     ).sort_values(["n_estimators", "max_depth", "n_selected"]).reset_index(drop=True)
 
-    best_row = best_forest_row(scan)
+    best_row = scan.loc[scan["ari_mean"].idxmax()]
     best = {
         "n_estimators": int(best_row["n_estimators"]),
         "max_depth": int(best_row["max_depth"]),

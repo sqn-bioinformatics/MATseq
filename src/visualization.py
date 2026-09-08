@@ -14,7 +14,6 @@ import scanpy as sc
 
 from .preprocessing import normalize_rpm
 from .config import CLASS_ORDER
-from .feature_engineering import best_forest_cell, best_forest_row
 
 CLASS_DISPLAY_NAMES = {
     "negative_control": "Negative Control",
@@ -306,18 +305,20 @@ def plot_mutual_information(
 def plot_forest_ari_sweep(
     scan: pd.DataFrame,
     output_path: Path,
-    selected: int = None,
+    selected: int,
     output_filename: str = "forest_ari_sweep.png",
     title: str = "Gene-count sweep by k-means separation",
 ) -> Path:
     """Scatter of per-seed k-means/ligand ARI against gene count.
     """
     ari_cols = [c for c in scan.columns if c.startswith("ari_seed_")]
-    cell = best_forest_cell(scan)
+    best_row = scan.loc[scan["ari_mean"].idxmax()]
+    cell = scan[
+        (scan["n_estimators"] == best_row["n_estimators"])
+        & (scan["max_depth"] == best_row["max_depth"])
+    ].sort_values("n_selected")
     gene_counts = cell["n_selected"].to_numpy()
     means = cell["ari_mean"].to_numpy()
-    if selected is None:
-        selected = int(best_forest_row(scan)["n_selected"])
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
     ax.scatter(
@@ -399,15 +400,13 @@ def draw_pca(ax, X_reduced, label_values, palette=None,
 
 
 def plot_pca(
-    name: str,
     X: pd.DataFrame,
     labels: Union[pd.DataFrame, np.ndarray],
+    output_filename: str,
     with_sample_names: bool = False,
     output_path: Path = None,
-    output_filename: str = None,
     palette: str = None,
     hue_order: list = None,
-    equal_aspect: bool = False,
 ) -> Path:
     """Create PCA visualization for pandas DataFrame data.
     """
@@ -424,7 +423,7 @@ def plot_pca(
 
     X_reduced = PCA(n_components=2).fit_transform(X)
 
-    figsize = (20, 15) if with_sample_names else (6, 6)
+    figsize = (20, 20) if with_sample_names else (6, 6)
 
     with plt.rc_context(
         {
@@ -442,7 +441,6 @@ def plot_pca(
             hue_order=hue_order,
             with_sample_names=with_sample_names,
             sample_names=sample_names,
-            equal_aspect=equal_aspect,
         )
         plt.tight_layout()
 
