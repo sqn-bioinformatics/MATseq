@@ -167,7 +167,6 @@ def run_pipeline(
     de_dir = RESULTS_DIR / "differential_gene_expression"
     de_dir.mkdir(parents=True, exist_ok=True)
 
-    deseq2_tables: dict[str, DESeq2] = {}
     for subset, (X_sub, y_sub) in subset_xy.items():
         deseq2 = DESeq2(
             raw_counts=X_sub,
@@ -180,12 +179,12 @@ def run_pipeline(
         deseq2.run_analysis(
             CLASS_ORDER[subset], class_to_compare_to="negative_control"
         )
-        deseq2_tables[subset] = deseq2
+        if subset == "train_ligands":
+            deseq2_train = deseq2
+            de_genes = deseq2_train.get_de_genes()
         pd.Series(sorted(deseq2.get_de_genes()), name="gene").to_csv(
             de_dir / f"de_genes_{subset}.csv", index=False
         )
-
-    deseq2_train = deseq2_tables["train_ligands"]
 
     print("\n--- STEP 3: FEATURE ENGINEERING GENE NUMBER DETERMINATION ---")
     out_dir = RESULTS_DIR / "feature_selection"
@@ -207,7 +206,6 @@ def run_pipeline(
         grid=FOREST_SELECTION_GRID,
         k_best=mi_elbow,
     )
-
     mi_result["scores"].to_csv(out_dir / "mutual_information.csv", index=False)
     kmeans_result["scan"].to_csv(out_dir / "forest_kmeans.csv", index=False)
     
@@ -232,9 +230,10 @@ def run_pipeline(
         }
     )
 
-    print("\n --- STEP 4: PLOT PCAs ---")
-    
-    pre_pipe = preprocessing_pipeline().set_output(transform="pandas")
+    print("\n --- STEP 4: PLOT PCA GRAPHS ---")
+    pca_dir = RESULTS_DIR / "figures" / "pca"
+    pca_dir.mkdir(parents=True, exist_ok=True)
+
     fs_pipe = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(
         transform="pandas"
     )
@@ -245,49 +244,45 @@ def run_pipeline(
         if subset in ["train_ligands", "test_ligands"]:
             X_pca, y_pca = X_sub, y_sub
         else:
-            # Showing where the other ligands clusters land
+            # Showing where the other ligands clusters land compared to train           
+            X_pca = pd.concat([X_sub, X_train])
             y_pca = pd.concat([y_sub, y_train])
 
-        X_pca_pre = pre.fit_transform(X_pca)
-        X_pca_selected = fs_pipe.transform(X_pca)
+        X_pca_pre = pre_pipe.fit_transform(X_pca) # Refitting on each subset
+
+        # The fs_pipe is fit once to train to keep parameters constant
+        X_pca_selected = fs_pipe.transform(X_pca) 
         palette = SUBSET_PALETTES.get(subset, CUSTOM_PALETTE_9)
         hue_order = CLASS_ORDER.get(subset)
-        for with_names, label_suffix in [(False, ""), (True, "labeled")]:
+        for with_names, label_suffix in [(False, ""), (True, "_labeled")]:
             plot_pca(
                 X=X_pca_pre,
                 labels=y_pca,
                 palette=palette,
                 hue_order=hue_order,
-                name=f"{subset}_{label_suffix}",
                 with_sample_names=with_names,
-                output_filename=f"{subset}_pca_{label_suffix}.png",
-                equal_aspect=True,
+                output_path=pca_dir,
+                output_filename=f"pca_{subset}{label_suffix}.png",
             )
             plot_pca(
                 X=X_pca_selected,
                 labels=y_pca,
                 palette=palette,
                 hue_order=hue_order,
-                name=f"{subset}_feature_selected_{label_suffix}",
                 with_sample_names=with_names,
+                output_path=pca_dir,
                 output_filename=(
-                    f"{subset}_feature_selected_{label_suffix}.png"
+                    f"pca_{subset}_fs{label_suffix}.png"
                 ),
-                equal_aspect=True,
             )
 
     print("\n--- STEP 5: FS vs DE VENN AND GO ---")
     fig_dir = RESULTS_DIR / "figures" / "venn"
-    fig_dir.mkdir(parents=True, exist_ok=True)
     tables_dir = RESULTS_DIR / "fs_de_genesets"
+    fig_dir.mkdir(parents=True, exist_ok=True)
     tables_dir.mkdir(parents=True, exist_ok=True)
-    
-    de_genes = deseq2_train.get_de_genes()
-    fs = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(
-        transform="pandas"
-    )
-    fs.fit(X_train, y_train)
-    fs_ranked = selected_with_importance(fs)
+
+    fs_ranked = selected_with_importance(fs_pipe)
     fs_genes = set(fs_ranked["gene"])
     plot_venn(
         [de_genes, fs_genes],
@@ -321,17 +316,12 @@ def run_pipeline(
  
     print("\n--- STEP 6: BEST PARMETER DETERMINATION WITH NESTED CV ---")
     model_dir = RESULTS_DIR / "models"
-    model_dir.mkdir(parents=True, exist_ok=True)
-    model_dir_wo = RESULTS_DIR / "models" / "no_flapa"
-    model_dir_wo.mkdir(parents=True, exist_ok=True)
     tables_dir = RESULTS_DIR / "nested_cv"
-    tables_dir.mkdir(parents=True, exist_ok=True)
     hp_dir = RESULTS_DIR / "hyperparameter_tuning"
     hp_dir.mkdir(parents=True, exist_ok=True)
-    hp_dir_wo = RESULTS_DIR / "hyperparameter_tuning_no_flapa"
-    hp_dir_wo.mkdir(parents=True, exist_ok=True)
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    model_dir.mkdir(parents=True, exist_ok=True)
 
-    # Include the Fla-Pa class
     models = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
     trainer = ModelTrainer(X_train, y_train, models=models, **MODEL_TRAINING_CONFIG)
     trainer.tune_nested(
@@ -344,69 +334,27 @@ def run_pipeline(
     )
     trainer.save_models(model_dir)
 
-    # Exclude the Fla-Pa class to check if training improves
-    flapa_mask = y_train != "Fla-PA"
-    X_wo, y_wo = X_train[flapa_mask], y_train[flapa_mask]
-    models_wo = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
-    trainer_wo = ModelTrainer(X_wo, y_wo, models=models_wo, **MODEL_TRAINING_CONFIG)
-    trainer_wo.tune_nested(
-        X_wo,
-        y_wo,
-        param_grids=HYPERPARAMETER_GRIDS,
-        output_dir=hp_dir_wo,
-        outer_cv=5,
-        inner_cv=3,
-    )
-    trainer_wo.save_models(model_dir_wo)
-
     all_models = trainer.nested_cv_summary_["model"].tolist()
     tuned_params = trainer.selected_params_
-    tuned_params_wo = trainer_wo.selected_params_
 
     trainer.nested_cv_summary_.to_csv(tables_dir / "supp_nested_cv_main.csv", index=False)
-    trainer_wo.nested_cv_summary_.to_csv(
-        tables_dir / "supp_nested_cv_no_flapa.csv", index=False
-    )
-    
+
     print("\n--- STEP 7: REFIT THE MODELS WITH BEST PARAMETERS ON GENESETS  ---")
     geneset_model_dir = RESULTS_DIR / "models"
     geneset_model_dir.mkdir(parents=True, exist_ok=True)
-    geneset_model_dir_wo = RESULTS_DIR / "models" / "no_flapa"
-    geneset_model_dir_wo.mkdir(parents=True, exist_ok=True)
 
-    primary_gs = primary_geneset_name()
+    primary_gs = primary_geneset_name() # Getting the number e.g. 'selected_130'
     genesets = {
         primary_gs: selected_genes,
         "de_overlap": overlap_genes,
         "union_stable_de": union_genes,
     }
-    fs_wo = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(
-        transform="pandas"
-    )
-    fs_wo.fit(X_wo, y_wo)
-    fs_wo_ranked = selected_with_importance(fs_wo)
-    fs_genes_wo = set(fs_wo_ranked["gene"])
-    de_genes_wo = {
-        gene
-        for ligand_name, result in deseq2_train.results.items()
-        if ligand_name != "Fla-PA"
-        for gene in result["significant"].index
-    }
-    genesets_wo = {
-        primary_gs: sorted(fs_genes_wo),
-        "de_overlap": sorted(fs_genes_wo & de_genes_wo),
-        "union_stable_de": sorted(fs_genes_wo | de_genes_wo),
-    }
 
     y_enc = trainer.label_encoder.transform(
         y_train.values if isinstance(y_train, pd.Series) else y_train
     )
-    y_enc_wo = trainer_wo.label_encoder.transform(
-        y_wo.values if isinstance(y_wo, pd.Series) else y_wo
-    )
 
     geneset_trainers = {}
-    geneset_trainers_wo = {}
     for gene_set, genes in genesets.items():
         base = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
         trained = {}
@@ -418,8 +366,7 @@ def run_pipeline(
                     ("clf", clone(base[name])),
                 ]
             ).set_output(transform="pandas")
-            params = tuned_params.get(name, {}).get("chosen_params", {})
-            pipe.set_params(**params)
+            pipe.set_params(**tuned_params.get(name, {}).get("chosen_params", {}))
             fit_kwargs = (
                 {"clf__sample_weight": compute_sample_weight("balanced", y_enc)}
                 if name == "XGBoost"
@@ -428,42 +375,12 @@ def run_pipeline(
             pipe.fit(X_train, y_enc, **fit_kwargs)
             trained[name] = pipe
 
-        geneset_trainers[gene_set] = ModelTrainer.from_trained_models(
-            trained, trainer.label_encoder
-        )
-
-        base_wo = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
-        trained_wo = {}
-        genes_wo = genesets_wo[gene_set]
-        for name in all_models:
-            pipe_wo = SkPipeline(
-                [
-                    *preprocessing_pipeline().steps,
-                    ("select_genes", ColumnSelector(genes_wo)),
-                    ("clf", clone(base_wo[name])),
-                ]
-            ).set_output(transform="pandas")
-            params_wo = tuned_params_wo.get(name, {}).get("chosen_params", {})
-            pipe_wo.set_params(**params_wo)
-            fit_kwargs_wo = (
-                {"clf__sample_weight": compute_sample_weight("balanced", y_enc_wo)}
-                if name == "XGBoost"
-                else {}
-            )
-            pipe_wo.fit(X_wo, y_enc_wo, **fit_kwargs_wo)
-            trained_wo[name] = pipe_wo
-
-        geneset_trainers_wo[gene_set] = ModelTrainer.from_trained_models(
-            trained_wo, trainer_wo.label_encoder
-        )
-
-    for gene_set, gene_trainer in geneset_trainers.items():
+        gene_trainer = ModelTrainer.from_trained_models(trained, trainer.label_encoder)
         gene_trainer.save_models(geneset_model_dir / gene_set)
-        geneset_trainers_wo[gene_set].save_models(geneset_model_dir_wo / gene_set)
+        geneset_trainers[gene_set] = gene_trainer
 
     print("\n--- STEP 8: VALIDATION ON TEST SET ---")
     val_dir = RESULTS_DIR / "validation" / "test_set"
-    val_dir_wo = RESULTS_DIR / "validation" / "test_set_no_flapa"
     validation_tables_dir = RESULTS_DIR / "validation"
     validation_tables_dir.mkdir(parents=True, exist_ok=True)
 
@@ -497,10 +414,132 @@ def run_pipeline(
     external_perf_csv = validation_tables_dir / "external_validation_performance.csv"
     external_perf_df.to_csv(external_perf_csv, index=False)
 
+    print("\n--- STEP 9: PREDICTIONS ON OTHER LIGANDS---")
+    predictions_dir = RESULTS_DIR / "predictions"
+    predictions_dir.mkdir(parents=True, exist_ok=True)
+    endpoint_subsets = {
+        "additional_ligands": (X_other, y_other),
+        "bacterial_ligands": (X_bact, y_bact),
+    }
+
+    for gene_set in (primary_gs, "de_overlap"):
+        gene_trainer = geneset_trainers[gene_set]
+        for subset_key, (X_end, y_end) in endpoint_subsets.items():
+            out_dir = predictions_dir / gene_set / subset_key
+            out_dir.mkdir(parents=True, exist_ok=True)
+            predictor = ModelPredictor(gene_trainer)
+            predictor.predict_samples(
+                X_end, sample_names=X_end.index.to_numpy(), y_test=y_end
+            )
+            for model_name, pred_df in predictor.predictions.items():
+                pred_df.to_csv(out_dir / f"{model_name}_predictions.csv", index=False)
+            for model_name, proba_df in predictor.probabilities.items():
+                proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
+            predictor.evaluate(out_dir, subset=subset_key)
+            class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
+            for model_name, proba_df in predictor.probabilities.items():
+                plot_probability_heatmap(
+                    proba_df, class_order_end,
+                    title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
+                    true_labels=predictor.y_test, all_controls=False,
+                    output_dir=out_dir,
+                    filename=f"{model_name}_probabilities_heatmap.png",
+                )
+
+    print("\n--- STEP 10: TLR VISUALIZATION ---")
+    tlr2_df, tlr4_df, flapa_data = load_tlr_data(
+        data_dir=Path(__file__).parent / "data" / "supplementary_data"
+    )
+    plot_tlr_hek_blue(tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png")
+
+    print("\n--- STEP 11: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
+    manuscript_tables_dir = RESULTS_DIR / "tables"
+    manuscript_tables_dir.mkdir(parents=True, exist_ok=True)
+    composite_figures_dir = RESULTS_DIR / "tables"
+    composite_figures_dir.mkdir(parents=True, exist_ok=True)
+    format_table2(
+        RESULTS_DIR / "nested_cv" / "supp_nested_cv_main.csv",
+        output_dir=manuscript_tables_dir,
+    )
+    assemble_supplementary_tables(RESULTS_DIR, output_dir=manuscript_tables_dir)
+    compose_figures()
+
+    print("\n--- STEP 12: WITHOUT Fla-PA SENSITIVITY ANALYSIS ---")
+    model_dir_wo = RESULTS_DIR / "models" / "no_flapa"
+    hp_dir_wo = RESULTS_DIR / "hyperparameter_tuning_no_flapa"
+    model_dir_wo.mkdir(parents=True, exist_ok=True)
+    hp_dir_wo.mkdir(parents=True, exist_ok=True)
+
+    flapa_mask = y_train != "Fla-PA"
+    X_wo, y_wo = X_train[flapa_mask], y_train[flapa_mask]
+    models_wo = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
+    trainer_wo = ModelTrainer(X_wo, y_wo, models=models_wo, **MODEL_TRAINING_CONFIG)
+    trainer_wo.tune_nested(
+        X_wo,
+        y_wo,
+        param_grids=HYPERPARAMETER_GRIDS,
+        output_dir=hp_dir_wo,
+        outer_cv=5,
+        inner_cv=3,
+    )
+    trainer_wo.save_models(model_dir_wo)
+
+    tuned_params_wo = trainer_wo.selected_params_
+    trainer_wo.nested_cv_summary_.to_csv(
+        tables_dir / "supp_nested_cv_no_flapa.csv", index=False
+    )
+
+    fs_wo = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(transform="pandas")
+    fs_wo.fit(X_wo, y_wo)
+    fs_wo_ranked = selected_with_importance(fs_wo)
+    fs_genes_wo = set(fs_wo_ranked["gene"])
+    de_genes_wo = {
+        gene
+        for ligand_name, result in deseq2_train.results.items()
+        if ligand_name != "Fla-PA"
+        for gene in result["significant"].index
+    }
+    genesets_wo = {
+        primary_gs: sorted(fs_genes_wo),
+        "de_overlap": sorted(fs_genes_wo & de_genes_wo),
+        "union_stable_de": sorted(fs_genes_wo | de_genes_wo),
+    }
+
+    y_enc_wo = trainer_wo.label_encoder.transform(
+        y_wo.values if isinstance(y_wo, pd.Series) else y_wo
+    )
+
+    geneset_trainers_wo = {}
+    for gene_set, genes in genesets_wo.items():
+        base_wo = ModelFactory.create_models(**MODEL_FACTORY_CONFIG)
+        trained_wo = {}
+        for name in all_models:
+            pipe_wo = SkPipeline(
+                [
+                    *preprocessing_pipeline().steps,
+                    ("select_genes", ColumnSelector(genes)),
+                    ("clf", clone(base_wo[name])),
+                ]
+            ).set_output(transform="pandas")
+            pipe_wo.set_params(**tuned_params_wo.get(name, {}).get("chosen_params", {}))
+            fit_kwargs_wo = (
+                {"clf__sample_weight": compute_sample_weight("balanced", y_enc_wo)}
+                if name == "XGBoost"
+                else {}
+            )
+            pipe_wo.fit(X_wo, y_enc_wo, **fit_kwargs_wo)
+            trained_wo[name] = pipe_wo
+
+        gene_trainer_wo = ModelTrainer.from_trained_models(
+            trained_wo, trainer_wo.label_encoder
+        )
+        gene_trainer_wo.save_models(model_dir_wo / gene_set)
+        geneset_trainers_wo[gene_set] = gene_trainer_wo
+
+    val_dir_wo = RESULTS_DIR / "validation" / "test_set_no_flapa"
     flapa_mask_ext = y_test != "Fla-PA"
     X_test_wo, y_test_wo = X_test[flapa_mask_ext], y_test[flapa_mask_ext]
     validation_wo_rows = []
-    
     for gene_set, gene_trainer in geneset_trainers_wo.items():
         out_dir_wo = val_dir_wo / gene_set / "test_ligands"
         out_dir_wo.mkdir(parents=True, exist_ok=True)
@@ -524,71 +563,38 @@ def run_pipeline(
             )
         summary_wo.insert(0, "gene_set", gene_set)
         validation_wo_rows.append(summary_wo)
-    
+
     external_perf_wo_df = pd.concat(validation_wo_rows, ignore_index=True)
-    external_perf_wo_csv = (
-        validation_tables_dir / "external_validation_no_flapa_performance.csv"
+    external_perf_wo_df.to_csv(
+        validation_tables_dir / "external_validation_no_flapa_performance.csv",
+        index=False,
     )
-    external_perf_wo_df.to_csv(external_perf_wo_csv, index=False)
 
-
-    print("\n--- STEP 9: PREDICTIONS ON OTHER LIGANDS---")
-    predictions_dir = RESULTS_DIR / "predictions"
-    predictions_dir.mkdir(parents=True, exist_ok=True)
     predictions_dir_wo = RESULTS_DIR / "predictions" / "no_flapa"
     predictions_dir_wo.mkdir(parents=True, exist_ok=True)
-    endpoint_subsets = {
-        "additional_ligands": (X_other, y_other),
-        "bacterial_ligands": (X_bact, y_bact),
-    }
-
-    for trainers, base_dir in (
-        (geneset_trainers, predictions_dir),
-        (geneset_trainers_wo, predictions_dir_wo),
-    ):
-        for gene_set in (primary_gs, "de_overlap"):
-            gene_trainer = trainers[gene_set]
-            for subset_key, (X_end, y_end) in endpoint_subsets.items():
-                out_dir = base_dir / gene_set / subset_key
-                out_dir.mkdir(parents=True, exist_ok=True)
-                predictor = ModelPredictor(gene_trainer)
-                predictor.predict_samples(
-                    X_end, sample_names=X_end.index.to_numpy(), y_test=y_end
+    for gene_set in (primary_gs, "de_overlap"):
+        gene_trainer = geneset_trainers_wo[gene_set]
+        for subset_key, (X_end, y_end) in endpoint_subsets.items():
+            out_dir = predictions_dir_wo / gene_set / subset_key
+            out_dir.mkdir(parents=True, exist_ok=True)
+            predictor = ModelPredictor(gene_trainer)
+            predictor.predict_samples(
+                X_end, sample_names=X_end.index.to_numpy(), y_test=y_end
+            )
+            for model_name, pred_df in predictor.predictions.items():
+                pred_df.to_csv(out_dir / f"{model_name}_predictions.csv", index=False)
+            for model_name, proba_df in predictor.probabilities.items():
+                proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
+            predictor.evaluate(out_dir, subset=subset_key)
+            class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
+            for model_name, proba_df in predictor.probabilities.items():
+                plot_probability_heatmap(
+                    proba_df, class_order_end,
+                    title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
+                    true_labels=predictor.y_test, all_controls=False,
+                    output_dir=out_dir,
+                    filename=f"{model_name}_probabilities_heatmap.png",
                 )
-                for model_name, pred_df in predictor.predictions.items():
-                    pred_df.to_csv(
-                        out_dir / f"{model_name}_predictions.csv", index=False
-                    )
-                for model_name, proba_df in predictor.probabilities.items():
-                    proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
-                predictor.evaluate(out_dir, subset=subset_key)
-                class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
-                for model_name, proba_df in predictor.probabilities.items():
-                    plot_probability_heatmap(
-                        proba_df, class_order_end,
-                        title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
-                        true_labels=predictor.y_test, all_controls=False,
-                        output_dir=out_dir,
-                        filename=f"{model_name}_probabilities_heatmap.png",
-                    )
-
-    print("\n--- STEP 10: TLR VISUALIZATION ---")
-    tlr2_df, tlr4_df, flapa_data = load_tlr_data(
-        data_dir=Path(__file__).parent / "data" / "supplementary_data"
-    )
-    plot_tlr_hek_blue(tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png")
-
-    print("\n--- STEP 11: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
-    manuscript_tables_dir = RESULTS_DIR / "tables"
-    manuscript_tables_dir.mkdir(parents=True, exist_ok=True)
-    composite_figures_dir = RESULTS_DIR / "tables"
-    composite_figures_dir.mkdir(parents=True, exist_ok=True)
-    format_table2(
-        RESULTS_DIR / "nested_cv" / "supp_nested_cv_main.csv",
-        output_dir=manuscript_tables_dir,
-    )
-    assemble_supplementary_tables(RESULTS_DIR, output_dir=manuscript_tables_dir)
-    compose_figures()
 
     print("\n" + "=" * 80)
     print("PIPELINE COMPLETED SUCCESSFULLY")

@@ -227,10 +227,6 @@ class DESeq2:
             print(f"Saved results to {res_output}")
 
             self.de_genes.update(sigs.index)
-
-            res_copy = res.copy()
-            res_copy.columns = [f"{col}_{ligand_name}" for col in res_copy.columns]
-
             if not sigs.empty:
                 self._generate_figures(ligand_name, dds, res, sigs)
 

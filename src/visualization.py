@@ -6,7 +6,7 @@ import seaborn as sns
 import textwrap
 from pathlib import Path
 from typing import Union
-from matplotlib.patches import Patch, FancyArrowPatch
+from matplotlib.patches import Patch
 from matplotlib_venn import venn2, venn3
 from sklearn.decomposition import PCA
 from adjustText import adjust_text
@@ -14,7 +14,6 @@ import scanpy as sc
 
 from .preprocessing import normalize_rpm
 from .config import CLASS_ORDER
-from .feature_engineering import best_forest_cell, best_forest_row
 
 CLASS_DISPLAY_NAMES = {
     "negative_control": "Negative Control",
@@ -30,9 +29,7 @@ SUBSET_DISPLAY_NAMES = {
 
 def display_label(label):
     """Human-readable form of a single class label (no underscores)."""
-    if label in CLASS_DISPLAY_NAMES:
-        return CLASS_DISPLAY_NAMES[label]
-    return str(label).replace("_", " ")
+    return CLASS_DISPLAY_NAMES.get(label, str(label).replace("_", " "))
 
 def display_labels(labels):
     """Human-readable forms of an iterable of class labels."""
@@ -40,9 +37,7 @@ def display_labels(labels):
 
 def subset_display(subset):
     """Human-readable subset/panel name (e.g. train_ligands -> 'Training Ligands')."""
-    if subset in SUBSET_DISPLAY_NAMES:
-        return SUBSET_DISPLAY_NAMES[subset]
-    return str(subset).replace("_", " ").title()
+    return SUBSET_DISPLAY_NAMES.get(subset, str(subset).replace("_", " ").title())
 
 def confusion_title(model, subset):
     """Figure title in the '<Model> Confusion Matrix <Subset>' format."""
@@ -55,71 +50,36 @@ def order_labels(present, subset="train_ligands"):
     return ordered + [c for c in present if c not in ordered]
 
 
-def _savefig_with_arrow_fallback(save_path, **kwargs):
-    """Save the current figure, retrying without adjust_text connector arrows.
-    """
-    try:
-        plt.savefig(save_path, **kwargs)
-    except StopIteration:
-        for ax in plt.gcf().axes:
-            for patch in [p for p in ax.patches if isinstance(p, FancyArrowPatch)]:
-                patch.remove()
-            for txt in list(ax.texts):
-                if getattr(txt, "arrow_patch", None) is None:
-                    continue
-                ax.text(
-                    *txt.get_position(),
-                    txt.get_text(),
-                    ha=txt.get_ha(),
-                    va=txt.get_va(),
-                    size=txt.get_size(),
-                    weight=txt.get_weight(),
-                    color=txt.get_color(),
-                    alpha=txt.get_alpha(),
-                )
-                txt.remove()
-        plt.savefig(save_path, **kwargs)
-
-
-def plot_confusion_matrix(cm, class_names, ax=None, title=None,
+def plot_confusion_matrix(cm, class_names, title=None,
                           output_dir=None, filename=None):
-    """Render a confusion matrix normalized over the true classes (rows).
-
-    Draws on ``ax`` and returns the image. When ``ax`` is None a figure is
-    created; passing ``output_dir`` then saves it and returns the path.
-    """
-    save = ax is None
-    if save:
-        fig, ax = plt.subplots(figsize=(6.5, 6))
+    """Render a confusion matrix normalized over the true classes (rows)."""
+    fig, ax = plt.subplots(figsize=(6.5, 6))
     cm = np.asarray(cm, dtype=float)
     labels = display_labels(class_names)
     n = cm.shape[0]
-    ncol = cm.shape[1]
-    ncell = max(n, ncol)
-    annot_fs = 9 if ncell <= 6 else (7 if ncell == 7 else 6)
-    tick_fs = 9 if ncell <= 7 else 8
+    annot_fs = 9 if n <= 6 else (7 if n == 7 else 6)
+    tick_fs = 9 if n <= 7 else 8
     im = ax.imshow(cm, cmap="Blues", vmin=0.0, vmax=1.0, aspect="auto")
     ax.set_box_aspect(1)
 
-    ax.set_xticks(range(ncol))
+    ax.set_xticks(range(n))
     ax.set_yticks(range(n))
-    ax.set_xticklabels(labels[:ncol], rotation=45, ha="right",
-                        fontsize=tick_fs)
-    ax.set_yticklabels(labels[:n], fontsize=tick_fs)
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=tick_fs)
+    ax.set_yticklabels(labels, fontsize=tick_fs)
     ax.set_xlabel("Predicted class", fontsize=10)
     ax.set_ylabel("True class", fontsize=10)
     if title:
         ax.set_title(title, fontsize=11, pad=8)
 
     for i in range(n):
-        for j in range(ncol):
+        for j in range(n):
             v = cm[i, j]
             # Drop the decimal for a full 100% so it never overruns the cell.
             txt = "100%" if v >= 0.9995 else f"{v * 100:.1f}%"
             ax.text(j, i, txt, ha="center", va="center",
                     color="white" if v > 0.5 else "#222222", fontsize=annot_fs)
 
-    ax.set_xticks(np.arange(-0.5, cm.shape[1], 1), minor=True)
+    ax.set_xticks(np.arange(-0.5, n, 1), minor=True)
     ax.set_yticks(np.arange(-0.5, n, 1), minor=True)
     ax.tick_params(which="both", length=0)
     for s in ax.spines.values():
@@ -128,8 +88,6 @@ def plot_confusion_matrix(cm, class_names, ax=None, title=None,
     cbar.outline.set_visible(False)
     cbar.ax.tick_params(length=0)
 
-    if not save or output_dir is None:
-        return im
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
@@ -166,7 +124,7 @@ def _order_probability_rows(proba_df, class_order, true_labels=None,
     return ordered
 
 
-def plot_probability_heatmap(proba_df, class_order, ax=None, title=None,
+def plot_probability_heatmap(proba_df, class_order, title=None,
                              true_labels=None, all_controls=False, seed=42, output_dir=None, filename=None):
     """Render a per-sample prediction-probability heatmap.
     """
@@ -174,9 +132,7 @@ def plot_probability_heatmap(proba_df, class_order, ax=None, title=None,
         proba_df, class_order, true_labels=true_labels,
         all_controls=all_controls, seed=seed,
     )
-    save = ax is None
-    if save:
-        fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(12, 8))
     mat = np.asarray(proba_df_ordered.values, dtype=float)
     col_labels = display_labels(list(proba_df_ordered.columns))
     row_labels = list(proba_df_ordered.index)
@@ -208,8 +164,6 @@ def plot_probability_heatmap(proba_df, class_order, ax=None, title=None,
     cbar.outline.set_visible(False)
     cbar.ax.tick_params(length=0)
 
-    if not save or output_dir is None:
-        return im
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
@@ -306,18 +260,20 @@ def plot_mutual_information(
 def plot_forest_ari_sweep(
     scan: pd.DataFrame,
     output_path: Path,
-    selected: int = None,
+    selected: int,
     output_filename: str = "forest_ari_sweep.png",
     title: str = "Gene-count sweep by k-means separation",
 ) -> Path:
     """Scatter of per-seed k-means/ligand ARI against gene count.
     """
     ari_cols = [c for c in scan.columns if c.startswith("ari_seed_")]
-    cell = best_forest_cell(scan)
+    best_row = scan.loc[scan["ari_mean"].idxmax()]
+    cell = scan[
+        (scan["n_estimators"] == best_row["n_estimators"])
+        & (scan["max_depth"] == best_row["max_depth"])
+    ].sort_values("n_selected")
     gene_counts = cell["n_selected"].to_numpy()
     means = cell["ari_mean"].to_numpy()
-    if selected is None:
-        selected = int(best_forest_row(scan)["n_selected"])
 
     fig, ax = plt.subplots(figsize=(7, 4.5))
     ax.scatter(
@@ -350,8 +306,7 @@ def plot_forest_ari_sweep(
     return save_path
 
 def draw_pca(ax, X_reduced, label_values, palette=None,
-             hue_order=None, with_sample_names=False, sample_names=None,
-             equal_aspect=True, title=None, marker_size=80):
+             hue_order=None, with_sample_names=False, sample_names=None, title=None):
     """Render a 2-component PCA scatter on ``ax``.
     """
     sns.scatterplot(
@@ -359,7 +314,7 @@ def draw_pca(ax, X_reduced, label_values, palette=None,
         y=X_reduced[:, 1],
         hue=label_values,
         hue_order=hue_order,
-        s=200 if with_sample_names else marker_size,
+        s=200 if with_sample_names else 80,
         alpha=0.6,
         palette=palette,
         ax=ax,
@@ -394,38 +349,29 @@ def draw_pca(ax, X_reduced, label_values, palette=None,
     for spine in ["left", "bottom"]:
         ax.spines[spine].set_linewidth(1.5)
 
-    if equal_aspect:
-        ax.set_aspect("equal", adjustable="datalim")
-        ax.set_box_aspect(1)
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.set_box_aspect(1)
     return ax
 
 
 def plot_pca(
-    name: str,
     X: pd.DataFrame,
     labels: Union[pd.DataFrame, np.ndarray],
+    output_filename: str,
+    output_path: Path,
     with_sample_names: bool = False,
-    output_filename: str = None,
     palette: str = None,
     hue_order: list = None,
-    equal_aspect: bool = False,
 ) -> Path:
     """Create PCA visualization for pandas DataFrame data.
     """
     label_values = (
         labels["label"].to_numpy() if isinstance(labels, pd.DataFrame) else labels
     )
-
-    if hasattr(X, "index"):
-        sample_names = X.index.to_numpy()
-    elif isinstance(labels, pd.DataFrame):
-        sample_names = labels.index.to_numpy()
-    else:
-        sample_names = np.arange(len(X))
-
+    sample_names = X.index.to_numpy()
     X_reduced = PCA(n_components=2).fit_transform(X)
 
-    figsize = (20, 15) if with_sample_names else (6, 6)
+    figsize = (20, 20) if with_sample_names else (6, 6)
 
     with plt.rc_context(
         {
@@ -443,25 +389,16 @@ def plot_pca(
             hue_order=hue_order,
             with_sample_names=with_sample_names,
             sample_names=sample_names,
-            equal_aspect=equal_aspect,
         )
         plt.tight_layout()
 
-        project_root = Path(__file__).parent.parent
-        output_path = project_root / "results" / "figures" / "pca"
         output_path.mkdir(parents=True, exist_ok=True)
-
-        if output_filename is None:
-            output_filename = (
-                f"{name}_pca_labeled.png" if with_sample_names else f"{name}_pca.png"
-            )
-
         save_path = output_path / output_filename
         try:
-            _savefig_with_arrow_fallback(save_path, dpi=300, bbox_inches="tight")
+            fig.savefig(save_path, dpi=300, bbox_inches="tight")
             print(f"Figure saved to: {save_path.absolute()}")
         finally:
-            plt.close()
+            plt.close(fig)
 
     return save_path.absolute()
 
@@ -469,8 +406,8 @@ def plot_pca(
 def plot_volcano(
     res: pd.DataFrame,
     analysis_name: str,
+    output_path: Path,
     log2foldchange: float = 2.0,
-    output_path: Path = None,
     output_filename: str = None,
 ) -> Path:
     """Create volcano plot showing differentially expressed genes.
@@ -547,8 +484,6 @@ def plot_volcano(
 
     fig.patch.set_facecolor("white")
 
-    if output_path is None:
-        output_path = Path(__file__).parent.parent / "results" / "figures" / "deseq2"
     output_path.mkdir(parents=True, exist_ok=True)
 
     if output_filename is None:
@@ -556,10 +491,10 @@ def plot_volcano(
 
     save_path = output_path / output_filename
     try:
-        _savefig_with_arrow_fallback(save_path, dpi=300, bbox_inches="tight")
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Figure saved: {save_path}")
     finally:
-        plt.close()
+        plt.close(fig)
 
     return save_path
 
@@ -568,8 +503,8 @@ def plot_heatmap(
     dds,
     sigs: pd.DataFrame,
     analysis_name: str,
+    output_path: Path,
     num_top_sig: Union[int, str] = 50,
-    output_path: Path = None,
     output_filename: str = None,
 ) -> Path:
     """Create hierarchical clustering heatmap of significant genes.
@@ -649,8 +584,6 @@ def plot_heatmap(
 
     g.figure.subplots_adjust(hspace=0.01, right=0.82)
     g.figure.patch.set_facecolor("white")
-    if output_path is None:
-        output_path = Path(__file__).parent.parent / "results" / "figures" / "deseq2"
     output_path.mkdir(parents=True, exist_ok=True)
 
     if output_filename is None:
@@ -661,7 +594,7 @@ def plot_heatmap(
         g.figure.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Figure saved: {save_path}")
     finally:
-        plt.close()
+        plt.close(g.figure)
 
     return save_path
 
@@ -669,8 +602,8 @@ def plot_heatmap(
 def plot_pca_deseq2(
     dds,
     analysis_name: str,
+    output_path: Path,
     with_text: bool = False,
-    output_path: Path = None,
     output_filename: str = None,
 ) -> Path:
     """Create PCA visualization from DESeq2 results.
@@ -701,8 +634,6 @@ def plot_pca_deseq2(
                 va="bottom",
             )
 
-    if output_path is None:
-        output_path = Path(__file__).parent.parent / "results" / "figures" / "deseq2"
     output_path.mkdir(parents=True, exist_ok=True)
 
     if output_filename is None:
@@ -713,16 +644,16 @@ def plot_pca_deseq2(
         fig.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Figure saved: {save_path}")
     finally:
-        plt.close()
+        plt.close(fig)
 
     return save_path
 
 
 def plot_go(
     go_df: pd.DataFrame,
+    output_path: Path,
+    output_filename: str,
     title: str = "Top 20 Significant GO Terms",
-    output_path: Path = None,
-    output_filename: str = None,
 ) -> Path:
     """Create horizontal bar plot of GO enrichment terms.
     """
@@ -771,18 +702,12 @@ def plot_go(
     fig.patch.set_facecolor("white")
     plt.tight_layout()
 
-    if output_path is None:
-        output_path = Path(__file__).parent.parent / "results" / "figures" / "go"
     output_path.mkdir(parents=True, exist_ok=True)
-
-    if output_filename is None:
-        output_filename = "go_enrichment.png"
-
     save_path = output_path / output_filename
     try:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
         print(f"Figure saved: {save_path}")
     finally:
-        plt.close()
+        plt.close(fig)
 
     return save_path
