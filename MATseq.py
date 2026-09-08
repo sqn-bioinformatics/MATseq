@@ -154,11 +154,7 @@ def run_pipeline(
         else:
             X_train, y_train = extract_subset(features, labels, "main_ligands")
             X_other, y_other = extract_subset(features, labels, "additional_ligands")
-            X_bact, y_bact = extract_subset(features, labels, "bacterial_ligands")
-
-    print("\n--- STEP 2: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ---")
-    de_dir = RESULTS_DIR / "differential_gene_expression"
-    de_dir.mkdir(parents=True, exist_ok=True)
+            X_bact, y_bact = extract_subset(features, labels, "bacterial_ligands")    
 
     subset_xy: dict[str, tuple[pd.DataFrame, pd.Series]] = {
         "train_ligands": (X_train, y_train),
@@ -166,49 +162,13 @@ def run_pipeline(
         "additional_ligands": (X_other, y_other),
         "bacterial_ligands": (X_bact, y_bact),
     }
-    pre = preprocessing_pipeline().set_output(transform="pandas")
-    fs_pipe = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(
-        transform="pandas"
-    )
-    fs_pipe.fit(X_train, y_train)
+
+    print("\n--- STEP 2: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ---")
+    de_dir = RESULTS_DIR / "differential_gene_expression"
+    de_dir.mkdir(parents=True, exist_ok=True)
 
     deseq2_tables: dict[str, DESeq2] = {}
     for subset, (X_sub, y_sub) in subset_xy.items():
-        print(f"\nProcessing {subset} subset...")
-        if subset in ["train_ligands", "test_ligands"]:
-            X_pca, y_pca = X_sub, y_sub
-        else:
-            X_pca = pd.concat([X_sub, X_train])
-            y_pca = pd.concat([y_sub, y_train])
-
-        X_pca_pre = pre.fit_transform(X_pca)
-        X_pca_selected = fs_pipe.transform(X_pca)
-        palette = SUBSET_PALETTES.get(subset, CUSTOM_PALETTE_9)
-        hue_order = CLASS_ORDER.get(subset)
-        for with_names, label_suffix in [(False, ""), (True, "_labeled")]:
-            plot_pca(
-                X=X_pca_pre,
-                labels=y_pca,
-                palette=palette,
-                hue_order=hue_order,
-                name=f"{subset}{label_suffix}",
-                with_sample_names=with_names,
-                output_filename=f"{subset}_pca{label_suffix}.png",
-                equal_aspect=True,
-            )
-            plot_pca(
-                X=X_pca_selected,
-                labels=y_pca,
-                palette=palette,
-                hue_order=hue_order,
-                name=f"{subset}_feature_selected{label_suffix}",
-                with_sample_names=with_names,
-                output_filename=(
-                    f"{subset}_feature_selected{label_suffix}.png"
-                ),
-                equal_aspect=True,
-            )
-
         deseq2 = DESeq2(
             raw_counts=X_sub,
             sample_labels=y_sub,
@@ -218,28 +178,30 @@ def run_pipeline(
             name=subset,
         )
         deseq2.run_analysis(
-            CLASS_ORDER[subset], negative_control="negative_control"
+            CLASS_ORDER[subset], class_to_compare_to="negative_control"
         )
         deseq2_tables[subset] = deseq2
-
         pd.Series(sorted(deseq2.get_de_genes()), name="gene").to_csv(
             de_dir / f"de_genes_{subset}.csv", index=False
         )
 
     deseq2_train = deseq2_tables["train_ligands"]
 
-    print("\n--- STEP 3: FINAL GENE NUMBER DETERMINATION ---")
+    print("\n--- STEP 3: FEATURE ENGINEERING GENE NUMBER DETERMINATION ---")
     out_dir = RESULTS_DIR / "feature_selection"
     fig_dir = RESULTS_DIR / "figures" / "feature_selection"
     out_dir.mkdir(parents=True, exist_ok=True)
     fig_dir.mkdir(parents=True, exist_ok=True)
 
-    mi_result = mutual_information(fs_pipe, X_train, y_train)
+    pre_pipe = preprocessing_pipeline().set_output(transform="pandas")
+    pre_pipe.fit(X_train, y_train)
+
+    mi_result = mutual_information(pre_pipe, X_train, y_train)
     mi_elbow = mi_result["mi_elbow"]
     print(f"  MI elbow (mean curve): {mi_elbow} genes")
 
     kmeans_result = forest_kmeans(
-        fs_pipe,
+        pre_pipe,
         X_train,
         y_train,
         grid=FOREST_SELECTION_GRID,
@@ -270,7 +232,52 @@ def run_pipeline(
         }
     )
 
-    print("\n--- STEP 4: FS vs DE VENN AND GO ---")
+    print("\n --- STEP 4: PLOT PCAs ---")
+    
+    pre_pipe = preprocessing_pipeline().set_output(transform="pandas")
+    fs_pipe = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(
+        transform="pandas"
+    )
+    fs_pipe.fit(X_train, y_train)
+
+    for subset, (X_sub, y_sub) in subset_xy.items():
+        print(f"\nProcessing {subset} subset...")
+        if subset in ["train_ligands", "test_ligands"]:
+            X_pca, y_pca = X_sub, y_sub
+        else:
+            # Showing where the other ligads land in relation to train clusters
+            X_pca = pd.concat([X_sub, X_train]) 
+            y_pca = pd.concat([y_sub, y_train])
+
+        X_pca_pre = pre.fit_transform(X_pca)
+        X_pca_selected = fs_pipe.transform(X_pca)
+        palette = SUBSET_PALETTES.get(subset, CUSTOM_PALETTE_9)
+        hue_order = CLASS_ORDER.get(subset)
+        for with_names, label_suffix in [(False, ""), (True, "labeled")]:
+            plot_pca(
+                X=X_pca_pre,
+                labels=y_pca,
+                palette=palette,
+                hue_order=hue_order,
+                name=f"{subset}_{label_suffix}",
+                with_sample_names=with_names,
+                output_filename=f"{subset}_pca_{label_suffix}.png",
+                equal_aspect=True,
+            )
+            plot_pca(
+                X=X_pca_selected,
+                labels=y_pca,
+                palette=palette,
+                hue_order=hue_order,
+                name=f"{subset}_feature_selected_{label_suffix}",
+                with_sample_names=with_names,
+                output_filename=(
+                    f"{subset}_feature_selected_{label_suffix}.png"
+                ),
+                equal_aspect=True,
+            )
+
+    print("\n--- STEP 5: FS vs DE VENN AND GO ---")
     fig_dir = RESULTS_DIR / "figures" / "venn"
     fig_dir.mkdir(parents=True, exist_ok=True)
     tables_dir = RESULTS_DIR / "fs_de_genesets"
@@ -313,7 +320,7 @@ def run_pipeline(
         tables_dir / "selected_vs_de_overlap_table.csv", index=False
     )
  
-    print("\n--- STEP 5: BEST PARMETER DETERMINATION WITH NESTED CV ---")
+    print("\n--- STEP 6: BEST PARMETER DETERMINATION WITH NESTED CV ---")
     model_dir = RESULTS_DIR / "models"
     model_dir.mkdir(parents=True, exist_ok=True)
     model_dir_wo = RESULTS_DIR / "models" / "no_flapa"
@@ -362,7 +369,7 @@ def run_pipeline(
         tables_dir / "supp_nested_cv_no_flapa.csv", index=False
     )
     
-    print("\n--- STEP 6: REFIT THE MODELS WITH BEST PARAMETERS ON GENESETS  ---")
+    print("\n--- STEP 7: REFIT THE MODELS WITH BEST PARAMETERS ON GENESETS  ---")
     geneset_model_dir = RESULTS_DIR / "models"
     geneset_model_dir.mkdir(parents=True, exist_ok=True)
     geneset_model_dir_wo = RESULTS_DIR / "models" / "no_flapa"
@@ -455,7 +462,7 @@ def run_pipeline(
         gene_trainer.save_models(geneset_model_dir / gene_set)
         geneset_trainers_wo[gene_set].save_models(geneset_model_dir_wo / gene_set)
 
-    print("\n--- STEP 7: VALIDATION ON TEST SET ---")
+    print("\n--- STEP 8: VALIDATION ON TEST SET ---")
     val_dir = RESULTS_DIR / "validation" / "test_set"
     val_dir_wo = RESULTS_DIR / "validation" / "test_set_no_flapa"
     validation_tables_dir = RESULTS_DIR / "validation"
@@ -526,7 +533,7 @@ def run_pipeline(
     external_perf_wo_df.to_csv(external_perf_wo_csv, index=False)
 
 
-    print("\n--- STEP 8: PREDICTIONS ON OTHER LIGANDS---")
+    print("\n--- STEP 9: PREDICTIONS ON OTHER LIGANDS---")
     predictions_dir = RESULTS_DIR / "predictions"
     predictions_dir.mkdir(parents=True, exist_ok=True)
     predictions_dir_wo = RESULTS_DIR / "predictions" / "no_flapa"
@@ -566,13 +573,13 @@ def run_pipeline(
                         filename=f"{model_name}_probabilities_heatmap.png",
                     )
 
-    print("\n--- STEP 9: TLR VISUALIZATION ---")
+    print("\n--- STEP 10: TLR VISUALIZATION ---")
     tlr2_df, tlr4_df, flapa_data = load_tlr_data(
         data_dir=Path(__file__).parent / "data" / "supplementary_data"
     )
     plot_tlr_hek_blue(tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png")
 
-    print("\n--- STEP 10: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
+    print("\n--- STEP 11: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
     manuscript_tables_dir = RESULTS_DIR / "tables"
     manuscript_tables_dir.mkdir(parents=True, exist_ok=True)
     composite_figures_dir = RESULTS_DIR / "tables"
