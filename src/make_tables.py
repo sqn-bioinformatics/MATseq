@@ -1,4 +1,4 @@
-"""Assemble and format the manuscript's tables from raw pipeline CSVs.
+"""Assemble and format the manuscript's tables from already-generated CSVs.
 
 The modelling code (MATseq.py -> src/model_training.py, src/pydeseq2.py,
 src/go_term_analysis.py) writes *raw* per-ligand / per-condition CSVs of
@@ -227,7 +227,7 @@ def format_table2(
     display[TABLE2_COLUMNS].to_csv(output_dir / "table2_formatted.csv", index=False)
     display[TABLE2_COLUMNS].to_excel(output_dir / "Table_2.xlsx", index=False)
 
-    _write_latex(fmt, output_dir / "table2.tex")
+    _write_xlsx(fmt, output_dir / "table2.xlsx")
     return fmt
 
 

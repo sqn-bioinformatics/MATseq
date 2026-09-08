@@ -73,6 +73,8 @@ from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 
 from .prediction import ModelPredictor
 
+from .make_tables import format_table2, assemble_supplementary_tables
+
 __all__ = [
     # Configuration
     "CUSTOM_PALETTE_9",
@@ -131,4 +133,7 @@ __all__ = [
     "create_fs_de_go_table",
     # Prediction and model comparison
     "ModelPredictor",
+    # Manuscript tables
+    "format_table2",
+    "assemble_supplementary_tables",
 ]
