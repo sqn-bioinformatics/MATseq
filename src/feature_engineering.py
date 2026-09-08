@@ -1,6 +1,5 @@
 from collections import defaultdict
 from functools import partial
-from pathlib import Path
 from typing import Dict, Sequence, Union
 
 import numpy as np
@@ -14,30 +13,22 @@ from sklearn.preprocessing import StandardScaler, FunctionTransformer
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.cluster import KMeans
 from sklearn.metrics import adjusted_rand_score
-from sklearn.utils.validation import (
-    _check_feature_names,
-    _check_n_features,
-)
 
 from .preprocessing import normalize_rpm
 
 SEEDS = (9419, 3374, 7796)
 
 
-def _record_input(estimator, X):
-    _check_n_features(estimator, X, reset=True)
-    _check_feature_names(estimator, X, reset=True)
-
-
 class LibraryLengthNormalizer(OneToOneFeatureMixin, BaseEstimator, TransformerMixin):
     """Normalize gene counts to library size (reads per million)."""
 
     def fit(self, X, y=None):
-        _record_input(self, X)
+        self.n_features_in_ = X.shape[1]
+        if hasattr(X, "columns"):
+            self.feature_names_in_ = np.asarray(X.columns, dtype=object)
         return self
 
     def transform(self, X):
-        """Normalize counts to library size (RPM)."""
         return normalize_rpm(X)
 
 
@@ -48,12 +39,9 @@ class ColumnSelector(BaseEstimator, TransformerMixin):
         self.genes = genes
 
     def fit(self, X, y=None):
-        if not isinstance(X, pd.DataFrame):
-            raise TypeError("ColumnSelector requires a DataFrame input")
-        self.columns_ = [g for g in list(self.genes) if g in X.columns]
+        self.columns_ = [g for g in self.genes if g in X.columns]
         if not self.columns_:
             raise ValueError("none of the requested genes are present in X")
-        _record_input(self, X)
         return self
 
     def transform(self, X):
@@ -104,8 +92,8 @@ def feature_pipeline(**kwargs) -> Pipeline:
 def selected_with_importance(fitted_pipeline: Pipeline) -> pd.DataFrame:
     """Extract selected genes ranked by ExtraTrees importance."""
     sfm = fitted_pipeline.named_steps["select_forest"]
-    names_in = np.asarray(fitted_pipeline[:-1].get_feature_names_out())
-    importances = np.asarray(sfm.estimator_.feature_importances_)
+    names_in = fitted_pipeline[:-1].get_feature_names_out()
+    importances = sfm.estimator_.feature_importances_
 
     support = sfm.get_support()
     genes = names_in[support]
@@ -120,14 +108,14 @@ def selected_with_importance(fitted_pipeline: Pipeline) -> pd.DataFrame:
         }
     )
 
+
 def mutual_information(
     fitted_pipeline: Pipeline,
     X: pd.DataFrame,
     y: Union[np.ndarray, pd.Series],
     seeds: Sequence[int] = SEEDS,
 ) -> Dict:
-    """MI curve over all genes plus its elbow, on the fitted preprocessing.
-    """
+    """MI curve over all genes plus its elbow, on the fitted preprocessing."""
     X_pre = fitted_pipeline.transform(X)
     mi_mean, per_run_elbows, curves = _mi_elbow_ranking(X_pre, y, seeds)
     mi_sorted = np.sort(mi_mean)[::-1]
@@ -139,6 +127,7 @@ def mutual_information(
         "per_run_elbows": per_run_elbows,
         "scores": pd.DataFrame(scores),
     }
+
 
 def elbow_index(scores) -> int:
     y = np.asarray(scores, dtype=float)
@@ -153,9 +142,9 @@ def elbow_index(scores) -> int:
     )
     return int(np.argmax(num)) + 1
 
+
 def _mi_elbow_ranking(X_pre, y, seeds: Sequence[int] = SEEDS):
-    """Per-seed MI; returns the gene-wise mean MI and the per-seed elbows.
-    """
+    """Per-seed MI; returns the gene-wise mean MI and the per-seed elbows."""
     curves = list(
         tqdm(
             Parallel(n_jobs=len(seeds), return_as="generator")(
@@ -170,6 +159,7 @@ def _mi_elbow_ranking(X_pre, y, seeds: Sequence[int] = SEEDS):
     )
     per_run_elbows = [elbow_index(np.sort(mi)[::-1]) for mi in curves]
     return np.mean(curves, axis=0), per_run_elbows, curves
+
 
 def forest_kmeans(
     fitted_pipeline: Pipeline,
@@ -216,8 +206,8 @@ def forest_kmeans(
             labels = KMeans(
                 n_clusters=n_classes, n_init=10, random_state=seed
             ).fit_predict(X_k[cols])
-            rows[(int(n_estimators), int(max_depth), n_selected)].append(
-                float(adjusted_rand_score(y, labels))
+            rows[(n_estimators, max_depth, n_selected)].append(
+                adjusted_rand_score(y, labels)
             )
 
     ari_cols = [f"ari_seed_{seed}" for seed in seeds]
