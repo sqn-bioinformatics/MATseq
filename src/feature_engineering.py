@@ -253,7 +253,7 @@ def forest_kmeans(
             }
             for (ne, md, ns), aris in rows.items()
         ]
-    )
+    ).sort_values(["n_estimators", "max_depth", "n_selected"]).reset_index(drop=True)
 
     best_row = best_forest_row(scan)
     best = {
@@ -262,4 +262,4 @@ def forest_kmeans(
         "n_selected": int(best_row["n_selected"]),
         "ari": float(best_row["ari_mean"]),
     }
-    return {"best": best, "scan": scan}
+    return {"best": best, "plateau": best["n_selected"], "scan": scan}

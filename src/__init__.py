@@ -2,7 +2,21 @@
 
 __version__ = "0.1.0"
 
-# Import commonly used functions and classes
+from .config import (
+    CUSTOM_PALETTE_9,
+    SUBSET_PALETTES,
+    CLASS_ORDER,
+    DESEQ2_CONFIG,
+    FEATURE_SELECTION_CONFIG,
+    MODEL_FACTORY_CONFIG,
+    MODEL_TRAINING_CONFIG,
+    HYPERPARAMETER_GRIDS,
+    LIGAND_ALIASES,
+    MAIN_LIGANDS,
+    ADDITIONAL_LIGANDS,
+    BACTERIAL_LIGANDS,
+)
+
 from .preprocessing import (
     prepare_counts,
     load_featurecounts,
@@ -11,8 +25,6 @@ from .preprocessing import (
     extract_subset,
     normalize_rpm,
 )
-
-from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 
 from .feature_engineering import (
     LibraryLengthNormalizer,
@@ -30,20 +42,7 @@ from .model_training import (
     ModelTrainer,
 )
 
-from .config import (
-    CUSTOM_PALETTE_9,
-    SUBSET_PALETTES,
-    CLASS_ORDER,
-    DESEQ2_CONFIG,
-    FEATURE_SELECTION_CONFIG,
-    MODEL_FACTORY_CONFIG,
-    MODEL_TRAINING_CONFIG,
-    HYPERPARAMETER_GRIDS,
-    LIGAND_ALIASES,
-    MAIN_LIGANDS,
-    ADDITIONAL_LIGANDS,
-    BACTERIAL_LIGANDS,
-)
+
 
 from .pydeseq2 import (
     DataProcessor as DESeq2DataProcessor,
@@ -70,8 +69,8 @@ from .go_term_analysis import (
     merge_go_tables,
     create_fs_de_go_table,
 )
+from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 
-# Prediction and model comparison
 from .prediction import ModelPredictor
 
 __all__ = [

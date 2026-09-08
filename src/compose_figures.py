@@ -4,9 +4,11 @@ Run as MATseq.py step 10, once every panel figure (DESeq2, PCA, GO, venn,
 prediction and validation heatmaps) has been written. No numbers are produced
 here: panels are only cropped, ordered and lettered.
 
-Ligand and model order come from the config (``class_order_for_plotting``,
-``ligands`` and ``hyperparameter_grids``), so a change there propagates to the
-composed pages. Most pages hold at most four panels so they drop cleanly onto
+Model order and the external-batch ligand order come from the config
+(``hyperparameter_grids``, ``class_order_for_plotting``); the per-ligand DESeq2
+pages follow ``make_tables.S1_LIGAND_ORDER``, so Supplementary Figure 1 and
+Supplementary Table S1 present their blocks in the same order. Most pages hold
+at most four panels so they drop cleanly onto
 one Word page; the model-comparison pages carry PCA plus all five models. Panel
 white margins are auto-cropped to remove inter-panel whitespace, panel letters
 run in sequence across the split pages of a figure, and missing panels are
@@ -27,15 +29,13 @@ from matplotlib.figure import Figure
 from matplotlib.patches import FancyArrow, FancyBboxPatch
 
 from .config import (
-    ADDITIONAL_LIGANDS,
-    BACTERIAL_LIGANDS,
     CLASS_ORDER,
     FEATURE_SELECTION_CONFIG,
     HYPERPARAMETER_GRIDS,
-    MAIN_LIGANDS,
     primary_geneset_name,
 )
 from .feature_engineering import SEEDS
+from .make_tables import S1_LIGAND_ORDER
 
 PROJECT_ROOT = Path(__file__).parent.parent
 RESULTS = PROJECT_ROOT / "results"
@@ -50,20 +50,15 @@ MODEL_TITLES = {
     "RandomForest": "Random Forest",
     "XGBoost": "XGBoost",
 }
-DE_SUBSET_LIGANDS = {
-    "train_ligands": MAIN_LIGANDS,
-    "test_ligands": MAIN_LIGANDS,
-    "additional_ligands": ADDITIONAL_LIGANDS,
-    "bacterial_ligands": BACTERIAL_LIGANDS,
-}
 
 
-def _load_cropped(path: Path, pad: int = 6) -> np.ndarray:
+def _load_cropped(path: Path) -> np.ndarray:
     """Read an image and trim its uniform white border."""
+    pad = 6
     img = mpimg.imread(str(path))
-    a = img.astype(float)
+    a = img.astype(np.float32)
     if a.max() > 1.0:
-        a = a / 255.0
+        a /= 255.0
     rgb = a[..., :3] if a.ndim == 3 else np.dstack([a] * 3)
     nonwhite = (rgb < 0.97).any(axis=2)
     if a.ndim == 3 and a.shape[2] == 4:
@@ -110,14 +105,16 @@ def _save(fig: Figure, out_path: Path) -> Path:
     return out_path
 
 
-def _row_page(paths: list[Path], titles: list[str | None], letters: list[str | None],
-              out_path: Path, height: float = 4.6) -> Path:
-    """One tight row; column widths track each cropped image so panels abut."""
-    wr = [_aspect(p) for p in paths]
-    fig = plt.figure(figsize=(height * sum(wr), height))
-    gs = fig.add_gridspec(1, len(paths), width_ratios=wr, wspace=0.03)
+def _grid_page(paths: list[Path], titles: list[str | None], letters: list[str],
+               out_path: Path, ncols: int, height: float = 4.4) -> Path:
+    """Lay panels out row-major; column widths track the widest cropped panel."""
+    nrows = -(-len(paths) // ncols)
+    wr = [max(_aspect(p) for p in paths[c::ncols]) for c in range(ncols)]
+    fig = plt.figure(figsize=(height * sum(wr), height * nrows))
+    gs = fig.add_gridspec(nrows, ncols, width_ratios=wr, wspace=0.04, hspace=0.12)
     for i, (p, t, l) in enumerate(zip(paths, titles, letters)):
-        ax = fig.add_subplot(gs[0, i])
+        r, c = divmod(i, ncols)
+        ax = fig.add_subplot(gs[r, c])
         _place_image(ax, p, t)
         _letter(ax, l)
     return _save(fig, out_path)
@@ -157,39 +154,30 @@ def _draw_pipeline_schematic(ax: Axes) -> None:
 
 
 def _model_grid_page(pca_png: Path, pca_title: str, pred_dir: Path,
-                     letters: list[str], out_path: Path, ncols: int = 3,
-                     height: float = 4.4) -> Path:
-    """PCA plus every model's probability heatmap on one page (2 rows x ncols)."""
-    paths = [pca_png] + [pred_dir / f"{m}_probabilities_heatmap.png" for m in MODELS]
-    titles = [pca_title] + [MODEL_TITLES[m] for m in MODELS]
-    nrows = -(-len(paths) // ncols)
-    wr = []
-    for c in range(ncols):
-        col = [_aspect(paths[r * ncols + c]) for r in range(nrows)
-               if r * ncols + c < len(paths)]
-        wr.append(max(col) if col else 1.0)
-    fig = plt.figure(figsize=(height * sum(wr), height * nrows))
-    gs = fig.add_gridspec(nrows, ncols, width_ratios=wr, wspace=0.04, hspace=0.12)
-    for i, (p, t, l) in enumerate(zip(paths, titles, letters)):
-        r, c = divmod(i, ncols)
-        ax = fig.add_subplot(gs[r, c])
-        _place_image(ax, p, t)
-        _letter(ax, l)
-    return _save(fig, out_path)
+                     letters: list[str], out_path: Path) -> Path:
+    """PCA plus every model's probability heatmap on one page."""
+    return _grid_page(
+        [pca_png] + [pred_dir / f"{m}_probabilities_heatmap.png" for m in MODELS],
+        [pca_title] + [MODEL_TITLES.get(m, m) for m in MODELS],
+        letters, out_path, ncols=3,
+    )
 
 
 def _prediction_pages(base: str, pred_root: Path, out_dir: Path) -> list[Path]:
-    """One page per prediction subset; each shows PCA plus all five models."""
+    """One page per prediction subset; each shows PCA plus every model."""
     specs = [
-        ("unseen ligands", "additional_ligands", list("ABCDEF"), f"{base}_p1.png"),
-        ("heat-killed bacteria", "bacterial_ligands", list("GHIJKL"), f"{base}_p2.png"),
+        ("unseen ligands", "additional_ligands"),
+        ("heat-killed bacteria", "bacterial_ligands"),
     ]
+    n_panels = len(MODELS) + 1
     return [
         _model_grid_page(
             FIG / "pca" / f"{subset}_feature_selected.png", f"PCA ({label})",
-            pred_root / subset, letters, out_dir / fname,
+            pred_root / subset,
+            list(ascii_uppercase[i * n_panels:(i + 1) * n_panels]),
+            out_dir / f"{base}_p{i + 1}.png",
         )
-        for label, subset, letters, fname in specs
+        for i, (label, subset) in enumerate(specs)
     ]
 
 
@@ -199,6 +187,7 @@ def _paginate_de(rows: list[tuple[str, str]], base: str, out_dir: Path) -> list[
     de0 = FIG / "deseq2" / rows[0][1]
     wr = [_aspect(de0 / f"{rows[0][0]}_volcano.png"),
           _aspect(de0 / f"{rows[0][0]}_histogram.png")]
+    letters = iter(ascii_uppercase)
     outs = []
     for ci, chunk in enumerate(chunks):
         fig = plt.figure(figsize=(12, 5.4 * len(chunk)))
@@ -209,8 +198,8 @@ def _paginate_de(rows: list[tuple[str, str]], base: str, out_dir: Path) -> list[
             ax1 = fig.add_subplot(gs[r, 1])
             _place_image(ax0, de / f"{ligand}_volcano.png")
             _place_image(ax1, de / f"{ligand}_histogram.png")
-            _letter(ax0, ascii_uppercase[4 * ci + 2 * r])
-            _letter(ax1, ascii_uppercase[4 * ci + 2 * r + 1])
+            _letter(ax0, next(letters))
+            _letter(ax1, next(letters))
         fname = f"{base}.png" if len(chunks) == 1 else f"{base}_p{ci + 1}.png"
         outs.append(_save(fig, out_dir / fname))
     return outs
@@ -219,9 +208,9 @@ def _paginate_de(rows: list[tuple[str, str]], base: str, out_dir: Path) -> list[
 def compose_figure2(out_dir: Path = OUT) -> list[Path]:
     """LPS DESeq2 on the training batch: A) volcano, B) clustered heatmap."""
     de = FIG / "deseq2" / "train_ligands"
-    return [_row_page(
+    return [_grid_page(
         [de / "LPS_volcano.png", de / "LPS_histogram.png"],
-        [None, None], ["A", "B"], out_dir / "Figure2.png", height=5.2)]
+        [None, None], ["A", "B"], out_dir / "Figure2.png", ncols=2, height=5.2)]
 
 
 def compose_figure3(out_dir: Path = OUT) -> list[Path]:
@@ -267,7 +256,8 @@ def compose_figure4a(out_dir: Path = OUT) -> list[Path]:
            / "test_ligands")
     return [_model_grid_page(
         FIG / "pca" / "test_ligands_feature_selected.png",
-        "PCA (external test batch)", val, list("ABCDEF"),
+        "PCA (external test batch)", val,
+        list(ascii_uppercase[:len(MODELS) + 1]),
         out_dir / "Figure4a_external_test.png")]
 
 
@@ -275,10 +265,8 @@ def compose_supp_figure1(out_dir: Path = OUT) -> list[Path]:
     """DESeq2 volcano and heatmap for every stimulus except LPS (Figure 2)."""
     rows = [
         (ligand, subset)
-        for subset in ("train_ligands", "additional_ligands", "bacterial_ligands")
-        for ligand in CLASS_ORDER[subset]
-        if ligand in DE_SUBSET_LIGANDS[subset]
-        and ligand not in ("negative_control", "LPS")
+        for subset, ligand, _ in S1_LIGAND_ORDER
+        if ligand != "LPS"
     ]
     return _paginate_de(rows, "SupplementaryFigure1", out_dir)
 
@@ -305,7 +293,7 @@ def compose_supp_figure4_external_de(out_dir: Path = OUT) -> list[Path]:
     rows = [
         (ligand, "test_ligands")
         for ligand in CLASS_ORDER["test_ligands"]
-        if ligand in DE_SUBSET_LIGANDS["test_ligands"] and ligand != "negative_control"
+        if ligand != "negative_control"
     ]
     return _paginate_de(rows, "SupplementaryFigure4_external_DE", out_dir)
 
@@ -313,9 +301,10 @@ def compose_supp_figure4_external_de(out_dir: Path = OUT) -> list[Path]:
 def compose_supp_figure5(out_dir: Path = OUT) -> list[Path]:
     """Gene-number selection: A) MI elbow curve, B) forest/k-means ARI sweep."""
     fs = FIG / "feature_selection"
-    return [_row_page(
+    return [_grid_page(
         [fs / "mutual_information.png", fs / "forest_ari_sweep.png"],
-        [None, None], ["A", "B"], out_dir / "SupplementaryFigure5.png")]
+        [None, None], ["A", "B"], out_dir / "SupplementaryFigure5.png",
+        ncols=2, height=4.6)]
 
 
 def compose_figures(out_dir: Path = OUT) -> list[Path]:
