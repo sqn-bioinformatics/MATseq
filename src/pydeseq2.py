@@ -189,15 +189,15 @@ class DESeq2:
         self._geneid_symbol_mapper = None
 
     def run_analysis(
-        self, class_list: list[str], negative_control: str = "negative_control"
+        self, class_list: list[str], class_to_compare_to: str = "negative_control"
     ) -> dict:
-        """Run DESeq2 analysis for all class pairs with negative control.
+        """Run DESeq2 analysis against a condition/class.
         """
         present = set(self.sample_labels.unique())
         filtered_list = [
-            c for c in class_list if c != negative_control and c in present
+            c for c in class_list if c != class_to_compare_to and c in present
         ]
-        pairs = [[my_class, negative_control] for my_class in filtered_list]
+        pairs = [[my_class, class_to_compare_to] for my_class in filtered_list]
 
         for class_pair in pairs:
             ligand_name = class_pair[0]

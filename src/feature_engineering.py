@@ -68,7 +68,6 @@ def preprocessing_pipeline() -> Pipeline:
         [
             ("normalise_for_library_size", LibraryLengthNormalizer()),
             ("log1p", FunctionTransformer(np.log1p, feature_names_out="one-to-one")),
-            ("standard_scale", StandardScaler()),
         ]
     )
 
@@ -128,7 +127,7 @@ def mutual_information(
 ) -> Dict:
     """MI curve over all genes plus its elbow, on the fitted preprocessing.
     """
-    X_pre = fitted_pipeline[:-2].transform(X)
+    X_pre = fitted_pipeline.transform(X)
     print(f"  Ranking {X_pre.shape[1]} genes over {len(seeds)} seeds")
     mi_mean, per_run_elbows, curves = _mi_elbow_ranking(X_pre, y, seeds)
     mi_sorted = np.sort(mi_mean)[::-1]
@@ -199,7 +198,7 @@ def forest_kmeans(
     Each grid cell is scored once per seed, seeding both the ExtraTrees
     ranking and the KMeans run, and ranked on the mean ARI across seeds.
     """
-    X_pre = fitted_pipeline[:-2].transform(X)
+    X_pre = fitted_pipeline.transform(X)
     print(f"  Ranking {X_pre.shape[1]} genes by mutual information for the scan")
     X_k = (
         SelectKBest(
