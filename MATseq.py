@@ -232,9 +232,10 @@ def run_pipeline(
         }
     )
 
-    print("\n --- STEP 4: PLOT PCAs ---")
-    
-    pre_pipe = preprocessing_pipeline().set_output(transform="pandas")
+    print("\n --- STEP 4: PLOT PCA GRAPHS ---")
+    pca_dir = RESULTS_DIR / "figures" / "pca"
+    pca_dir.mkdir(parents=True, exist_ok=True)
+
     fs_pipe = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(
         transform="pandas"
     )
@@ -245,11 +246,13 @@ def run_pipeline(
         if subset in ["train_ligands", "test_ligands"]:
             X_pca, y_pca = X_sub, y_sub
         else:
-            # Showing where the other ligands clusters land
+            # Showing where the other ligands clusters land compared to train
             y_pca = pd.concat([y_sub, y_train])
 
-        X_pca_pre = pre.fit_transform(X_pca)
-        X_pca_selected = fs_pipe.transform(X_pca)
+        X_pca_pre = pre_pipe.fit_transform(X_pca) # Refitting on each subset
+
+        # The fs_pipe is fit once to train to keep parameters constant
+        X_pca_selected = fs_pipe.transform(X_pca) 
         palette = SUBSET_PALETTES.get(subset, CUSTOM_PALETTE_9)
         hue_order = CLASS_ORDER.get(subset)
         for with_names, label_suffix in [(False, ""), (True, "labeled")]:
@@ -260,6 +263,7 @@ def run_pipeline(
                 hue_order=hue_order,
                 name=f"{subset}_{label_suffix}",
                 with_sample_names=with_names,
+                output_path=pca_dir,
                 output_filename=f"{subset}_pca_{label_suffix}.png",
                 equal_aspect=True,
             )
@@ -270,6 +274,7 @@ def run_pipeline(
                 hue_order=hue_order,
                 name=f"{subset}_feature_selected_{label_suffix}",
                 with_sample_names=with_names,
+                output_path=pca_dir,
                 output_filename=(
                     f"{subset}_feature_selected_{label_suffix}.png"
                 ),

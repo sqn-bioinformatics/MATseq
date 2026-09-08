@@ -350,8 +350,7 @@ def plot_forest_ari_sweep(
     return save_path
 
 def draw_pca(ax, X_reduced, label_values, palette=None,
-             hue_order=None, with_sample_names=False, sample_names=None,
-             equal_aspect=True, title=None, marker_size=80):
+             hue_order=None, with_sample_names=False, sample_names=None, title=None):
     """Render a 2-component PCA scatter on ``ax``.
     """
     sns.scatterplot(
@@ -359,7 +358,7 @@ def draw_pca(ax, X_reduced, label_values, palette=None,
         y=X_reduced[:, 1],
         hue=label_values,
         hue_order=hue_order,
-        s=200 if with_sample_names else marker_size,
+        s=200 if with_sample_names else 80,
         alpha=0.6,
         palette=palette,
         ax=ax,
@@ -394,9 +393,8 @@ def draw_pca(ax, X_reduced, label_values, palette=None,
     for spine in ["left", "bottom"]:
         ax.spines[spine].set_linewidth(1.5)
 
-    if equal_aspect:
-        ax.set_aspect("equal", adjustable="datalim")
-        ax.set_box_aspect(1)
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.set_box_aspect(1)
     return ax
 
 
@@ -405,6 +403,7 @@ def plot_pca(
     X: pd.DataFrame,
     labels: Union[pd.DataFrame, np.ndarray],
     with_sample_names: bool = False,
+    output_path: Path = None,
     output_filename: str = None,
     palette: str = None,
     hue_order: list = None,
@@ -447,15 +446,10 @@ def plot_pca(
         )
         plt.tight_layout()
 
-        project_root = Path(__file__).parent.parent
-        output_path = project_root / "results" / "figures" / "pca"
+        if output_path is None:
+            project_root = Path(__file__).parent.parent
+            output_path = project_root / "results" / "figures" / "pca"
         output_path.mkdir(parents=True, exist_ok=True)
-
-        if output_filename is None:
-            output_filename = (
-                f"{name}_pca_labeled.png" if with_sample_names else f"{name}_pca.png"
-            )
-
         save_path = output_path / output_filename
         try:
             _savefig_with_arrow_fallback(save_path, dpi=300, bbox_inches="tight")
