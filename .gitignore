@@ -68,3 +68,6 @@ paper/*
 
 #ignore scripts
 scripts/*
+
+#temp ignore uplading folder
+tessafanasyeva@orcid/*

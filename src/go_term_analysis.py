@@ -259,7 +259,7 @@ def create_fs_de_go_table(
     if not go_df_intersect.empty:
         plot_go(
             go_df_intersect,
-            title="DE ∩ FS Top 20 Significant GO Terms",
+            condition="DE ∩ FS",
             output_path=go_fig_dir,
             output_filename="de_intersect_fs_go.png",
         )
@@ -267,7 +267,7 @@ def create_fs_de_go_table(
     if not go_df_fs_only.empty:
         plot_go(
             go_df_fs_only,
-            title="FS \\ DE Top 20 Significant GO Terms",
+            condition="FS \\ DE",
             output_path=go_fig_dir,
             output_filename="fs_only_go.png",
         )

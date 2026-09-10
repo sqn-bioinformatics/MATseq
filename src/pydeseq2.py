@@ -254,7 +254,7 @@ class DESeq2:
             if not go_df.empty:
                 plot_go(
                     go_df,
-                    title=f"{ligand_name} Top 20 Significant GO Terms",
+                    condition=ligand_name,
                     output_path=self.go_fig_dir,
                     output_filename=f"{ligand_name}_go.png",
                 )

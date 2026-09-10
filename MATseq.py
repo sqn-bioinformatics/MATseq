@@ -208,18 +208,9 @@ def run_pipeline(
     )
     mi_result["scores"].to_csv(out_dir / "mutual_information.csv", index=False)
     kmeans_result["scan"].to_csv(out_dir / "forest_kmeans.csv", index=False)
-    
-    best = kmeans_result["best"]
-    n_genes = kmeans_result["plateau"]
 
     plot_mutual_information(mi_result, fig_dir)
-    plot_forest_ari_sweep(kmeans_result["scan"], fig_dir, selected=n_genes)
-
-    print(
-        f"  Best by ARI: n_estimators={best['n_estimators']}, "
-        f"max_depth={best['max_depth']} (ARI={best['ari']:.3f})"
-    )
-    print(f"  Plateau gene count (max_features): {n_genes}")
+    plot_forest_ari_sweep(kmeans_result["scan"], fig_dir)
 
     update_config(
         {

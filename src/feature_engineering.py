@@ -69,7 +69,9 @@ def selection_pipeline(
     random_state: int = 42,
 ) -> Pipeline:
     en = ExtraTreesClassifier(
-        n_estimators=n_estimators, max_depth=max_depth, random_state=random_state
+        n_estimators=n_estimators, max_depth=max_depth,
+        random_state=random_state, 
+        n_jobs=-1, class_weight="balanced"
     )
     score_func = partial(mutual_info_classif, random_state=random_state)
     return Pipeline(

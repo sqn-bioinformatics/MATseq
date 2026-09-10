@@ -238,16 +238,14 @@ def plot_mutual_information(
 
     fig, ax1 = plt.subplots(figsize=(8, 5))
     scores = result["scores"]
-    ax1.plot(scores["rank"], scores["mi_sorted"], label="mutual information")
+    ax1.plot(scores["rank"], scores["mi_sorted"])
     ax1.axvline(
-        mi_elbow, color="C0", ls="--", label=f"MI elbow (mean {mi_elbow})"
+        mi_elbow, color="r", ls="--", label=f"mean elbow = {mi_elbow}"
     )
-    ax1.set_xlabel("gene rank")
-    ax1.set_ylabel("sorted mutual information")
-    ax1.set_title(
-        f"Mutual information elbow: {mi_elbow} genes (per-seed: {per_run_elbows})"
-    )
-    ax1.legend()
+    ax1.set_xlabel("Gene rank")
+    ax1.set_ylabel("Mutual information")
+    ax1.legend(frameon=False, loc="upper right")
+    ax1.spines[["top", "right"]].set_visible(False)
 
     save_path = output_path / output_filename
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -260,7 +258,6 @@ def plot_mutual_information(
 def plot_forest_ari_sweep(
     scan: pd.DataFrame,
     output_path: Path,
-    selected: int,
     output_filename: str = "forest_ari_sweep.png",
     title: str = "Gene-count sweep by k-means separation",
 ) -> Path:
@@ -286,9 +283,6 @@ def plot_forest_ari_sweep(
         gene_counts, means, marker="_", s=420, color="#d62728",
         linewidth=2, zorder=4, label="mean",
     )
-    ax.axvline(selected, color="#d62728", ls="--", alpha=0.5, zorder=1,
-               label=f"selected ({selected})")
-
     ax.set_title(title, fontsize=12, pad=8)
     ax.set_xlabel("Number of selected genes")
     ax.set_ylabel("Adjusted Rand Index\n(k-means vs. ligand class)")
@@ -336,13 +330,17 @@ def draw_pca(ax, X_reduced, label_values, palette=None,
 
     handles, labels_txt = ax.get_legend_handles_labels()
     if handles:
+        # Place the legend OUTSIDE the axes, anchored to the top-right corner
+        # of the (fixed-square) PCA box. The collage reserves gutter space to
+        # the right of the PCA panel (see assemble_panel_collage wspace) so the
+        # legend clears the neighbouring confusion matrix and no class name is
+        # truncated, while never overlapping the scatter points.
         _leg_labels = ["NC" if lb == "Negative Control" else lb
                        for lb in display_labels(labels_txt)]
         ax.legend(handles, _leg_labels,
-                  loc="lower right",
-                  ncol=1, fontsize=8,
-                  frameon=True, framealpha=0.85, edgecolor="none",
-                  handletextpad=0.4, borderaxespad=0.5)
+                  loc="upper left", bbox_to_anchor=(1.02, 1.0),
+                  borderaxespad=0, ncol=1, fontsize=9,
+                  frameon=False, handletextpad=0.4)
 
     for spine in ["top", "right"]:
         ax.spines[spine].set_visible(False)
@@ -653,20 +651,18 @@ def plot_go(
     go_df: pd.DataFrame,
     output_path: Path,
     output_filename: str,
-    title: str = "Top 20 Significant GO Terms",
+    condition: str,
+    title: str = "Enriched GO Terms",
 ) -> Path:
     """Create horizontal bar plot of GO enrichment terms.
     """
-    if go_df.empty:
-        raise ValueError("No GO enrichment terms to plot")
-
-    go_terms = go_df.head(20).copy()
+    go_terms = go_df.head(15).copy()
     go_terms = go_terms.sort_values("ratio_in_study", ascending=False)
 
     if len(go_terms) == 0:
         raise ValueError("No GO terms remaining after filtering")
 
-    norm = mpl.colors.Normalize(vmin=go_terms.fdr.min(), vmax=go_terms.fdr.max())
+    norm = mpl.colors.LogNorm(vmin=go_terms.fdr.min(), vmax=go_terms.fdr.max())
     color_mapper = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.bwr_r)
 
     fig = plt.figure(figsize=(8, 10))
@@ -679,25 +675,26 @@ def plot_go(
     )
 
     ax.set_yticklabels([textwrap.fill(term, 40) for term in go_terms["term"]])
-    ax.set_xlabel("Gene Ratio (n_genes in term / n_study genes)", fontsize=12)
+    ax.set_xlabel("Gene Ratio (n_genes in term / n_study genes)", fontsize=10)
     ax.set_ylabel("")
-    ax.set_title(title, fontsize=14, fontweight="bold")
-    ax.grid(True, alpha=0.3, linestyle="-", linewidth=0.5, axis="x")
+    ax.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter("%.2f"))
+    full_title = f"{condition} {title}"
+    ax.set_title(full_title, fontsize=12)
 
     cbar = fig.colorbar(
         color_mapper,
         ax=ax,
         orientation="vertical",
-        pad=0.01,
-        format=mpl.ticker.LogFormatterSciNotation(),
+        pad=0.02,
+        fraction=0.03,
+        aspect=60,
     )
-    cbar.ax.set_position([0.8, 0.5, 0.2, 0.3])
-    cbar.ax.set_title("padj", loc="left", pad=4.0)
+    cbar.outline.set_visible(False)
+    cbar.ax.tick_params(labelsize=8)
+    cbar.set_label("FDR (adjusted p)", fontsize=10)
 
     for spine in ["top", "right"]:
         ax.spines[spine].set_visible(False)
-    for spine in ["left", "bottom"]:
-        ax.spines[spine].set_linewidth(1.5)
 
     fig.patch.set_facecolor("white")
     plt.tight_layout()
