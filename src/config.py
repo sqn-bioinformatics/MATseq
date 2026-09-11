@@ -56,7 +56,6 @@ _config = _load_config()
 
 DESEQ2_CONFIG = _config["deseq2"]
 FEATURE_SELECTION_CONFIG = _config["feature_selection"]
-MODEL_FACTORY_CONFIG = _config["model_factory"]
 MODEL_TRAINING_CONFIG = _config["model_training"]
 HYPERPARAMETER_GRIDS = _config["hyperparameter_grids"]
 _PALETTES = _config["colors"]
@@ -82,17 +81,6 @@ def get_config(key: str) -> Any:
         except (TypeError, KeyError):
             raise KeyError(f"Config key '{key}' not found")
     return config
-
-def update_config(updates: dict) -> None:
-    """Merge updates into config.json's feature_selection block and write it back."""
-    config_path = _find_config_path()
-    with config_path.open() as f:
-        config = json.load(f)
-    config.setdefault("feature_selection", {}).update(updates)
-    with config_path.open("w") as f:
-        json.dump(config, f, indent=2)
-    FEATURE_SELECTION_CONFIG.update(updates)
-
 
 def primary_geneset_name() -> str:
     """Geneset key for the full tuned selection, e.g. 'selected_130' (= n_selected)."""

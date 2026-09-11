@@ -9,7 +9,6 @@ from .config import (
     SUBSET_DISPLAY_NAMES,
     DESEQ2_CONFIG,
     FEATURE_SELECTION_CONFIG,
-    MODEL_FACTORY_CONFIG,
     MODEL_TRAINING_CONFIG,
     HYPERPARAMETER_GRIDS,
     LIGAND_ALIASES,
@@ -36,13 +35,7 @@ from .feature_engineering import (
     forest_kmeans,
 )
 
-from .model_training import (
-    make_score,
-    ModelFactory,
-    ModelTrainer,
-)
-
-
+from .model_training import ModelTrainer
 
 from .pydeseq2 import (
     DataProcessor as DESeq2DataProcessor,
@@ -69,7 +62,7 @@ from .go_term_analysis import (
 )
 from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 
-from .prediction import ModelPredictor
+from .prediction import predict_samples
 
 from .make_tables import format_table2, assemble_supplementary_tables
 
@@ -81,7 +74,6 @@ __all__ = [
     "SUBSET_DISPLAY_NAMES",
     "DESEQ2_CONFIG",
     "FEATURE_SELECTION_CONFIG",
-    "MODEL_FACTORY_CONFIG",
     "MODEL_TRAINING_CONFIG",
     "HYPERPARAMETER_GRIDS",
     "LIGAND_ALIASES",
@@ -104,10 +96,7 @@ __all__ = [
     "mutual_information",
     "forest_kmeans",
     # Model training
-    "ModelFactory",
     "ModelTrainer",
-    # Evaluation
-    "make_score",
     # DESeq2 analysis
     "DESeq2DataProcessor",
     "DESeq2",
@@ -127,8 +116,8 @@ __all__ = [
     "run_go_analysis",
     "merge_go_tables",
     "create_fs_de_go_table",
-    # Prediction and model comparison
-    "ModelPredictor",
+    # Prediction
+    "predict_samples",
     # Manuscript tables
     "format_table2",
     "assemble_supplementary_tables",

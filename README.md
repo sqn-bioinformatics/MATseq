@@ -99,7 +99,6 @@ MATseq will attempt to download these files automatically if missing (may be slo
 
 **Model training:**
 - `model_training.random_state`: Reproducibility seed for training and CV splits
-- `model_factory.calibrate`: Probability-calibrate the LinearSVC (CalibratedClassifierCV)
 - `hyperparameter_grids`: Per-model search grids used by the nested cross-validation
 
 ### Main Pipeline
@@ -125,12 +124,12 @@ cached under `results/cache`; rerun with `--force-recompute` to ignore the cache
    - Compare the union of selected genes against the DESeq2 DE genes (Venn diagram)
    - Gene-frequency table; GO enrichment on DE ∩ FS and FS \ DE gene sets
 
-4. **Nested CV tuning + deployment refit** (main panel, with and without Fla-PA)
+4. **Nested CV tuning + refit per gene set** (main panel, with and without Fla-PA)
    - Nested stratified CV (5 outer, 3 inner) tuning LinearSVC, SGDClassifier, LogisticRegression, RandomForest, XGBoost
    - Feature selection is embedded in the cross-validation pipeline and re-fit on each outer training fold only (no test-fold information reaches selection), so reported metrics are leakage-free
    - Inner `GridSearchCV` tunes classifier hyperparameters on macro F1
    - Class imbalance handled with balanced class/sample weights (no SMOTE)
-   - Deployment hyperparameters chosen by majority vote across outer folds, then refit on the full panel
+   - Hyperparameters chosen by majority vote across outer folds, then refit on the full panel for each gene set
    - Writes per-fold and pooled out-of-fold metrics, confusion matrices, and `selected_params.json`
    - A second model set is trained on the main panel excluding Fla-PA
 
@@ -181,18 +180,17 @@ results/
 │   └── Supplementary_Table_{1..12}.csv      # Publication supplementary tables
 ├── feature_analysis/
 │   └── gene_frequency_table.csv            # Gene selection frequency across 1000 runs
-├── models/                                 # Deployed main-panel models
-│   ├── label_encoder.pkl
-│   ├── {model}.pkl
-│   └── no_flapa/                           # Models trained without Fla-PA
-│       ├── label_encoder.pkl
-│       └── {model}.pkl
+├── models/                                 # Main-panel models refit per gene set
+│   ├── {gene_set}/
+│   │   ├── label_encoder.pkl
+│   │   └── {model}.pkl
+│   └── no_flapa/{gene_set}/                # Models trained without Fla-PA
 ├── hyperparameter_tuning/                  # Nested CV outputs (main panel)
 │   ├── nested_cv_per_fold.csv
-│   ├── nested_cv_summary.csv
-│   ├── {prefix}oof_predictions.csv         # Pooled out-of-fold predictions
-│   ├── {prefix}{model}_classification_report.csv
-│   ├── selected_params.json                # Deployment hyperparameters
+│   ├── oof_predictions.csv                 # Pooled out-of-fold predictions
+│   ├── {model}_classification_report.csv
+│   ├── {model}_confusion_matrix.csv
+│   ├── selected_params.json                # Selected hyperparameters
 │   └── inner_cv_results/{model}_fold_{n}.csv
 ├── hyperparameter_tuning_no_flapa/         # Same, for the no-Fla-PA models
 ├── figures/
@@ -209,9 +207,8 @@ results/
 │   ├── venn/
 │   │   └── venn_de_vs_fs.png
 │   ├── model_evaluation/
-│   │   ├── {prefix}{model}_confusion_matrix.csv
-│   │   ├── {prefix}{model}_confusion_matrix_normalized.csv
-│   │   └── Confusion_Matrix_{prefix}{model}.png
+│   │   ├── Confusion_Matrix_{model}.png
+│   │   └── no_flapa/Confusion_Matrix_{model}.png
 │   └── supplementary/
 │       └── tlr_hek_blue.png
 ├── validation/{test_name}/                 # External test batch (e.g. 7086)
