@@ -20,10 +20,6 @@
   "model_training": {
     "random_state": 42
   },
-  "model_factory": {
-    "random_state": 42,
-    "calibrate": true
-  },
   "ligand_aliases": {
     "E.coli": "HK E.coli",
     "S.aureus": "HK S.aureus",
