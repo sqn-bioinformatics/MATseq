@@ -15,20 +15,6 @@ from goatools.anno.genetogo_reader import Gene2GoReader
 from goatools.goea.go_enrichment_ns import GOEnrichmentStudyNS
 
 
-def _get_data_dir() -> Path:
-    """Get data directory for GO files.
-
-    Returns:
-        Path to data/go_terms_support directory.
-    """
-    project_root = Path(__file__).parent.parent
-    data_dir = project_root / "data" / "go_terms_support"
-    if not data_dir.exists():
-        data_dir = Path.cwd() / "data" / "go_terms_support"
-    data_dir.mkdir(parents=True, exist_ok=True)
-    return data_dir
-
-
 def _parse_geneid2nt(gene_file: Path) -> Dict[int, Any]:
     """Parse NCBI gene result file to namedtuple dictionary.
     """
@@ -77,11 +63,11 @@ def _parse_geneid2nt(gene_file: Path) -> Dict[int, Any]:
     return geneid2nt
 
 
-def initialize_go(data_dir: Path = None) -> tuple:
+def initialize_go(data_dir: Path) -> tuple:
     """Initialize GO enrichment analysis objects.
     Loads GO ontology, gene associations, and creates enrichment study object.
     """
-    data_dir = data_dir or _get_data_dir()
+    data_dir.mkdir(parents=True, exist_ok=True)
     print("Initializing GO terms...")
 
     gene2go_file = data_dir / "gene2go"
@@ -194,19 +180,13 @@ def generate_go_table(genes: set, goeaobj, geneid_symbol_mapper: dict) -> pd.Dat
 def run_go_analysis(
     genes: set,
     analysis_name: str,
-    output_dir: Path = None,
-    data_dir: Path = None,
-    goeaobj=None,
-    geneid_symbol_mapper: dict = None,
+    output_dir: Path,
+    goeaobj,
+    geneid_symbol_mapper: dict,
 ) -> pd.DataFrame:
     """Run GO enrichment analysis and save results to CSV.
     """
-    if goeaobj is None or geneid_symbol_mapper is None:
-        goeaobj, geneid_symbol_mapper = initialize_go(data_dir)
     go_df = generate_go_table(genes, goeaobj, geneid_symbol_mapper)
-
-    if output_dir is None:
-        output_dir = Path(__file__).parent.parent / "results" / "go_terms"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     csv_path = output_dir / f"{analysis_name}_go_terms.csv"
@@ -219,17 +199,13 @@ def run_go_analysis(
 def create_fs_de_go_table(
     de_genes: set,
     fs_genes: set,
-    goeaobj=None,
-    geneid_symbol_mapper=None,
-    output_dir: Path = None,
+    goeaobj,
+    geneid_symbol_mapper: dict,
+    output_dir: Path,
+    fig_dir: Path,
 ) -> tuple:
     """Create GO tables for de intersect fs and fs-only gene sets.
     """
-    if goeaobj is None or geneid_symbol_mapper is None:
-        goeaobj, geneid_symbol_mapper = initialize_go()
-
-    if output_dir is None:
-        output_dir = Path(__file__).parent.parent / "results" / "go_terms"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     de_intersect_fs = de_genes & fs_genes
@@ -251,24 +227,21 @@ def create_fs_de_go_table(
         geneid_symbol_mapper=geneid_symbol_mapper,
     )
 
-    go_fig_dir = Path(__file__).parent.parent / "results" / "figures" / "go"
-    go_fig_dir.mkdir(parents=True, exist_ok=True)
-
     from .visualization import plot_go
 
     if not go_df_intersect.empty:
         plot_go(
             go_df_intersect,
-            title="DE ∩ FS Top 20 Significant GO Terms",
-            output_path=go_fig_dir,
+            condition="DE ∩ FS",
+            output_path=fig_dir,
             output_filename="de_intersect_fs_go.png",
         )
 
     if not go_df_fs_only.empty:
         plot_go(
             go_df_fs_only,
-            title="FS \\ DE Top 20 Significant GO Terms",
-            output_path=go_fig_dir,
+            condition="FS \\ DE",
+            output_path=fig_dir,
             output_filename="fs_only_go.png",
         )
 
@@ -277,7 +250,7 @@ def create_fs_de_go_table(
 
 def merge_go_tables(
     go_files: List[Path],
-    output_dir: Path = None,
+    output_dir: Path,
     output_filename: str = "GO_merged_results.csv",
 ) -> pd.DataFrame:
     """Merge GO enrichment results from multiple ligand analyses.
@@ -300,8 +273,6 @@ def merge_go_tables(
 
     merged_df = merged_df.sort_values("fdr", ascending=True).reset_index(drop=True)
 
-    if output_dir is None:
-        output_dir = Path(__file__).parent.parent / "results" / "go_terms"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / output_filename
     merged_df.to_csv(output_path, index=False)

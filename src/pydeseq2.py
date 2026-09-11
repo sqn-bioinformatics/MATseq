@@ -1,7 +1,6 @@
 """PyDESeq2 analysis and visualization for differential expression studies."""
 
 import pandas as pd
-import numpy as np
 from pathlib import Path
 from typing import Tuple
 from anndata import AnnData
@@ -142,7 +141,11 @@ class DESeq2:
         self,
         raw_counts: pd.DataFrame,
         sample_labels: pd.Series,
-        output_dir: Path = None,
+        output_dir: Path,
+        figures_dir: Path,
+        go_terms_dir: Path,
+        go_fig_dir: Path,
+        go_data_dir: Path,
         padj_threshold: float = 0.05,
         log2fc_threshold: float = 2.0,
         n_cpus: int = 42,
@@ -164,24 +167,13 @@ class DESeq2:
         self.n_cpus = n_cpus
         self.name = name
 
-        results = Path.cwd() / "results"
-        if output_dir is None:
-            output_dir = results / "differential_gene_expression"
-            if name:
-                output_dir = output_dir / name
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-        self.figures_dir = results / "figures" / "deseq2"
-        self.go_terms_dir = results / "go_terms"
-        self.go_fig_dir = results / "figures" / "go"
-        if name:
-            self.figures_dir = self.figures_dir / name
-            self.go_terms_dir = self.go_terms_dir / name
-            self.go_fig_dir = self.go_fig_dir / name
-        self.figures_dir.mkdir(parents=True, exist_ok=True)
-        self.go_terms_dir.mkdir(parents=True, exist_ok=True)
-        self.go_fig_dir.mkdir(parents=True, exist_ok=True)
+        self.output_dir = output_dir
+        self.figures_dir = figures_dir
+        self.go_terms_dir = go_terms_dir
+        self.go_fig_dir = go_fig_dir
+        self.go_data_dir = go_data_dir
+        for directory in (output_dir, figures_dir, go_terms_dir, go_fig_dir):
+            directory.mkdir(parents=True, exist_ok=True)
 
         self.results = {}
         self.de_genes = set()
@@ -254,7 +246,7 @@ class DESeq2:
             if not go_df.empty:
                 plot_go(
                     go_df,
-                    title=f"{ligand_name} Top 20 Significant GO Terms",
+                    condition=ligand_name,
                     output_path=self.go_fig_dir,
                     output_filename=f"{ligand_name}_go.png",
                 )
@@ -264,7 +256,7 @@ class DESeq2:
     def get_go_objects(self) -> tuple:
         """Return (goeaobj, geneid_symbol_mapper), initializing if needed."""
         if self._goeaobj is None:
-            self._goeaobj, self._geneid_symbol_mapper = initialize_go()
+            self._goeaobj, self._geneid_symbol_mapper = initialize_go(self.go_data_dir)
         return self._goeaobj, self._geneid_symbol_mapper
 
     def _go_table(self, ligand_name: str, genes: set) -> pd.DataFrame:

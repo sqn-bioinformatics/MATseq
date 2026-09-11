@@ -1,5 +1,3 @@
-"""Model prediction and evaluation on new data and multiple runs."""
-
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -8,17 +6,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from sklearn.metrics import classification_report, confusion_matrix
-
 from .model_training import ModelTrainer, ModelFactory, make_score
-from .visualization import order_labels
-
+from .config import CLASS_ORDER
 
 class ModelPredictor:
     def __init__(self, trainer: ModelTrainer):
-        if not hasattr(trainer, "trained_models"):
-            raise AttributeError("trainer must have trained_models attribute")
-        if len(trainer.trained_models) == 0:
-            raise ValueError("trainer must have at least one trained model")
         self.trainer = trainer
         self.predictions = {}
         self.probabilities = {}
@@ -27,7 +19,7 @@ class ModelPredictor:
     def predict_samples(
         self, X_test: pd.DataFrame, y_test: pd.Series, sample_names: np.ndarray
     ) -> Dict[str, pd.DataFrame]:
-        """Predict labels for test samples using all trained models.
+        """Predict labels for test samples.
         """
         predictions_dict = {}
         self.y_test = y_test
@@ -60,15 +52,14 @@ class ModelPredictor:
     def evaluate(self, output_dir: Path, subset: str = "train_ligands") -> pd.DataFrame:
         """Score predictions against true labels
         """
-        if self.y_test is None:
-            raise ValueError("True labels required; call predict_samples")
-
         rows = []
         for model_name, pred_df in self.predictions.items():
             y_pred = pred_df["prediction"].to_numpy()
             rows.append({"model": model_name, **make_score(self.y_test, y_pred)})
 
-            labels = order_labels(set(self.y_test) | set(y_pred), subset)
+            present = set(self.y_test) | set(y_pred)
+            order = CLASS_ORDER[subset]
+            labels = [c for c in order if c in present] + [c for c in present if c not in order]
             report = classification_report(
                 self.y_test, y_pred, labels=labels, zero_division=0, output_dict=True
             )
