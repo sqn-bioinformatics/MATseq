@@ -56,7 +56,6 @@ _config = _load_config()
 
 DESEQ2_CONFIG = _config["deseq2"]
 FEATURE_SELECTION_CONFIG = _config["feature_selection"]
-FOREST_SELECTION_GRID = _config["forest_selection_grid"]
 MODEL_FACTORY_CONFIG = _config["model_factory"]
 MODEL_TRAINING_CONFIG = _config["model_training"]
 HYPERPARAMETER_GRIDS = _config["hyperparameter_grids"]
@@ -67,6 +66,8 @@ MAIN_LIGANDS = _config["ligands"]["main_ligands"]
 ADDITIONAL_LIGANDS = _config["ligands"]["additional_ligands"]
 BACTERIAL_LIGANDS = _config["ligands"]["bacterial_ligands"]
 CLASS_ORDER = _config["class_order_for_plotting"]
+CLASS_DISPLAY_NAMES = _config["class_display_names"]
+SUBSET_DISPLAY_NAMES = _config["subset_display_names"]
 SUBSET_PALETTES = {
     subset: _PALETTES[palette_name]
     for subset, palette_name in _config["subset_palettes"].items()

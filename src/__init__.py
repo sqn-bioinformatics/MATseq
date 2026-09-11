@@ -6,6 +6,7 @@ from .config import (
     CUSTOM_PALETTE_9,
     SUBSET_PALETTES,
     CLASS_ORDER,
+    SUBSET_DISPLAY_NAMES,
     DESEQ2_CONFIG,
     FEATURE_SELECTION_CONFIG,
     MODEL_FACTORY_CONFIG,
@@ -27,7 +28,6 @@ from .preprocessing import (
 )
 
 from .feature_engineering import (
-    LibraryLengthNormalizer,
     ColumnSelector,
     feature_pipeline,
     preprocessing_pipeline,
@@ -56,10 +56,8 @@ from .visualization import (
     plot_pca,
     plot_volcano,
     plot_heatmap,
-    plot_pca_deseq2,
     plot_go,
     plot_probability_heatmap,
-    subset_display,
 )
 
 from .go_term_analysis import (
@@ -80,6 +78,7 @@ __all__ = [
     "CUSTOM_PALETTE_9",
     "SUBSET_PALETTES",
     "CLASS_ORDER",
+    "SUBSET_DISPLAY_NAMES",
     "DESEQ2_CONFIG",
     "FEATURE_SELECTION_CONFIG",
     "MODEL_FACTORY_CONFIG",
@@ -98,7 +97,6 @@ __all__ = [
     "normalize_rpm",
     "load_tlr_data",
     # Feature engineering
-    "LibraryLengthNormalizer",
     "ColumnSelector",
     "feature_pipeline",
     "preprocessing_pipeline",
@@ -121,10 +119,8 @@ __all__ = [
     "plot_pca",
     "plot_volcano",
     "plot_heatmap",
-    "plot_pca_deseq2",
     "plot_go",
     "plot_probability_heatmap",
-    "subset_display",
     # GO term analysis
     "initialize_go",
     "generate_go_table",

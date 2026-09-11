@@ -6,13 +6,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-def load_tlr_data(data_dir: Path = None) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+def load_tlr_data(data_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     """Load TLR2 (Pam3) and TLR4 (LPS) data from supplementary tables.
     """
-    if data_dir is None:
-        data_dir = Path(__file__).parent.parent / "data" / "supplementary_data"
-
-    data_dir = Path(data_dir)
     tlr4_raw = pd.read_csv(data_dir / "Supplementary_Table_5.csv")
     tlr4_lps = tlr4_raw[tlr4_raw["OD630nm_LPS_Replicate1"].notna()]
     tlr4_df = pd.DataFrame(
@@ -112,9 +108,9 @@ def plot_tlr_panel(
 def plot_tlr_hek_blue(
     tlr2_df: pd.DataFrame,
     tlr4_df: pd.DataFrame,
-    fla_pa_data: dict = None,
-    output_path: Path = None,
-    output_filename: str = "TLR_HEK_Blue.png",
+    fla_pa_data: dict,
+    output_path: Path,
+    output_filename: str,
 ) -> Path:
     """Create TLR2/TLR4 dose-response plots with Fla-PA bar.
     """
@@ -124,15 +120,12 @@ def plot_tlr_hek_blue(
     ax1, ax1_bar = axes[0]
     ax2, ax2_bar = axes[1]
 
-    fla_pa_tlr4 = fla_pa_data["tlr4"]["average"] if fla_pa_data else None
-    fla_pa_tlr2 = fla_pa_data["tlr2"]["average"] if fla_pa_data else None
-
     plot_tlr_panel(
         ax_main=ax1,
         ax_bar=ax1_bar,
         df=tlr4_df,
         conc_col="Concentration_EU_mL",
-        fla_pa_val=fla_pa_tlr4,
+        fla_pa_val=fla_pa_data["tlr4"]["average"],
         xlabel="Concentration (EU/ml)",
         title="HEK-Blue™ Reporter Line TLR4 LPS",
         label="LPS",
@@ -143,7 +136,7 @@ def plot_tlr_hek_blue(
         ax_bar=ax2_bar,
         df=tlr2_df,
         conc_col="Concentration_ng_mL",
-        fla_pa_val=fla_pa_tlr2,
+        fla_pa_val=fla_pa_data["tlr2"]["average"],
         xlabel="Concentration (ng/mL)",
         title="HEK-Blue™ Reporter Line TLR2 Pam3",
         label="Pam3",
@@ -151,10 +144,6 @@ def plot_tlr_hek_blue(
 
     plt.tight_layout()
 
-    if output_path is None:
-        output_path = (
-            Path(__file__).parent.parent / "results" / "figures" / "supplementary"
-        )
     output_path.mkdir(parents=True, exist_ok=True)
 
     save_path = output_path / output_filename

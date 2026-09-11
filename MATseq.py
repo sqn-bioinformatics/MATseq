@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from src import (
     CUSTOM_PALETTE_9,
     CLASS_ORDER,
+    SUBSET_DISPLAY_NAMES,
     SUBSET_PALETTES,
     ColumnSelector,
     DESEQ2_CONFIG,
@@ -44,10 +45,8 @@ from src import (
     plot_tlr_hek_blue,
     plot_venn,
     prepare_counts,
-    subset_display,
 )
 from src.config import (
-    FOREST_SELECTION_GRID,
     get_config,
     get_genome_dir,
     get_sample_dir,
@@ -166,11 +165,17 @@ def run_pipeline(
     print("\n--- STEP 2: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ---")
     de_dir = RESULTS_DIR / "differential_gene_expression"
     de_dir.mkdir(parents=True, exist_ok=True)
+    go_data_dir = Path(__file__).parent / "data" / "go_terms_support"
 
     for subset, (X_sub, y_sub) in subset_xy.items():
         deseq2 = DESeq2(
             raw_counts=X_sub,
             sample_labels=y_sub,
+            output_dir=de_dir / subset,
+            figures_dir=RESULTS_DIR / "figures" / "deseq2" / subset,
+            go_terms_dir=RESULTS_DIR / "go_terms" / subset,
+            go_fig_dir=RESULTS_DIR / "figures" / "go" / subset,
+            go_data_dir=go_data_dir,
             padj_threshold=DESEQ2_CONFIG.get("padj_threshold", 0.05),
             log2fc_threshold=DESEQ2_CONFIG.get("log2fc_threshold", 2.0),
             n_cpus=DESEQ2_CONFIG.get("n_cpus", 42),
@@ -193,33 +198,24 @@ def run_pipeline(
     fig_dir.mkdir(parents=True, exist_ok=True)
 
     pre_pipe = preprocessing_pipeline().set_output(transform="pandas")
-    pre_pipe.fit(X_train, y_train)
+    X_train_pre = pre_pipe.fit_transform(X_train, y_train)
 
-    mi_result = mutual_information(pre_pipe, X_train, y_train)
+    mi_result = mutual_information(X_train_pre, y_train)
     mi_elbow = mi_result["mi_elbow"]
     print(f"  MI elbow (mean curve): {mi_elbow} genes")
 
-    kmeans_result = forest_kmeans(
-        pre_pipe,
-        X_train,
+    ari_scan = forest_kmeans(
+        X_train_pre,
         y_train,
-        grid=FOREST_SELECTION_GRID,
         k_best=mi_elbow,
+        n_estimators=FEATURE_SELECTION_CONFIG["n_estimators"],
+        max_depth=FEATURE_SELECTION_CONFIG["max_depth"],
     )
     mi_result["scores"].to_csv(out_dir / "mutual_information.csv", index=False)
-    kmeans_result["scan"].to_csv(out_dir / "forest_kmeans.csv", index=False)
+    ari_scan.to_csv(out_dir / "forest_kmeans.csv", index=False)
 
     plot_mutual_information(mi_result, fig_dir)
-    plot_forest_ari_sweep(kmeans_result["scan"], fig_dir)
-
-    update_config(
-        {
-            "k_best": mi_elbow,
-            "n_estimators": best["n_estimators"],
-            "max_depth": best["max_depth"],
-            "max_features": n_genes,
-        }
-    )
+    plot_forest_ari_sweep(ari_scan, fig_dir)
 
     print("\n --- STEP 4: PLOT PCA GRAPHS ---")
     pca_dir = RESULTS_DIR / "figures" / "pca"
@@ -235,7 +231,7 @@ def run_pipeline(
         if subset in ["train_ligands", "test_ligands"]:
             X_pca, y_pca = X_sub, y_sub
         else:
-            # Showing where the other ligands clusters land compared to train           
+            # Showing where the other ligands clusters land compared to train
             X_pca = pd.concat([X_sub, X_train])
             y_pca = pd.concat([y_sub, y_train])
 
@@ -288,6 +284,8 @@ def run_pipeline(
         fs_genes=fs_genes,
         goeaobj=goeaobj,
         geneid_symbol_mapper=geneid_symbol_mapper,
+        output_dir=RESULTS_DIR / "go_terms",
+        fig_dir=RESULTS_DIR / "figures" / "go",
     )
 
     selected_genes = sorted(fs_genes)
@@ -320,6 +318,7 @@ def run_pipeline(
         y_train,
         param_grids=HYPERPARAMETER_GRIDS,
         output_dir=hp_dir,
+        fig_dir=RESULTS_DIR / "figures" / "model_evaluation",
         outer_cv=5,
         inner_cv=3,
     )
@@ -388,15 +387,15 @@ def run_pipeline(
         for model_name, proba_df in predictor.probabilities.items():
             proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
         summary = predictor.evaluate(out_dir, subset="test_ligands")
-        class_order = CLASS_ORDER.get("test_ligands", CLASS_ORDER["test_ligands"])
+        class_order = CLASS_ORDER["test_ligands"]
 
         for model_name, proba_df in predictor.probabilities.items():
             plot_probability_heatmap(
                 proba_df, class_order,
-                title=f"{model_name} Prediction Probabilities {subset_display('test_ligands')}",
+                title=f"{model_name} Prediction Probabilities {SUBSET_DISPLAY_NAMES['test_ligands']}",
                 true_labels=predictor.y_test, all_controls=True,
-                output_dir=out_dir,
-                filename=f"{model_name}_probabilities_heatmap.png",
+                output_path=out_dir,
+                output_filename=f"{model_name}_probabilities_heatmap.png",
             )
         summary.insert(0, "gene_set", gene_set)
         validation_rows.append(summary)
@@ -427,33 +426,37 @@ def run_pipeline(
             for model_name, proba_df in predictor.probabilities.items():
                 proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
             predictor.evaluate(out_dir, subset=subset_key)
-            class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
+            class_order_end = CLASS_ORDER[subset_key]
             for model_name, proba_df in predictor.probabilities.items():
                 plot_probability_heatmap(
                     proba_df, class_order_end,
-                    title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
+                    title=f"{model_name} Prediction Probabilities {SUBSET_DISPLAY_NAMES[subset_key]}",
                     true_labels=predictor.y_test, all_controls=False,
-                    output_dir=out_dir,
-                    filename=f"{model_name}_probabilities_heatmap.png",
+                    output_path=out_dir,
+                    output_filename=f"{model_name}_probabilities_heatmap.png",
                 )
 
     print("\n--- STEP 10: TLR VISUALIZATION ---")
     tlr2_df, tlr4_df, flapa_data = load_tlr_data(
         data_dir=Path(__file__).parent / "data" / "supplementary_data"
     )
-    plot_tlr_hek_blue(tlr2_df, tlr4_df, flapa_data, output_filename="tlr_hek_blue.png")
+    plot_tlr_hek_blue(
+        tlr2_df, tlr4_df, flapa_data,
+        output_path=RESULTS_DIR / "figures" / "supplementary",
+        output_filename="tlr_hek_blue.png",
+    )
 
     print("\n--- STEP 11: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
     manuscript_tables_dir = RESULTS_DIR / "tables"
     manuscript_tables_dir.mkdir(parents=True, exist_ok=True)
-    composite_figures_dir = RESULTS_DIR / "tables"
+    composite_figures_dir = Path(__file__).parent / "paper" / "paper_updated" / "figures"
     composite_figures_dir.mkdir(parents=True, exist_ok=True)
     format_table2(
         RESULTS_DIR / "nested_cv" / "supp_nested_cv_main.csv",
         output_dir=manuscript_tables_dir,
     )
     assemble_supplementary_tables(RESULTS_DIR, output_dir=manuscript_tables_dir)
-    compose_figures()
+    compose_figures(RESULTS_DIR, composite_figures_dir)
 
     print("\n--- STEP 12: WITHOUT Fla-PA SENSITIVITY ANALYSIS ---")
     model_dir_wo = RESULTS_DIR / "models" / "no_flapa"
@@ -470,6 +473,7 @@ def run_pipeline(
         y_wo,
         param_grids=HYPERPARAMETER_GRIDS,
         output_dir=hp_dir_wo,
+        fig_dir=RESULTS_DIR / "figures" / "model_evaluation",
         outer_cv=5,
         inner_cv=3,
     )
@@ -543,14 +547,14 @@ def run_pipeline(
         for model_name, proba_df in predictor_wo.probabilities.items():
             proba_df.to_csv(out_dir_wo / f"{model_name}_probabilities.csv")
         summary_wo = predictor_wo.evaluate(out_dir_wo, subset="test_ligands")
-        class_order_wo = CLASS_ORDER.get("test_ligands", CLASS_ORDER["test_ligands"])
+        class_order_wo = CLASS_ORDER["test_ligands"]
         for model_name, proba_df in predictor_wo.probabilities.items():
             plot_probability_heatmap(
                 proba_df, class_order_wo,
-                title=f"{model_name} Prediction Probabilities {subset_display('test_ligands')}",
+                title=f"{model_name} Prediction Probabilities {SUBSET_DISPLAY_NAMES['test_ligands']}",
                 true_labels=predictor_wo.y_test, all_controls=True,
-                output_dir=out_dir_wo,
-                filename=f"{model_name}_probabilities_heatmap.png",
+                output_path=out_dir_wo,
+                output_filename=f"{model_name}_probabilities_heatmap.png",
             )
         summary_wo.insert(0, "gene_set", gene_set)
         validation_wo_rows.append(summary_wo)
@@ -577,14 +581,14 @@ def run_pipeline(
             for model_name, proba_df in predictor.probabilities.items():
                 proba_df.to_csv(out_dir / f"{model_name}_probabilities.csv")
             predictor.evaluate(out_dir, subset=subset_key)
-            class_order_end = CLASS_ORDER.get(subset_key, CLASS_ORDER["train_ligands"])
+            class_order_end = CLASS_ORDER[subset_key]
             for model_name, proba_df in predictor.probabilities.items():
                 plot_probability_heatmap(
                     proba_df, class_order_end,
-                    title=f"{model_name} Prediction Probabilities {subset_display(subset_key)}",
+                    title=f"{model_name} Prediction Probabilities {SUBSET_DISPLAY_NAMES[subset_key]}",
                     true_labels=predictor.y_test, all_controls=False,
-                    output_dir=out_dir,
-                    filename=f"{model_name}_probabilities_heatmap.png",
+                    output_path=out_dir,
+                    output_filename=f"{model_name}_probabilities_heatmap.png",
                 )
 
     print("\n" + "=" * 80)

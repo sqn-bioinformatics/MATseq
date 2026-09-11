@@ -30,7 +30,7 @@ from sklearn.model_selection import (
 from sklearn.base import clone
 
 from .feature_engineering import feature_pipeline
-from .config import FEATURE_SELECTION_CONFIG
+from .config import CLASS_ORDER, FEATURE_SELECTION_CONFIG, SUBSET_DISPLAY_NAMES
 
 
 def make_score(y_test, y_pred) -> dict:
@@ -166,6 +166,7 @@ class ModelTrainer:
         y,
         param_grids: Dict[str, Dict],
         output_dir: Path,
+        fig_dir: Path,
         outer_cv: int = 5,
         inner_cv: int = 3,
         scoring: str = "f1_macro",
@@ -175,19 +176,11 @@ class ModelTrainer:
         output_dir = Path(output_dir)
         inner_results_dir = output_dir / "inner_cv_results"
         inner_results_dir.mkdir(parents=True, exist_ok=True)
-        fig_dir = output_dir.parent / "figures" / "model_evaluation"
         fig_dir.mkdir(parents=True, exist_ok=True)
 
         y_array = y.values if isinstance(y, pd.Series) else y
         self.label_encoder.fit(y_array)
         y_encoded = self.label_encoder.transform(y_array)
-
-        min_class_count = np.bincount(y_encoded).min()
-        if outer_cv > min_class_count:
-            raise ValueError(
-                f"outer_cv={outer_cv} exceeds smallest class count={min_class_count}"
-            )
-
         sample_ids = (
             X.index.to_numpy() if isinstance(X, pd.DataFrame) else np.arange(len(X))
         )
@@ -276,9 +269,9 @@ class ModelTrainer:
 
         oof_frames = []
         pooled_rows = []
-        from .visualization import order_labels
-
-        class_names = order_labels(self.label_encoder.classes_, "train_ligands")
+        classes = list(self.label_encoder.classes_)
+        order = CLASS_ORDER["train_ligands"]
+        class_names = [c for c in order if c in classes] + [c for c in classes if c not in order]
         for model_name in self.models:
             df = pd.DataFrame(pooled[model_name])
             y_true_dec = self.decode_predictions(df["true_enc"].to_numpy())
@@ -382,13 +375,14 @@ class ModelTrainer:
         self, cm, class_names, model: str, output_dir: Path,
         subset: str = "train_ligands", file_prefix: str = "",
     ) -> None:
-        """Save a confusion matrix (delegates to visualization)."""
-        from .visualization import plot_confusion_matrix, confusion_title
+        """Save a confusion matrix."""
+        from .visualization import plot_confusion_matrix
 
         save_path = plot_confusion_matrix(
-            cm, class_names, title=confusion_title(model, subset),
-            output_dir=output_dir,
-            filename=f"Confusion_Matrix_{file_prefix}{model}.png",
+            cm, class_names,
+            title=f"{model} Confusion Matrix {SUBSET_DISPLAY_NAMES[subset]}",
+            output_path=output_dir,
+            output_filename=f"Confusion_Matrix_{file_prefix}{model}.png",
         )
         print(f"Figure saved: {save_path}")
 

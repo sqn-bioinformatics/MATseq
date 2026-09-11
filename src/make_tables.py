@@ -476,12 +476,6 @@ def assemble_supplementary_table_8(results_dir, output_dir=None,
     if not fpath.exists():
         raise FileNotFoundError(f"S8: missing forest/KMeans file {fpath}")
     src = pd.read_csv(fpath)
-    if {"n_estimators", "max_depth", "ari_mean"}.issubset(src.columns):
-        best = src.loc[src["ari_mean"].idxmax()]
-        src = src[
-            (src["n_estimators"] == best["n_estimators"])
-            & (src["max_depth"] == best["max_depth"])
-        ]
     src = src.sort_values("n_selected").reset_index(drop=True)
     out = pd.DataFrame({"n_selected_genes": src["n_selected"]})
     for col in SUPP_TABLE_8_COLUMNS[1:4]:
