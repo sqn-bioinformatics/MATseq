@@ -124,10 +124,12 @@ def plot_venn(
     title: str = None,
 ) -> Path:
     """Plot a 2-set Venn diagram and save it."""
-    fig = plt.figure(figsize=(8, 8))
-    venn2([set(s) for s in sets], set_labels=set_labels)
+    with plt.rc_context({"font.size": 22}):
+        fig = plt.figure(figsize=(8, 8))
+        venn2([set(s) for s in sets],
+              set_labels=[textwrap.fill(lb, 16) for lb in set_labels])
     if title:
-        plt.title(title, fontsize=13)
+        plt.title(title, fontsize=22)
 
     save_path = output_path / output_filename
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -151,9 +153,10 @@ def plot_mutual_information(
     ax1.axvline(
         mi_elbow, color="r", ls="--", label=f"mean elbow = {mi_elbow}"
     )
-    ax1.set_xlabel("Gene rank")
-    ax1.set_ylabel("Mutual information")
-    ax1.legend(frameon=False, loc="upper right")
+    ax1.set_xlabel("Gene rank", fontsize=19)
+    ax1.set_ylabel("Mutual information", fontsize=19)
+    ax1.tick_params(labelsize=17)
+    ax1.legend(frameon=False, loc="upper right", fontsize=17)
     ax1.spines[["top", "right"]].set_visible(False)
 
     save_path = output_path / output_filename
@@ -189,11 +192,12 @@ def plot_forest_ari_sweep(
     )
     ax.set_xscale("log")
     ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter())
-    ax.set_title(title, fontsize=12, pad=8)
-    ax.set_xlabel("Gene rank (ExtraTrees importance)")
-    ax.set_ylabel("Adjusted Rand Index\n(k-means vs. ligand class)")
+    ax.set_title(title, fontsize=20, pad=8)
+    ax.set_xlabel("Gene rank (ExtraTrees importance)", fontsize=18)
+    ax.set_ylabel("Adjusted Rand Index\n(k-means vs. ligand class)", fontsize=18)
+    ax.tick_params(labelsize=16)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1.0))
+    ax.legend(frameon=False, loc="best", fontsize=15)
 
     save_path = output_path / output_filename
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -227,9 +231,9 @@ def plot_pca(
             palette=palette,
             ax=ax,
         )
-        ax.set_xlabel("PC1", fontsize=12)
-        ax.set_ylabel("PC2", fontsize=12)
-        ax.tick_params(axis="both", labelsize=11)
+        ax.set_xlabel("PC1", fontsize=18)
+        ax.set_ylabel("PC2", fontsize=18)
+        ax.tick_params(axis="both", labelsize=16)
 
         if with_sample_names:
             texts = [
@@ -245,7 +249,7 @@ def plot_pca(
                       ["NC" if lb == "negative_control" else CLASS_DISPLAY_NAMES.get(lb, lb)
                        for lb in labels_txt],
                       loc="upper left", bbox_to_anchor=(1.02, 1.0),
-                      borderaxespad=0, ncol=1, fontsize=9,
+                      borderaxespad=0, ncol=1, fontsize=15,
                       frameon=False, handletextpad=0.4)
 
         ax.spines[["top", "right"]].set_visible(False)
@@ -446,11 +450,12 @@ def plot_go(
         palette=list(color_mapper.to_rgba(go_terms.fdr.values)),
     )
 
-    ax.set_yticklabels([textwrap.fill(term, 40) for term in go_terms["term"]])
-    ax.set_xlabel("Gene Ratio (n_genes in term / n_study genes)", fontsize=10)
+    ax.set_yticklabels([textwrap.fill(term, 30) for term in go_terms["term"]])
+    ax.set_xlabel("Gene Ratio (n_genes in term / n_study genes)", fontsize=18)
     ax.set_ylabel("")
+    ax.tick_params(labelsize=17)
     ax.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter("%.2f"))
-    ax.set_title(f"{condition} {title}", fontsize=12)
+    ax.set_title(f"{condition} {title}", fontsize=20)
 
     cbar = fig.colorbar(
         color_mapper,
@@ -461,8 +466,8 @@ def plot_go(
         aspect=60,
     )
     cbar.outline.set_visible(False)
-    cbar.ax.tick_params(labelsize=8)
-    cbar.set_label("FDR (adjusted p)", fontsize=10)
+    cbar.ax.tick_params(which="both", labelsize=16)
+    cbar.set_label("FDR (adjusted p)", fontsize=18)
 
     ax.spines[["top", "right"]].set_visible(False)
 

@@ -383,7 +383,15 @@ def run_pipeline(
         output_dir=manuscript_tables_dir,
     )
     assemble_supplementary_tables(RESULTS_DIR, output_dir=manuscript_tables_dir)
-    compose_figures(RESULTS_DIR, composite_figures_dir)
+    figure3_panels = [
+        RESULTS_DIR / "figures" / "feature_selection" / "mutual_information.png",
+        RESULTS_DIR / "figures" / "feature_selection" / "forest_ari_sweep.png",
+        RESULTS_DIR / "figures" / "venn" / "venn_de_vs_fs.png",
+        RESULTS_DIR / "figures" / "pca" / "pca_train_ligands.png",
+        RESULTS_DIR / "figures" / "pca" / "pca_train_ligands_fs.png",
+        RESULTS_DIR / "figures" / "go" / "de_intersect_fs_go.png",
+    ]
+    compose_figures(figure3_panels, composite_figures_dir / "Figure_3.png")
 
     print("\n" + "=" * 80)
     print("PIPELINE COMPLETED SUCCESSFULLY")
