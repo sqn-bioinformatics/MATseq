@@ -1,4 +1,5 @@
 """Compose the manuscript's multi-panel figure from rendered panel PNGs."""
+import textwrap
 from pathlib import Path
 from string import ascii_uppercase
 
@@ -12,6 +13,8 @@ def compose_figures(
     output_path: Path,
     ncols: int = 2,
     max_size: tuple[float, float] = (6.69, 8.66),
+    title: str | None = None,
+    first_letter: int = 0,
 ) -> Path:
     """Lay panels out row by row, labelled A, B, ..., within max_size inches.
 
@@ -29,7 +32,9 @@ def compose_figures(
         rows = np.flatnonzero(ink.any(axis=1))
         cols = np.flatnonzero(ink.any(axis=0))
         images.append(img[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1])
-    gap, left, top, right, bottom = 0.3, 0.3, 0.25, 0.05, 0.05
+    gap, left, right, bottom = 0.3, 0.3, 0.05, 0.05
+    heading = textwrap.fill(title, 90) if title else ""
+    top = 0.25 + (0.22 * (heading.count("\n") + 1) if title else 0.0)
     nrows = -(-len(images) // ncols)
     width = (max_size[0] - left - right - (ncols - 1) * gap) / ncols
     heights = [
@@ -44,6 +49,8 @@ def compose_figures(
     fig_w = left + ncols * width + (ncols - 1) * gap + right
     fig_h = top + sum(heights) + (nrows - 1) * gap + bottom
     fig = plt.figure(figsize=(fig_w, fig_h))
+    if title:
+        fig.text(0.5, 1 - 0.1 / fig_h, heading, ha="center", va="top", fontsize=13)
     for i, img in enumerate(images):
         r, c = divmod(i, ncols)
         h = width * img.shape[0] / img.shape[1]
@@ -55,7 +62,7 @@ def compose_figures(
         ax.imshow(img)
         ax.axis("off")
         ax.annotate(
-            ascii_uppercase[i], (0, 1), xycoords="axes fraction",
+            ascii_uppercase[first_letter + i], (0, 1), xycoords="axes fraction",
             xytext=(-6, 3), textcoords="offset points", ha="right",
             va="bottom", fontsize=12, fontweight="bold",
         )
