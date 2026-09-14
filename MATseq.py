@@ -14,6 +14,7 @@ from src import (
     CUSTOM_PALETTE_9,
     CLASS_ORDER,
     SUBSET_PALETTES,
+    SUBSET_DISPLAY_NAMES,
     DESEQ2_CONFIG,
     FEATURE_SELECTION_CONFIG,
     HYPERPARAMETER_GRIDS,
@@ -383,7 +384,62 @@ def run_pipeline(
         output_dir=manuscript_tables_dir,
     )
     assemble_supplementary_tables(RESULTS_DIR, output_dir=manuscript_tables_dir)
-    compose_figures(RESULTS_DIR, composite_figures_dir)
+    deseq2_dir = RESULTS_DIR / "figures" / "deseq2"
+    compose_figures(
+        [deseq2_dir / "train_ligands" / "LPS_volcano.png",
+         deseq2_dir / "train_ligands" / "LPS_histogram.png"],
+        composite_figures_dir / "Figure_2.png",
+        ncols=2,
+        max_size=(9.84, 6.69),
+    )
+    figure3_panels = [
+        RESULTS_DIR / "figures" / "feature_selection" / "mutual_information.png",
+        RESULTS_DIR / "figures" / "feature_selection" / "forest_ari_sweep.png",
+        RESULTS_DIR / "figures" / "venn" / "venn_de_vs_fs.png",
+        RESULTS_DIR / "figures" / "pca" / "pca_train_ligands.png",
+        RESULTS_DIR / "figures" / "pca" / "pca_train_ligands_fs.png",
+        RESULTS_DIR / "figures" / "go" / "de_intersect_fs_go.png",
+    ]
+    compose_figures(figure3_panels, composite_figures_dir / "Figure_3.png")
+
+    main_panel = panels["main"]
+    for filename, subset, cm_dir in [
+        ("Figure4.png", "train_ligands", main_panel["fig_dir"]),
+        ("Figure5.png", "test_ligands",
+         main_panel["val_dir"] / primary_gs / "test_ligands"),
+        ("Figure6.png", "additional_ligands",
+         main_panel["pred_dir"] / primary_gs / "additional_ligands"),
+        ("Figure7.png", "bacterial_ligands",
+         main_panel["pred_dir"] / primary_gs / "bacterial_ligands"),
+    ]:
+        compose_figures(
+            [pca_dir / f"pca_{subset}_fs.png"]
+            + [cm_dir / f"Confusion_Matrix_{model}.png" for model in HYPERPARAMETER_GRIDS],
+            composite_figures_dir / filename,
+            ncols=3,
+            max_size=(9.84, 6.69),
+            title=SUBSET_DISPLAY_NAMES[subset],
+        )
+
+    supp1_ligands = [
+        ("train_ligands", "Pam3"),
+        ("train_ligands", "R848"),
+        ("train_ligands", "PGN"),
+        ("train_ligands", "Fla-PA"),
+        ("additional_ligands", "LTA"),
+        ("additional_ligands", "MPLA"),
+        ("additional_ligands", "Pam2"),
+        ("bacterial_ligands", "HK E.coli"),
+        ("bacterial_ligands", "HK S.aureus"),
+    ]
+    for page, start in enumerate(range(0, len(supp1_ligands), 2)):
+        compose_figures(
+            [deseq2_dir / subset / f"{ligand}_{kind}.png"
+             for subset, ligand in supp1_ligands[start:start + 2]
+             for kind in ("volcano", "histogram")],
+            composite_figures_dir / f"Supplementary_Figure1p{page + 1}.png",
+            first_letter=start * 2,
+        )
 
     print("\n" + "=" * 80)
     print("PIPELINE COMPLETED SUCCESSFULLY")

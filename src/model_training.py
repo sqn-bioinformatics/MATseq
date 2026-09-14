@@ -26,7 +26,7 @@ from sklearn.svm import LinearSVC
 from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
 
-from .config import CLASS_ORDER, FEATURE_SELECTION_CONFIG, SUBSET_DISPLAY_NAMES
+from .config import CLASS_ORDER, FEATURE_SELECTION_CONFIG
 from .feature_engineering import ColumnSelector, feature_pipeline, preprocessing_pipeline
 from .visualization import plot_confusion_matrix
 
@@ -61,7 +61,7 @@ def evaluate(y_true, y_pred, model_name: str, subset: str, output_dir: Path,
     )
     plot_confusion_matrix(
         cm, labels,
-        title=f"{model_name} Confusion Matrix {SUBSET_DISPLAY_NAMES[subset]}",
+        title=model_name,
         output_path=fig_dir,
         output_filename=f"Confusion_Matrix_{model_name}.png",
     )

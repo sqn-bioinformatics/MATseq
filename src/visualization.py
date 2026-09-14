@@ -19,10 +19,11 @@ def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: s
     """Render a confusion matrix normalized over the true classes (rows)."""
     fig, ax = plt.subplots(figsize=(6.5, 6))
     cm = np.asarray(cm, dtype=float)
-    labels = [CLASS_DISPLAY_NAMES.get(c, c) for c in class_names]
+    labels = ["NC" if c == "negative_control" else CLASS_DISPLAY_NAMES.get(c, c)
+              for c in class_names]
     n = cm.shape[0]
-    annot_fs = 9 if n <= 6 else (7 if n == 7 else 6)
-    tick_fs = 9 if n <= 7 else 8
+    annot_fs = 15 if n <= 6 else (13 if n == 7 else 12)
+    tick_fs = 18 if n <= 7 else 16
     im = ax.imshow(cm, cmap="Blues", vmin=0.0, vmax=1.0, aspect="auto")
     ax.set_box_aspect(1)
 
@@ -30,10 +31,10 @@ def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: s
     ax.set_yticks(range(n))
     ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=tick_fs)
     ax.set_yticklabels(labels, fontsize=tick_fs)
-    ax.set_xlabel("Predicted class", fontsize=10)
-    ax.set_ylabel("True class", fontsize=10)
+    ax.set_xlabel("Predicted class", fontsize=20)
+    ax.set_ylabel("True class", fontsize=20)
     if title:
-        ax.set_title(title, fontsize=11, pad=8)
+        ax.set_title(title, fontsize=20, pad=8)
 
     for i in range(n):
         for j in range(n):
@@ -47,7 +48,7 @@ def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: s
     ax.spines[:].set_visible(False)
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.outline.set_visible(False)
-    cbar.ax.tick_params(length=0)
+    cbar.ax.tick_params(length=0, labelsize=16)
 
     output_path.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
@@ -124,10 +125,12 @@ def plot_venn(
     title: str = None,
 ) -> Path:
     """Plot a 2-set Venn diagram and save it."""
-    fig = plt.figure(figsize=(8, 8))
-    venn2([set(s) for s in sets], set_labels=set_labels)
+    with plt.rc_context({"font.size": 22}):
+        fig = plt.figure(figsize=(8, 8))
+        venn2([set(s) for s in sets],
+              set_labels=[textwrap.fill(lb, 16) for lb in set_labels])
     if title:
-        plt.title(title, fontsize=13)
+        plt.title(title, fontsize=22)
 
     save_path = output_path / output_filename
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -151,9 +154,10 @@ def plot_mutual_information(
     ax1.axvline(
         mi_elbow, color="r", ls="--", label=f"mean elbow = {mi_elbow}"
     )
-    ax1.set_xlabel("Gene rank")
-    ax1.set_ylabel("Mutual information")
-    ax1.legend(frameon=False, loc="upper right")
+    ax1.set_xlabel("Gene rank", fontsize=19)
+    ax1.set_ylabel("Mutual information", fontsize=19)
+    ax1.tick_params(labelsize=17)
+    ax1.legend(frameon=False, loc="upper right", fontsize=17)
     ax1.spines[["top", "right"]].set_visible(False)
 
     save_path = output_path / output_filename
@@ -189,11 +193,12 @@ def plot_forest_ari_sweep(
     )
     ax.set_xscale("log")
     ax.xaxis.set_major_formatter(mpl.ticker.ScalarFormatter())
-    ax.set_title(title, fontsize=12, pad=8)
-    ax.set_xlabel("Gene rank (ExtraTrees importance)")
-    ax.set_ylabel("Adjusted Rand Index\n(k-means vs. ligand class)")
+    ax.set_title(title, fontsize=20, pad=8)
+    ax.set_xlabel("Gene rank (ExtraTrees importance)", fontsize=18)
+    ax.set_ylabel("Adjusted Rand Index\n(k-means vs. ligand class)", fontsize=18)
+    ax.tick_params(labelsize=16)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1.0))
+    ax.legend(frameon=False, loc="best", fontsize=15)
 
     save_path = output_path / output_filename
     fig.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -227,9 +232,9 @@ def plot_pca(
             palette=palette,
             ax=ax,
         )
-        ax.set_xlabel("PC1", fontsize=12)
-        ax.set_ylabel("PC2", fontsize=12)
-        ax.tick_params(axis="both", labelsize=11)
+        ax.set_xlabel("PC1", fontsize=18)
+        ax.set_ylabel("PC2", fontsize=18)
+        ax.tick_params(axis="both", labelsize=16)
 
         if with_sample_names:
             texts = [
@@ -245,7 +250,7 @@ def plot_pca(
                       ["NC" if lb == "negative_control" else CLASS_DISPLAY_NAMES.get(lb, lb)
                        for lb in labels_txt],
                       loc="upper left", bbox_to_anchor=(1.02, 1.0),
-                      borderaxespad=0, ncol=1, fontsize=9,
+                      borderaxespad=0, ncol=1, fontsize=15,
                       frameon=False, handletextpad=0.4)
 
         ax.spines[["top", "right"]].set_visible(False)
@@ -293,7 +298,7 @@ def plot_volcano(
         ]
     ).drop_duplicates()
 
-    fig = plt.figure(figsize=(8, 10))
+    fig = plt.figure(figsize=(5.5, 5.55))
     ax = sns.scatterplot(
         data=grapher,
         x="log2FoldChange",
@@ -310,20 +315,21 @@ def plot_volcano(
 
     texts = [
         plt.text(x=row.log2FoldChange, y=row.padj_log, s=row.name,
-                 weight="bold", size=8)
+                 weight="bold", size=11)
         for _, row in annotation_subset.iterrows()
     ]
 
     adjust_text(texts, arrowprops=dict(arrowstyle="-", color="k"))
-    plt.legend(bbox_to_anchor=(1.4, 1), prop={"size": 10, "weight": "bold"})
-    plt.xticks(size=10, weight="bold")
-    plt.yticks(size=10, weight="bold")
-    plt.xlabel("$log_{2}$ fold change", fontsize=12)
-    plt.ylabel("-$log_{10}$ FDR", fontsize=12)
+    plt.legend(loc="upper left", bbox_to_anchor=(1.02, 1),
+               prop={"size": 13, "weight": "bold"})
+    plt.xticks(size=17, weight="bold")
+    plt.yticks(size=17, weight="bold")
+    plt.xlabel("$log_{2}$ fold change", fontsize=17)
+    plt.ylabel("-$log_{10}$ FDR", fontsize=17)
     plt.ylim(-2, grapher["padj_log"].max() + 5)
     plt.title(
         f"{analysis_name} Differentially Expressed Genes",
-        fontsize=12,
+        fontsize=17,
         fontweight="bold",
     )
 
@@ -362,7 +368,7 @@ def plot_heatmap(
         lut[cond] = "magenta" if "negative" in c or c == "control" else next(other_colors)
     col_colors = list(dds_sigs.obs.condition.map(lut))
     g = sns.clustermap(
-        figsize=(8, 10),
+        figsize=(5.5, 5.5),
         data=grapher,
         cmap="RdYlBu_r",
         z_score=0,
@@ -379,7 +385,8 @@ def plot_heatmap(
 
     vmin, vmax = g.ax_heatmap.collections[0].get_clim()
     g.ax_cbar.set_yticks([vmin, 0, vmax])
-    g.ax_cbar.set_yticklabels([f"{vmin:.1f}", "0", f"{vmax:.1f}"])
+    g.ax_cbar.set_yticklabels([f"{vmin:.1f}", "0", f"{vmax:.1f}"], fontsize=7)
+    g.ax_cbar.yaxis.label.set_size(7)
 
     handles = [Patch(facecolor=lut[name], label=name) for name in lut]
 
@@ -387,7 +394,7 @@ def plot_heatmap(
         handles=handles,
         bbox_to_anchor=(1.0, 1.0),
         loc="upper left",
-        fontsize=10,
+        fontsize=9,
         fancybox=True,
         frameon=True,
         facecolor="white",
@@ -400,16 +407,18 @@ def plot_heatmap(
 
     reordered_genes = grapher.index[g.dendrogram_row.reordered_ind]
     g.ax_heatmap.set_yticks(np.arange(len(reordered_genes)) + 0.5)
-    g.ax_heatmap.set_yticklabels(reordered_genes, fontsize=8)
+    g.ax_heatmap.set_yticklabels(reordered_genes, fontsize=6)
 
     g.ax_col_dendrogram.set_title(
         f"{analysis_name} Differentially Expressed Genes",
-        fontsize=12,
+        fontsize=17,
         fontweight="bold",
         pad=2,
     )
 
     g.figure.subplots_adjust(hspace=0.01, right=0.82)
+    cbar_x, _, cbar_w, cbar_h = g.ax_cbar.get_position().bounds
+    g.ax_cbar.set_position((cbar_x, 0.5 - cbar_h / 2, cbar_w, cbar_h))
     g.figure.patch.set_facecolor("white")
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -446,11 +455,12 @@ def plot_go(
         palette=list(color_mapper.to_rgba(go_terms.fdr.values)),
     )
 
-    ax.set_yticklabels([textwrap.fill(term, 40) for term in go_terms["term"]])
-    ax.set_xlabel("Gene Ratio (n_genes in term / n_study genes)", fontsize=10)
+    ax.set_yticklabels([textwrap.fill(term, 30) for term in go_terms["term"]])
+    ax.set_xlabel("Gene Ratio (n_genes in term / n_study genes)", fontsize=18)
     ax.set_ylabel("")
+    ax.tick_params(labelsize=17)
     ax.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter("%.2f"))
-    ax.set_title(f"{condition} {title}", fontsize=12)
+    ax.set_title(f"{condition} {title}", fontsize=20)
 
     cbar = fig.colorbar(
         color_mapper,
@@ -461,8 +471,8 @@ def plot_go(
         aspect=60,
     )
     cbar.outline.set_visible(False)
-    cbar.ax.tick_params(labelsize=8)
-    cbar.set_label("FDR (adjusted p)", fontsize=10)
+    cbar.ax.tick_params(which="both", labelsize=16)
+    cbar.set_label("FDR (adjusted p)", fontsize=18)
 
     ax.spines[["top", "right"]].set_visible(False)
 
