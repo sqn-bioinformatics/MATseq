@@ -19,8 +19,7 @@ def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: s
     """Render a confusion matrix normalized over the true classes (rows)."""
     fig, ax = plt.subplots(figsize=(6.5, 6))
     cm = np.asarray(cm, dtype=float)
-    labels = ["NC" if c == "negative_control" else CLASS_DISPLAY_NAMES.get(c, c)
-              for c in class_names]
+    labels = [CLASS_DISPLAY_NAMES.get(c, c) for c in class_names]
     n = cm.shape[0]
     annot_fs = 15 if n <= 6 else (13 if n == 7 else 12)
     tick_fs = 18 if n <= 7 else 16
@@ -247,8 +246,7 @@ def plot_pca(
         handles, labels_txt = ax.get_legend_handles_labels()
         if handles:
             ax.legend(handles,
-                      ["NC" if lb == "negative_control" else CLASS_DISPLAY_NAMES.get(lb, lb)
-                       for lb in labels_txt],
+                      [CLASS_DISPLAY_NAMES.get(lb, lb) for lb in labels_txt],
                       loc="upper left", bbox_to_anchor=(1.02, 1.0),
                       borderaxespad=0, ncol=1, fontsize=15,
                       frameon=False, handletextpad=0.4)
@@ -417,8 +415,6 @@ def plot_heatmap(
     )
 
     g.figure.subplots_adjust(hspace=0.01, right=0.82)
-    cbar_x, _, cbar_w, cbar_h = g.ax_cbar.get_position().bounds
-    g.ax_cbar.set_position((cbar_x, 0.5 - cbar_h / 2, cbar_w, cbar_h))
     g.figure.patch.set_facecolor("white")
     output_path.mkdir(parents=True, exist_ok=True)
 

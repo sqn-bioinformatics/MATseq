@@ -34,7 +34,7 @@ Raw inputs consumed (relative to the results directory):
      S7: feature_selection/mutual_information.csv
      S8: feature_selection/forest_kmeans.csv
      S9-S10: nested_cv/supp_nested_cv_{main,no_flapa}.csv
-     S11-S12: validation/external_validation{,_no_flapa}_performance.csv
+     S11-S12: validation/external_validation_{main,no_flapa}_performance.csv
 """
 from pathlib import Path
 
@@ -102,10 +102,6 @@ METRICS = [("accuracy", "Accuracy"), ("f1", "F1"),
            ("precision", "Precision"), ("recall", "Recall")]
 TABLE2_COLUMNS = ["Condition", "Model", "Accuracy", "F1", "Precision", "Recall",
                   "Training time"]
-SUPP_TABLE_7_COLUMNS = ["gene_rank", "MI_seed_1043", "MI_seed_3669",
-                        "MI_seed_6360", "MI_mean"]
-SUPP_TABLE_8_COLUMNS = ["n_selected_genes", "ARI_seed_1043", "ARI_seed_3669",
-                        "ARI_seed_6360", "ARI_mean", "ARI_std"]
 SUPP_TABLE_9_COLUMNS = ["model", "accuracy_mean", "accuracy_std",
                         "balanced_accuracy_mean", "balanced_accuracy_std",
                         "f1_mean", "f1_std", "f1_weighted_mean",
@@ -152,7 +148,6 @@ def format_table2(
     Writes:
         table2_formatted.csv  -- plain 'mean ± SD' cells, ** around bolded cells.
         Table_2.xlsx          -- Excel table with the same columns as the paper example.
-        table2.tex            -- booktabs LaTeX, \textbf{} on bolded cells.
     Returns the formatted DataFrame that backs both outputs.
     """
     raw_csv = Path(raw_csv)
@@ -226,63 +221,12 @@ def format_table2(
     )
     display[TABLE2_COLUMNS].to_csv(output_dir / "table2_formatted.csv", index=False)
     display[TABLE2_COLUMNS].to_excel(output_dir / "Table_2.xlsx", index=False)
-
-    _write_xlsx(fmt, output_dir / "table2.xlsx")
     return fmt
-
-
-def _write_latex(fmt, out_path):
-    headers = [h for _, h in METRICS] + ["Training time"]
-    has_condition = "Condition" in fmt.columns
-    lines = [
-        r"\begin{table}[t]",
-        r"\centering",
-        r"\caption{Classification performance from MATseq.py nested "
-        r"cross-validation. Cells show mean $\pm$ standard deviation across "
-        r"the five outer folds; the best value per metric is in bold.}",
-        r"\label{tab:table2}",
-        r"\begin{tabular}{" + ("ll" if has_condition else "l")
-        + "c" * len(headers) + "}",
-        r"\toprule",
-        (("Condition & " if has_condition else "") + "Model & "
-         + " & ".join(headers) + r" \\"),
-        r"\midrule",
-    ]
-    prev_cond = None
-    for _, r in fmt.iterrows():
-        cells = []
-        for _, header in METRICS:
-            v = r[header]
-            if v.startswith("**") and v.endswith("**"):
-                v = r"\textbf{" + v.strip("*") + "}"
-            cells.append(v.replace("±", r"$\pm$"))
-        cells.append(str(r.get("Training time", "")))
-        if has_condition:
-            if prev_cond is not None and r["Condition"] != prev_cond:
-                lines.append(r"\midrule")
-            cond = r["Condition"] if r["Condition"] != prev_cond else ""
-            lines.append(
-                f"{cond} & {r['Model']} & " + " & ".join(cells) + r" \\"
-            )
-            prev_cond = r["Condition"]
-        else:
-            lines.append(f"{r['Model']} & " + " & ".join(cells) + r" \\")
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
-    Path(out_path).write_text("\n".join(lines) + "\n")
 
 
 # ============================================================================
 # Supplementary tables S1-S12
 # ============================================================================
-def _read_go_table(path):
-    """Read a raw GO CSV, dropping a leading unnamed index column if present."""
-    df = pd.read_csv(path)
-    unnamed = [c for c in df.columns if str(c).startswith("Unnamed:")]
-    if unnamed:
-        df = df.drop(columns=unnamed)
-    return df
-
-
 def assemble_supplementary_table_1(results_dir, output_dir=None,
                                    filename="Supplementary_Table_1.csv"):
     """Assemble the wide per-ligand DESeq2 table (S1).
@@ -331,7 +275,7 @@ def assemble_supplementary_table_2(results_dir, output_dir=None,
         fpath = go_dir / subset / f"{file_key}_go_terms.csv"
         if not fpath.exists():
             raise FileNotFoundError(f"S2: missing GO file {fpath}")
-        df = _read_go_table(fpath)
+        df = pd.read_csv(fpath)
         df.insert(0, "Ligand", label)
         frames.append(df)
     merged = pd.concat(frames, axis=0, ignore_index=True)
@@ -400,7 +344,7 @@ def assemble_supplementary_table_4(results_dir, output_dir=None,
         fpath = go_dir / fname
         if not fpath.exists():
             raise FileNotFoundError(f"S4: missing GO file {fpath}")
-        df = _read_go_table(fpath)
+        df = pd.read_csv(fpath)
         df.insert(0, "Condition", label)
         frames.append(df)
     merged = pd.concat(frames, axis=0, ignore_index=True)
@@ -456,12 +400,10 @@ def assemble_supplementary_table_7(results_dir, output_dir=None,
         raise FileNotFoundError(f"S7: missing mutual-information file {fpath}")
     src = pd.read_csv(fpath)
     out = pd.DataFrame(index=src.index)
-    out["gene_rank"] = src["rank"] if "rank" in src.columns else range(1, len(src) + 1)
-    for col in SUPP_TABLE_7_COLUMNS[1:4]:
-        raw_col = col.replace("MI_seed_", "mi_seed_")
-        out[col] = src[raw_col] if raw_col in src.columns else pd.NA
-    out["MI_mean"] = src["mi_sorted"] if "mi_sorted" in src.columns else src.get("MI_mean")
-    out = out[SUPP_TABLE_7_COLUMNS]
+    out["gene_rank"] = src["rank"]
+    for raw_col in src.columns[src.columns.str.startswith("mi_sorted_seed_")]:
+        out[raw_col.replace("mi_sorted_seed_", "MI_seed_")] = src[raw_col]
+    out["MI_mean"] = src["mi_sorted"]
     out_dir = Path(output_dir) if output_dir else results_dir / "tables"
     out_dir.mkdir(parents=True, exist_ok=True)
     out.to_csv(out_dir / filename, index=False)
@@ -478,12 +420,10 @@ def assemble_supplementary_table_8(results_dir, output_dir=None,
     src = pd.read_csv(fpath)
     src = src.sort_values("n_selected").reset_index(drop=True)
     out = pd.DataFrame({"n_selected_genes": src["n_selected"]})
-    for col in SUPP_TABLE_8_COLUMNS[1:4]:
-        raw_col = col.replace("ARI_seed_", "ari_seed_")
-        out[col] = src[raw_col] if raw_col in src.columns else pd.NA
+    for raw_col in src.columns[src.columns.str.startswith("ari_seed_")]:
+        out[raw_col.replace("ari_seed_", "ARI_seed_")] = src[raw_col]
     out["ARI_mean"] = src["ari_mean"]
     out["ARI_std"] = src["ari_std"]
-    out = out[SUPP_TABLE_8_COLUMNS]
     out_dir = Path(output_dir) if output_dir else results_dir / "tables"
     out_dir.mkdir(parents=True, exist_ok=True)
     out.to_csv(out_dir / filename, index=False)
@@ -528,9 +468,9 @@ def assemble_supplementary_table_11(results_dir, output_dir=None,
                                     filename="Supplementary_Table_11.csv"):
     """Assemble the external-validation performance table (S11)."""
     results_dir = Path(results_dir)
-    fpath = results_dir / "validation" / "external_validation_performance.csv"
+    fpath = results_dir / "validation" / "external_validation_main_performance.csv"
     if not fpath.exists():
-        fpath = results_dir / "tables" / "external_validation_performance.csv"
+        fpath = results_dir / "tables" / "external_validation_main_performance.csv"
     if not fpath.exists():
         raise FileNotFoundError(f"S11: missing validation summary {fpath}")
     src = pd.read_csv(fpath)

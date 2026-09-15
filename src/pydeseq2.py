@@ -9,11 +9,8 @@ from pydeseq2.ds import DeseqStats
 from pydeseq2.default_inference import DefaultInference
 
 from .visualization import plot_volcano, plot_heatmap, plot_go
-from .go_term_analysis import (
-    initialize_go,
-    generate_go_table,
-    merge_go_tables,
-)
+from .go_term_analysis import merge_go_tables, run_go_analysis
+
 class DataProcessor:
     """Process raw count data and perform DESeq2 analysis."""
 
@@ -145,7 +142,8 @@ class DESeq2:
         figures_dir: Path,
         go_terms_dir: Path,
         go_fig_dir: Path,
-        go_data_dir: Path,
+        goeaobj,
+        geneid_symbol_mapper: dict,
         padj_threshold: float = 0.05,
         log2fc_threshold: float = 2.0,
         n_cpus: int = 42,
@@ -171,14 +169,13 @@ class DESeq2:
         self.figures_dir = figures_dir
         self.go_terms_dir = go_terms_dir
         self.go_fig_dir = go_fig_dir
-        self.go_data_dir = go_data_dir
+        self.goeaobj = goeaobj
+        self.geneid_symbol_mapper = geneid_symbol_mapper
         for directory in (output_dir, figures_dir, go_terms_dir, go_fig_dir):
             directory.mkdir(parents=True, exist_ok=True)
 
         self.results = {}
         self.de_genes = set()
-        self._goeaobj = None
-        self._geneid_symbol_mapper = None
 
     def run_analysis(
         self, class_list: list[str], class_to_compare_to: str = "negative_control"
@@ -241,8 +238,10 @@ class DESeq2:
         plot_heatmap(dds, sigs, ligand_name, output_path=self.figures_dir)
 
         try:
-            go_df = self._go_table(ligand_name, set(sigs.index))
-            go_df.to_csv(self.go_terms_dir / f"{ligand_name}_go_terms.csv")
+            go_df = run_go_analysis(
+                set(sigs.index), ligand_name, self.go_terms_dir,
+                self.goeaobj, self.geneid_symbol_mapper,
+            )
             if not go_df.empty:
                 plot_go(
                     go_df,
@@ -252,16 +251,6 @@ class DESeq2:
                 )
         except Exception as e:
             print(f"Warning: GO enrichment failed for {ligand_name}: {e}")
-
-    def get_go_objects(self) -> tuple:
-        """Return (goeaobj, geneid_symbol_mapper), initializing if needed."""
-        if self._goeaobj is None:
-            self._goeaobj, self._geneid_symbol_mapper = initialize_go(self.go_data_dir)
-        return self._goeaobj, self._geneid_symbol_mapper
-
-    def _go_table(self, ligand_name: str, genes: set) -> pd.DataFrame:
-        goeaobj, mapper = self.get_go_objects()
-        return generate_go_table(set(genes), goeaobj, mapper)
 
     def get_de_genes(self):
         """Return set of all differentially expressed genes."""

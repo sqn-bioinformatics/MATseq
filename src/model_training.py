@@ -86,7 +86,6 @@ class ModelTrainer:
                     random_state=random_state,
                     dual="auto",
                     verbose=0,
-                    class_weight="balanced",
                 ),
                 cv=2,
             ),
@@ -95,12 +94,10 @@ class ModelTrainer:
                 early_stopping=False,
                 max_iter=1000,
                 tol=1e-3,
-                class_weight="balanced",
                 random_state=random_state,
             ),
             "LogisticRegression": LogisticRegression(
                 penalty="l2",
-                class_weight="balanced",
                 solver="liblinear",
                 max_iter=10000,
                 random_state=random_state,
@@ -109,14 +106,14 @@ class ModelTrainer:
                 max_depth=5,
                 n_estimators=500,
                 random_state=random_state,
-                n_jobs=-1,
-                class_weight="balanced",
+                n_jobs=1,
             ),
             "XGBoost": XGBClassifier(
                 objective="multi:softmax",
                 max_depth=5,
                 n_estimators=500,
                 random_state=random_state,
+                n_jobs=1,
                 verbosity=0,
             ),
         }
@@ -136,6 +133,8 @@ class ModelTrainer:
         param_grids: dict[str, dict[str, list]],
         output_dir: Path,
         fig_dir: Path,
+        cache_dir: Path,
+        k_best: int,
         outer_cv: int = 5,
         inner_cv: int = 3,
         scoring: str = "f1_macro",
@@ -159,24 +158,25 @@ class ModelTrainer:
             for model_name, model in self.models.items():
                 pipe = Pipeline([
                     *feature_pipeline(
-                        **FEATURE_SELECTION_CONFIG, random_state=fold_seed
+                        **FEATURE_SELECTION_CONFIG, k_best=k_best, random_state=fold_seed, n_jobs=1
                     ).steps,
                     ("clf", clone(model)),
-                ])
+                ], memory=str(cache_dir))
                 gs = GridSearchCV(
                     pipe,
                     param_grids[model_name],
                     cv=StratifiedKFold(n_splits=inner_cv, shuffle=True, random_state=fold_seed),
                     scoring=scoring,
-                    n_jobs=-1,
-                    refit=True,
+                    n_jobs=48,
+                    refit=False,
                 )
+                fit_params = {"clf__sample_weight": compute_sample_weight("balanced", y_tr)}
                 print(f"  Outer fold {fold_idx} — tuning {model_name}...")
-                gs.fit(X_tr, y_tr, **(
-                    {"clf__sample_weight": compute_sample_weight("balanced", y_tr)}
-                    if model_name == "XGBoost" else {}
-                ))
-                y_pred = self.label_encoder.inverse_transform(gs.best_estimator_.predict(X_te))
+                gs.fit(X_tr, y_tr, **fit_params)
+                best = pipe.set_params(
+                    **gs.best_params_, select_forest__estimator__n_jobs=48
+                ).fit(X_tr, y_tr, **fit_params)
+                y_pred = self.label_encoder.inverse_transform(best.predict(X_te))
 
                 per_fold_rows.append({
                     "model": model_name,
@@ -235,14 +235,16 @@ class ModelTrainer:
     def refit(self, genes: list[str]) -> None:
         """Refit every model with its selected params on the full panel restricted to genes."""
         for model_name, model in self.models.items():
+            pre_steps = preprocessing_pipeline().steps
             pipe = Pipeline([
-                *preprocessing_pipeline().steps,
+                pre_steps[0],
                 ("select_genes", ColumnSelector(genes)),
+                *pre_steps[1:],
                 ("clf", clone(model)),
             ]).set_output(transform="pandas")
             pipe.set_params(**self.selected_params_[model_name]["chosen_params"])
-            pipe.fit(self.X, self.y_enc, **(
-                {"clf__sample_weight": compute_sample_weight("balanced", self.y_enc)}
-                if model_name == "XGBoost" else {}
-            ))
+            pipe.fit(
+                self.X, self.y_enc,
+                clf__sample_weight=compute_sample_weight("balanced", self.y_enc),
+            )
             self.trained_models[model_name] = pipe
