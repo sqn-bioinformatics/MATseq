@@ -262,7 +262,7 @@ def merge_go_tables(
 
     for go_file in go_files:
         ligand_name = go_file.stem.split("_")[0]
-        df = pd.read_csv(go_file, index_col=0)
+        df = pd.read_csv(go_file)
 
         df.insert(0, "Ligand", ligand_name)
 

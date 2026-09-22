@@ -59,12 +59,12 @@ FEATURE_SELECTION_CONFIG = _config["feature_selection"]
 MODEL_TRAINING_CONFIG = _config["model_training"]
 HYPERPARAMETER_GRIDS = _config["hyperparameter_grids"]
 _PALETTES = _config["colors"]
-CUSTOM_PALETTE_9 = _PALETTES["palette_9"]
 LIGAND_ALIASES = _config.get("ligand_aliases", {})
 MAIN_LIGANDS = _config["ligands"]["main_ligands"]
 ADDITIONAL_LIGANDS = _config["ligands"]["additional_ligands"]
 BACTERIAL_LIGANDS = _config["ligands"]["bacterial_ligands"]
 CLASS_ORDER = _config["class_order_for_plotting"]
+CONDITION_ORDER = ["all_genes", "feature_selection", "fs_plus_de", "random_selected"]
 CLASS_DISPLAY_NAMES = _config["class_display_names"]
 SUBSET_DISPLAY_NAMES = _config["subset_display_names"]
 SUBSET_PALETTES = {
@@ -73,7 +73,7 @@ SUBSET_PALETTES = {
 }
 
 def get_config(key: str) -> Any:
-    """Get a configuration value using dot notation, e.g. 'paths.data_dir'."""
+    """Get a configuration value using dot notation, e.g. 'paths.featurecounts_dir'."""
     config = _load_config()
     for part in key.split("."):
         try:
@@ -81,7 +81,3 @@ def get_config(key: str) -> Any:
         except (TypeError, KeyError):
             raise KeyError(f"Config key '{key}' not found")
     return config
-
-def primary_geneset_name() -> str:
-    """Geneset key for the full tuned selection, e.g. 'selected_130' (= n_selected)."""
-    return f"selected_{FEATURE_SELECTION_CONFIG['max_features']}"

@@ -15,13 +15,8 @@ def compose_figures(
     max_size: tuple[float, float] = (6.69, 8.66),
     title: str | None = None,
     first_letter: int = 0,
+    margins: tuple[float, float, float, float] = (0.3, 0.3, 0.05, 0.05),
 ) -> Path:
-    """Lay panels out row by row, labelled A, B, ..., within max_size inches.
-
-    The default max_size is an A4 text block (170 mm wide) with ~37 mm of
-    height left for the caption. Panels share one column width, are aligned
-    to the top-left of their cell and are cropped only of their white border.
-    """
     missing = [p for p in panel_paths if not p.is_file()]
     if missing:
         raise FileNotFoundError(f"Missing panel images: {missing}")
@@ -32,7 +27,7 @@ def compose_figures(
         rows = np.flatnonzero(ink.any(axis=1))
         cols = np.flatnonzero(ink.any(axis=0))
         images.append(img[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1])
-    gap, left, right, bottom = 0.3, 0.3, 0.05, 0.05
+    gap, left, right, bottom = margins
     heading = textwrap.fill(title, 90) if title else ""
     top = 0.25 + (0.22 * (heading.count("\n") + 1) if title else 0.0)
     nrows = -(-len(images) // ncols)
@@ -63,7 +58,7 @@ def compose_figures(
         ax.axis("off")
         ax.annotate(
             ascii_uppercase[first_letter + i], (0, 1), xycoords="axes fraction",
-            xytext=(-6, 3), textcoords="offset points", ha="right",
+            xytext=(-8, 6), textcoords="offset points", ha="right",
             va="bottom", fontsize=12, fontweight="bold",
         )
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -2,6 +2,7 @@
 """MAT-seq pipeline orchestration script."""
 
 import argparse
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -11,7 +12,6 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent))
 
 from src import (
-    CUSTOM_PALETTE_9,
     CLASS_ORDER,
     SUBSET_PALETTES,
     SUBSET_DISPLAY_NAMES,
@@ -28,6 +28,7 @@ from src import (
     ModelTrainer,
     create_fs_de_go_table,
     extract_subset,
+    initialize_go,
     load_tlr_data,
     plot_mutual_information,
     plot_forest_ari_sweep,
@@ -38,14 +39,16 @@ from src import (
     prepare_counts,
 )
 from src.config import (
+    ADDITIONAL_LIGANDS,
+    BACTERIAL_LIGANDS,
+    MAIN_LIGANDS,
     get_config,
     get_genome_dir,
     get_sample_dir,
     get_work_dir,
-    primary_geneset_name,
 )
 from src.compose_figures import compose_figures
-from src.make_tables import assemble_supplementary_tables, format_table2
+from src.compose_tables import assemble_supplementary_tables, format_table2
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
@@ -121,9 +124,7 @@ def run_pipeline(
             genome_dir=genome_dir,
             dry_run=dry_run,
         )
-        if not ok:
-            return None
-        if dry_run:
+        if not ok or dry_run:
             return None
 
     print("\n--- STEP 1: COUNT TABLE GENERATION ---")
@@ -154,18 +155,23 @@ def run_pipeline(
 
     print("\n--- STEP 2: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ---")
     de_dir = RESULTS_DIR / "differential_gene_expression"
-    de_dir.mkdir(parents=True, exist_ok=True)
-    go_data_dir = Path(__file__).parent / "data" / "go_terms_support"
+    deseq2_fig_dir = RESULTS_DIR / "figures" / "deseq2"
+    go_dir = RESULTS_DIR / "go_terms"
+    go_fig_dir = RESULTS_DIR / "figures" / "go"
+    goeaobj, geneid_symbol_mapper = initialize_go(
+        Path(__file__).parent / "data" / "go_terms_support"
+    )
 
     for subset, (X_sub, y_sub) in subset_xy.items():
         deseq2 = DESeq2(
             raw_counts=X_sub,
             sample_labels=y_sub,
             output_dir=de_dir / subset,
-            figures_dir=RESULTS_DIR / "figures" / "deseq2" / subset,
-            go_terms_dir=RESULTS_DIR / "go_terms" / subset,
-            go_fig_dir=RESULTS_DIR / "figures" / "go" / subset,
-            go_data_dir=go_data_dir,
+            figures_dir=deseq2_fig_dir / subset,
+            go_terms_dir=go_dir / subset,
+            go_fig_dir=go_fig_dir / subset,
+            goeaobj=goeaobj,
+            geneid_symbol_mapper=geneid_symbol_mapper,
             **DESEQ2_CONFIG,
             name=subset,
         )
@@ -181,9 +187,9 @@ def run_pipeline(
 
     print("\n--- STEP 3: FEATURE ENGINEERING GENE NUMBER DETERMINATION ---")
     out_dir = RESULTS_DIR / "feature_selection"
-    fig_dir = RESULTS_DIR / "figures" / "feature_selection"
+    fs_fig_dir = RESULTS_DIR / "figures" / "feature_selection"
     out_dir.mkdir(parents=True, exist_ok=True)
-    fig_dir.mkdir(parents=True, exist_ok=True)
+    fs_fig_dir.mkdir(parents=True, exist_ok=True)
 
     pre_pipe = preprocessing_pipeline().set_output(transform="pandas")
     X_train_pre = pre_pipe.fit_transform(X_train, y_train)
@@ -202,14 +208,13 @@ def run_pipeline(
     mi_result["scores"].to_csv(out_dir / "mutual_information.csv", index=False)
     ari_scan.to_csv(out_dir / "forest_kmeans.csv", index=False)
 
-    plot_mutual_information(mi_result, fig_dir)
-    plot_forest_ari_sweep(ari_scan, fig_dir)
+    plot_mutual_information(mi_result, fs_fig_dir)
+    plot_forest_ari_sweep(ari_scan, fs_fig_dir)
 
     print("\n --- STEP 4: PLOT PCA GRAPHS ---")
     pca_dir = RESULTS_DIR / "figures" / "pca"
-    pca_dir.mkdir(parents=True, exist_ok=True)
 
-    fs_pipe = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(
+    fs_pipe = feature_pipeline(**FEATURE_SELECTION_CONFIG, k_best=mi_elbow).set_output(
         transform="pandas"
     )
     fs_pipe.fit(X_train, y_train)
@@ -227,8 +232,8 @@ def run_pipeline(
 
         # The fs_pipe is fit once to train to keep parameters constant
         X_pca_selected = fs_pipe.transform(X_pca) 
-        palette = SUBSET_PALETTES.get(subset, CUSTOM_PALETTE_9)
-        hue_order = CLASS_ORDER.get(subset)
+        palette = SUBSET_PALETTES[subset]
+        hue_order = CLASS_ORDER[subset]
         for with_names, label_suffix in [(False, ""), (True, "_labeled")]:
             plot_pca(
                 X=X_pca_pre,
@@ -252,9 +257,9 @@ def run_pipeline(
             )
 
     print("\n--- STEP 5: FS vs DE VENN AND GO ---")
-    fig_dir = RESULTS_DIR / "figures" / "venn"
+    venn_dir = RESULTS_DIR / "figures" / "venn"
     tables_dir = RESULTS_DIR / "fs_de_genesets"
-    fig_dir.mkdir(parents=True, exist_ok=True)
+    venn_dir.mkdir(parents=True, exist_ok=True)
     tables_dir.mkdir(parents=True, exist_ok=True)
 
     fs_ranked = selected_with_importance(fs_pipe)
@@ -262,18 +267,17 @@ def run_pipeline(
     plot_venn(
         [de_genes, fs_genes],
         set_labels=("Differentially Expressed Genes", "Feature Selection Genes"),
-        output_path=fig_dir,
+        output_path=venn_dir,
         output_filename="venn_de_vs_fs.png",
         title="Differential expression vs. feature selection",
     )
-    goeaobj, geneid_symbol_mapper = deseq2_train.get_go_objects()
     create_fs_de_go_table(
         de_genes=de_genes,
         fs_genes=fs_genes,
         goeaobj=goeaobj,
         geneid_symbol_mapper=geneid_symbol_mapper,
-        output_dir=RESULTS_DIR / "go_terms",
-        fig_dir=RESULTS_DIR / "figures" / "go",
+        output_dir=go_dir,
+        fig_dir=go_fig_dir,
     )
 
     fs_ranked.to_csv(tables_dir / "fs_genes_ranked.csv", index=False)
@@ -287,14 +291,15 @@ def run_pipeline(
         tables_dir / "selected_vs_de_overlap_table.csv", index=False
     )
  
-    print("\n--- STEP 6: NESTED CV, GENESET REFIT, VALIDATION AND PREDICTIONS ---")
-    primary_gs = primary_geneset_name()  # e.g. 'selected_130'
+    print("\n--- STEP 6: NESTED CV, REFIT, VALIDATION AND PREDICTIONS ---")
     endpoint_subsets = {
         "additional_ligands": (X_other, y_other),
         "bacterial_ligands": (X_bact, y_bact),
     }
     mask, mask_test = y_train != "Fla-PA", y_test != "Fla-PA"
-    fs_wo = feature_pipeline(**FEATURE_SELECTION_CONFIG).set_output(transform="pandas")
+    fs_wo = feature_pipeline(**FEATURE_SELECTION_CONFIG, k_best=mi_elbow).set_output(
+        transform="pandas"
+    )
     fs_wo.fit(X_train[mask], y_train[mask])
     de_genes_wo = {
         gene
@@ -309,65 +314,54 @@ def run_pipeline(
         "main": {
             "X": X_train, "y": y_train, "X_test": X_test, "y_test": y_test,
             "fs_genes": fs_genes, "de_genes": de_genes,
-            "hp_dir": RESULTS_DIR / "hyperparameter_tuning",
-            "fig_dir": RESULTS_DIR / "figures" / "model_evaluation",
-            "model_dir": RESULTS_DIR / "models",
-            "nested_csv": nested_dir / "supp_nested_cv_main.csv",
-            "val_dir": val_root / "test_set",
-            "perf_csv": val_root / "external_validation_performance.csv",
-            "pred_dir": RESULTS_DIR / "predictions",
         },
         "no_flapa": {
             "X": X_train[mask], "y": y_train[mask],
             "X_test": X_test[mask_test], "y_test": y_test[mask_test],
             "fs_genes": set(selected_with_importance(fs_wo)["gene"]),
             "de_genes": de_genes_wo,
-            "hp_dir": RESULTS_DIR / "hyperparameter_tuning_no_flapa",
-            "fig_dir": RESULTS_DIR / "figures" / "model_evaluation" / "no_flapa",
-            "model_dir": RESULTS_DIR / "models" / "no_flapa",
-            "nested_csv": nested_dir / "supp_nested_cv_no_flapa.csv",
-            "val_dir": val_root / "test_set_no_flapa",
-            "perf_csv": val_root / "external_validation_no_flapa_performance.csv",
-            "pred_dir": RESULTS_DIR / "predictions" / "no_flapa",
         },
     }
 
     for panel_name, panel in panels.items():
         print(f"\nPanel: {panel_name}")
-        trainer = ModelTrainer(panel["X"], panel["y"], **MODEL_TRAINING_CONFIG)
-        trainer.tune_nested(
-            HYPERPARAMETER_GRIDS, panel["hp_dir"], panel["fig_dir"], outer_cv=5, inner_cv=3
-        ).to_csv(panel["nested_csv"], index=False)
-
-        fs, de = panel["fs_genes"], panel["de_genes"]
-        genesets = {
-            primary_gs: sorted(fs),
-            "de_overlap": sorted(fs & de),
-            "union_stable_de": sorted(fs | de),
-        }
-        validation = {}
-        for gene_set, genes in genesets.items():
-            trainer.refit(genes)
-            trainer.save_models(panel["model_dir"] / gene_set)
-            validation[gene_set] = predict_samples(
-                trainer, panel["X_test"], panel["y_test"], "test_ligands",
-                panel["val_dir"] / gene_set / "test_ligands", all_controls=True,
-            )
-            if gene_set == "union_stable_de":
-                continue
-            for subset, (X_end, y_end) in endpoint_subsets.items():
-                predict_samples(
-                    trainer, X_end, y_end, subset,
-                    panel["pred_dir"] / gene_set / subset, all_controls=False,
-                )
-        pd.concat(validation, names=["gene_set"]).reset_index(level=0).to_csv(
-            panel["perf_csv"], index=False
+        panel.update(
+            hp_dir=RESULTS_DIR / "hyperparameter_tuning" / panel_name,
+            fig_dir=RESULTS_DIR / "figures" / "model_evaluation" / panel_name,
+            model_dir=RESULTS_DIR / "models" / panel_name,
+            nested_csv=nested_dir / f"supp_nested_cv_{panel_name}.csv",
+            val_dir=val_root / f"test_set_{panel_name}" / "test_ligands",
+            val_fig_dir=RESULTS_DIR / "figures" / "validation" / panel_name / "test_ligands",
+            perf_csv=val_root / f"external_validation_{panel_name}_performance.csv",
+            pred_dir=RESULTS_DIR / "predictions" / panel_name,
+            pred_fig_dir=RESULTS_DIR / "figures" / "predictions" / panel_name,
         )
+        cache_dir = panel["hp_dir"] / "pipeline_cache"
+        trainer = ModelTrainer(panel["X"], panel["y"], **MODEL_TRAINING_CONFIG)
+        if cache_dir.exists():
+            shutil.rmtree(cache_dir)
+        trainer.tune_nested(
+            HYPERPARAMETER_GRIDS, panel["hp_dir"], panel["fig_dir"], cache_dir,
+            k_best=mi_elbow, fs_genes=panel["fs_genes"], de_genes=panel["de_genes"],
+            outer_cv=5, inner_cv=3,
+        ).to_csv(panel["nested_csv"], index=False)
+        shutil.rmtree(cache_dir)
+
+        trainer.refit(sorted(panel["fs_genes"]))
+        trainer.save_models(panel["model_dir"])
+        predict_samples(
+            trainer, panel["X_test"], panel["y_test"], "test_ligands",
+            panel["val_dir"], panel["val_fig_dir"],
+        ).to_csv(panel["perf_csv"], index=False)
+        for subset, (X_end, y_end) in endpoint_subsets.items():
+            predict_samples(
+                trainer, X_end, y_end, subset,
+                panel["pred_dir"] / subset, panel["pred_fig_dir"] / subset,
+            )
 
     print("\n--- STEP 7: TLR VISUALIZATION ---")
-    tlr2_df, tlr4_df, flapa_data = load_tlr_data(
-        data_dir=Path(__file__).parent / "data" / "supplementary_data"
-    )
+    supp_data_dir = Path(__file__).parent / "data" / "supplementary_data"
+    tlr2_df, tlr4_df, flapa_data = load_tlr_data(data_dir=supp_data_dir)
     plot_tlr_hek_blue(
         tlr2_df, tlr4_df, flapa_data,
         output_path=RESULTS_DIR / "figures" / "supplementary",
@@ -375,42 +369,46 @@ def run_pipeline(
     )
 
     print("\n--- STEP 8: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
-    manuscript_tables_dir = RESULTS_DIR / "tables"
-    manuscript_tables_dir.mkdir(parents=True, exist_ok=True)
-    composite_figures_dir = Path(__file__).parent / "paper" / "paper_updated" / "figures"
-    composite_figures_dir.mkdir(parents=True, exist_ok=True)
+    manuscript_tables_dir = RESULTS_DIR / "paper"/ "tables"
+    composite_figures_dir = RESULTS_DIR/ "paper" / "figures"
     format_table2(
-        RESULTS_DIR / "nested_cv" / "supp_nested_cv_main.csv",
+        panels["main"]["nested_csv"],
+        manuscript_tables_dir / "table2_formatted.csv",
+        manuscript_tables_dir / "Table_2.xlsx",
+    )
+    format_table2(
+        panels["no_flapa"]["nested_csv"],
+        manuscript_tables_dir / "Supplementary_Table_8.csv",
+    )
+    assemble_supplementary_tables(
+        de_dir, go_dir, tables_dir, out_dir, supp_data_dir,
         output_dir=manuscript_tables_dir,
     )
-    assemble_supplementary_tables(RESULTS_DIR, output_dir=manuscript_tables_dir)
-    deseq2_dir = RESULTS_DIR / "figures" / "deseq2"
     compose_figures(
-        [deseq2_dir / "train_ligands" / "LPS_volcano.png",
-         deseq2_dir / "train_ligands" / "LPS_histogram.png"],
-        composite_figures_dir / "Figure_2.png",
+        [deseq2_fig_dir / "train_ligands" / "LPS_volcano.png",
+         deseq2_fig_dir / "train_ligands" / "LPS_histogram.png"],
+        composite_figures_dir / "Figure2.png",
         ncols=2,
-        max_size=(9.84, 6.69),
+        margins=(0.45, 0.4, 0.3, 0.3),
     )
     figure3_panels = [
-        RESULTS_DIR / "figures" / "feature_selection" / "mutual_information.png",
-        RESULTS_DIR / "figures" / "feature_selection" / "forest_ari_sweep.png",
-        RESULTS_DIR / "figures" / "venn" / "venn_de_vs_fs.png",
-        RESULTS_DIR / "figures" / "pca" / "pca_train_ligands.png",
-        RESULTS_DIR / "figures" / "pca" / "pca_train_ligands_fs.png",
-        RESULTS_DIR / "figures" / "go" / "de_intersect_fs_go.png",
+        fs_fig_dir / "mutual_information.png",
+        fs_fig_dir / "forest_ari_sweep.png",
+        venn_dir / "venn_de_vs_fs.png",
+        pca_dir / "pca_train_ligands.png",
+        pca_dir / "pca_train_ligands_fs.png",
+        go_fig_dir / "de_intersect_fs_go.png",
     ]
-    compose_figures(figure3_panels, composite_figures_dir / "Figure_3.png")
+    compose_figures(figure3_panels, composite_figures_dir / "Figure3.png")
 
     main_panel = panels["main"]
     for filename, subset, cm_dir in [
-        ("Figure4.png", "train_ligands", main_panel["fig_dir"]),
-        ("Figure5.png", "test_ligands",
-         main_panel["val_dir"] / primary_gs / "test_ligands"),
+        ("Figure4.png", "train_ligands", main_panel["fig_dir"] / "feature_selection"),
+        ("Figure5.png", "test_ligands", main_panel["val_fig_dir"]),
         ("Figure6.png", "additional_ligands",
-         main_panel["pred_dir"] / primary_gs / "additional_ligands"),
+         main_panel["pred_fig_dir"] / "additional_ligands"),
         ("Figure7.png", "bacterial_ligands",
-         main_panel["pred_dir"] / primary_gs / "bacterial_ligands"),
+         main_panel["pred_fig_dir"] / "bacterial_ligands"),
     ]:
         compose_figures(
             [pca_dir / f"pca_{subset}_fs.png"]
@@ -422,23 +420,23 @@ def run_pipeline(
         )
 
     supp1_ligands = [
-        ("train_ligands", "Pam3"),
-        ("train_ligands", "R848"),
-        ("train_ligands", "PGN"),
-        ("train_ligands", "Fla-PA"),
-        ("additional_ligands", "LTA"),
-        ("additional_ligands", "MPLA"),
-        ("additional_ligands", "Pam2"),
-        ("bacterial_ligands", "HK E.coli"),
-        ("bacterial_ligands", "HK S.aureus"),
+        (subset, ligand)
+        for subset, ligands in [
+            ("train_ligands", MAIN_LIGANDS),
+            ("additional_ligands", ADDITIONAL_LIGANDS),
+            ("bacterial_ligands", BACTERIAL_LIGANDS),
+        ]
+        for ligand in CLASS_ORDER[subset]
+        if ligand in ligands and ligand not in ("negative_control", "LPS")
     ]
     for page, start in enumerate(range(0, len(supp1_ligands), 2)):
         compose_figures(
-            [deseq2_dir / subset / f"{ligand}_{kind}.png"
+            [deseq2_fig_dir / subset / f"{ligand}_{kind}.png"
              for subset, ligand in supp1_ligands[start:start + 2]
              for kind in ("volcano", "histogram")],
             composite_figures_dir / f"Supplementary_Figure1p{page + 1}.png",
             first_letter=start * 2,
+            margins=(0.45, 0.4, 0.3, 0.3),
         )
 
     print("\n" + "=" * 80)

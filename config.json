@@ -1,9 +1,5 @@
 {
   "paths": {
-    "data_dir": "~/MATseq/data",
-    "go_terms_support_dir": "~/MATseq/data/go_terms_support",
-    "results_dir": "~/MATseq/results",
-    "figures_dir": "~/MATseq/results/figures",
     "featurecounts_dir": "~/MATseq/results/featurecounts"
   },
   "deseq2": {
@@ -12,10 +8,9 @@
     "n_cpus": 42
   },
   "feature_selection": {
-    "k_best": 5022,
     "n_estimators": 8000,
     "max_depth": 8,
-    "max_features": 135
+    "max_features": 132
   },
   "model_training": {
     "random_state": 42
@@ -89,7 +84,7 @@
     ]
   },
   "class_display_names": {
-    "negative_control": "Negative Control"
+    "negative_control": "NC"
   },
   "subset_display_names": {
     "train_ligands": "Training Ligands",
@@ -185,13 +180,11 @@
     },
     "XGBoost": {
       "clf__max_depth": [
-        2,
-        3
+        2
       ],
       "clf__n_estimators": [
         100,
-        300,
-        500
+        300
       ],
       "clf__learning_rate": [
         0.05,
@@ -203,14 +196,11 @@
       ],
       "clf__colsample_bytree": [
         0.3,
-        0.5,
-        0.8
+        0.5
       ],
       "clf__reg_lambda": [
         1,
-        10,
-        50,
-        100
+        10
       ]
     }
   },
