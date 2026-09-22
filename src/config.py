@@ -64,6 +64,7 @@ MAIN_LIGANDS = _config["ligands"]["main_ligands"]
 ADDITIONAL_LIGANDS = _config["ligands"]["additional_ligands"]
 BACTERIAL_LIGANDS = _config["ligands"]["bacterial_ligands"]
 CLASS_ORDER = _config["class_order_for_plotting"]
+CONDITION_ORDER = ["all_genes", "feature_selection", "fs_plus_de", "random_selected"]
 CLASS_DISPLAY_NAMES = _config["class_display_names"]
 SUBSET_DISPLAY_NAMES = _config["subset_display_names"]
 SUBSET_PALETTES = {

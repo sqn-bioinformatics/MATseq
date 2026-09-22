@@ -48,7 +48,7 @@ from src.config import (
     get_work_dir,
 )
 from src.compose_figures import compose_figures
-from src.make_tables import assemble_supplementary_tables, format_table2
+from src.compose_tables import assemble_supplementary_tables, format_table2
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
@@ -291,8 +291,7 @@ def run_pipeline(
         tables_dir / "selected_vs_de_overlap_table.csv", index=False
     )
  
-    print("\n--- STEP 6: NESTED CV, GENESET REFIT, VALIDATION AND PREDICTIONS ---")
-    primary_gs = f"selected_{FEATURE_SELECTION_CONFIG['max_features']}"
+    print("\n--- STEP 6: NESTED CV, REFIT, VALIDATION AND PREDICTIONS ---")
     endpoint_subsets = {
         "additional_ligands": (X_other, y_other),
         "bacterial_ligands": (X_bact, y_bact),
@@ -331,9 +330,11 @@ def run_pipeline(
             fig_dir=RESULTS_DIR / "figures" / "model_evaluation" / panel_name,
             model_dir=RESULTS_DIR / "models" / panel_name,
             nested_csv=nested_dir / f"supp_nested_cv_{panel_name}.csv",
-            val_dir=val_root / f"test_set_{panel_name}",
+            val_dir=val_root / f"test_set_{panel_name}" / "test_ligands",
+            val_fig_dir=RESULTS_DIR / "figures" / "validation" / panel_name / "test_ligands",
             perf_csv=val_root / f"external_validation_{panel_name}_performance.csv",
             pred_dir=RESULTS_DIR / "predictions" / panel_name,
+            pred_fig_dir=RESULTS_DIR / "figures" / "predictions" / panel_name,
         )
         cache_dir = panel["hp_dir"] / "pipeline_cache"
         trainer = ModelTrainer(panel["X"], panel["y"], **MODEL_TRAINING_CONFIG)
@@ -341,39 +342,26 @@ def run_pipeline(
             shutil.rmtree(cache_dir)
         trainer.tune_nested(
             HYPERPARAMETER_GRIDS, panel["hp_dir"], panel["fig_dir"], cache_dir,
-            k_best=mi_elbow, outer_cv=5, inner_cv=3,
+            k_best=mi_elbow, fs_genes=panel["fs_genes"], de_genes=panel["de_genes"],
+            outer_cv=5, inner_cv=3,
         ).to_csv(panel["nested_csv"], index=False)
         shutil.rmtree(cache_dir)
 
-        fs, de = panel["fs_genes"], panel["de_genes"]
-        genesets = {
-            primary_gs: sorted(fs),
-            "de_overlap": sorted(fs & de),
-            "union_stable_de": sorted(fs | de),
-        }
-        validation = {}
-        for gene_set, genes in genesets.items():
-            trainer.refit(genes)
-            trainer.save_models(panel["model_dir"] / gene_set)
-            validation[gene_set] = predict_samples(
-                trainer, panel["X_test"], panel["y_test"], "test_ligands",
-                panel["val_dir"] / gene_set / "test_ligands", all_controls=True,
+        trainer.refit(sorted(panel["fs_genes"]))
+        trainer.save_models(panel["model_dir"])
+        predict_samples(
+            trainer, panel["X_test"], panel["y_test"], "test_ligands",
+            panel["val_dir"], panel["val_fig_dir"],
+        ).to_csv(panel["perf_csv"], index=False)
+        for subset, (X_end, y_end) in endpoint_subsets.items():
+            predict_samples(
+                trainer, X_end, y_end, subset,
+                panel["pred_dir"] / subset, panel["pred_fig_dir"] / subset,
             )
-            if gene_set == "union_stable_de":
-                continue
-            for subset, (X_end, y_end) in endpoint_subsets.items():
-                predict_samples(
-                    trainer, X_end, y_end, subset,
-                    panel["pred_dir"] / gene_set / subset, all_controls=False,
-                )
-        pd.concat(validation, names=["gene_set"]).reset_index(level=0).to_csv(
-            panel["perf_csv"], index=False
-        )
 
     print("\n--- STEP 7: TLR VISUALIZATION ---")
-    tlr2_df, tlr4_df, flapa_data = load_tlr_data(
-        data_dir=Path(__file__).parent / "data" / "supplementary_data"
-    )
+    supp_data_dir = Path(__file__).parent / "data" / "supplementary_data"
+    tlr2_df, tlr4_df, flapa_data = load_tlr_data(data_dir=supp_data_dir)
     plot_tlr_hek_blue(
         tlr2_df, tlr4_df, flapa_data,
         output_path=RESULTS_DIR / "figures" / "supplementary",
@@ -385,15 +373,23 @@ def run_pipeline(
     composite_figures_dir = RESULTS_DIR/ "paper" / "figures"
     format_table2(
         panels["main"]["nested_csv"],
+        manuscript_tables_dir / "table2_formatted.csv",
+        manuscript_tables_dir / "Table_2.xlsx",
+    )
+    format_table2(
+        panels["no_flapa"]["nested_csv"],
+        manuscript_tables_dir / "Supplementary_Table_8.csv",
+    )
+    assemble_supplementary_tables(
+        de_dir, go_dir, tables_dir, out_dir, supp_data_dir,
         output_dir=manuscript_tables_dir,
     )
-    assemble_supplementary_tables(RESULTS_DIR, output_dir=manuscript_tables_dir)
     compose_figures(
         [deseq2_fig_dir / "train_ligands" / "LPS_volcano.png",
          deseq2_fig_dir / "train_ligands" / "LPS_histogram.png"],
-        composite_figures_dir / "Figure_2.png",
+        composite_figures_dir / "Figure2.png",
         ncols=2,
-        max_size=(9.84, 6.69),
+        margins=(0.45, 0.4, 0.3, 0.3),
     )
     figure3_panels = [
         fs_fig_dir / "mutual_information.png",
@@ -403,17 +399,16 @@ def run_pipeline(
         pca_dir / "pca_train_ligands_fs.png",
         go_fig_dir / "de_intersect_fs_go.png",
     ]
-    compose_figures(figure3_panels, composite_figures_dir / "Figure_3.png")
+    compose_figures(figure3_panels, composite_figures_dir / "Figure3.png")
 
     main_panel = panels["main"]
     for filename, subset, cm_dir in [
-        ("Figure4.png", "train_ligands", main_panel["fig_dir"]),
-        ("Figure5.png", "test_ligands",
-         main_panel["val_dir"] / primary_gs / "test_ligands"),
+        ("Figure4.png", "train_ligands", main_panel["fig_dir"] / "feature_selection"),
+        ("Figure5.png", "test_ligands", main_panel["val_fig_dir"]),
         ("Figure6.png", "additional_ligands",
-         main_panel["pred_dir"] / primary_gs / "additional_ligands"),
+         main_panel["pred_fig_dir"] / "additional_ligands"),
         ("Figure7.png", "bacterial_ligands",
-         main_panel["pred_dir"] / primary_gs / "bacterial_ligands"),
+         main_panel["pred_fig_dir"] / "bacterial_ligands"),
     ]:
         compose_figures(
             [pca_dir / f"pca_{subset}_fs.png"]
@@ -441,6 +436,7 @@ def run_pipeline(
              for kind in ("volcano", "histogram")],
             composite_figures_dir / f"Supplementary_Figure1p{page + 1}.png",
             first_letter=start * 2,
+            margins=(0.45, 0.4, 0.3, 0.3),
         )
 
     print("\n" + "=" * 80)

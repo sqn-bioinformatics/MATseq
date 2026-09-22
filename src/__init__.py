@@ -30,4 +30,4 @@ from .visualization import (
 from .go_term_analysis import create_fs_de_go_table, initialize_go
 from .tlr_analysis import load_tlr_data, plot_tlr_hek_blue
 from .prediction import predict_samples
-from .make_tables import format_table2, assemble_supplementary_tables
+from .compose_tables import format_table2, assemble_supplementary_tables

@@ -83,11 +83,6 @@ class DataProcessor:
         """
         metadata = self.prepare_metadata()
         counts = self.raw_counts.loc[metadata.index].copy()
-
-        # Keep genes with >= 10 counts in at least the smallest group's sample count
-        min_group = int(metadata["condition"].value_counts().min())
-        counts = counts.loc[:, (counts >= 10).sum(axis=0) >= min_group]
-
         print(f"DESeq2 analysis: {counts.shape[0]} samples, {counts.shape[1]} genes")
 
         dds = DeseqDataSet(

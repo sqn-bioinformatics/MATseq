@@ -2,6 +2,7 @@
 
 import json
 import pickle
+import time
 from pathlib import Path
 
 import numpy as np
@@ -26,7 +27,7 @@ from sklearn.svm import LinearSVC
 from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
 
-from .config import CLASS_ORDER, FEATURE_SELECTION_CONFIG
+from .config import CLASS_ORDER, CONDITION_ORDER, FEATURE_SELECTION_CONFIG
 from .feature_engineering import ColumnSelector, feature_pipeline, preprocessing_pipeline
 from .visualization import plot_confusion_matrix
 
@@ -135,85 +136,135 @@ class ModelTrainer:
         fig_dir: Path,
         cache_dir: Path,
         k_best: int,
+        fs_genes: set[str],
+        de_genes: set[str],
         outer_cv: int = 5,
         inner_cv: int = 3,
         scoring: str = "f1_macro",
     ) -> pd.DataFrame:
-        """Nested CV tuning; selects per-model params by majority vote across outer folds."""
-        inner_results_dir = output_dir / "inner_cv_results"
-        inner_results_dir.mkdir(parents=True, exist_ok=True)
+        """Nested CV over the four feature-set conditions of Table 2.
 
+        Params for the deployed models are taken from the feature_selection
+        condition only, by majority vote across outer folds.
+        """
         outer = StratifiedKFold(
             n_splits=outer_cv, shuffle=True, random_state=self.random_state
         )
         fold_seeds = np.random.SeedSequence(self.random_state).generate_state(outer_cv)
+        folds = list(outer.split(self.X, self.y_enc))
+        fs_plus_de = sorted(fs_genes | de_genes)
         per_fold_rows = []
         oof_frames = []
 
-        for fold_idx, (train_idx, test_idx) in enumerate(outer.split(self.X, self.y_enc)):
-            X_tr, X_te = self.X.iloc[train_idx], self.X.iloc[test_idx]
-            y_tr, y_te = self.y_enc[train_idx], self.y.to_numpy()[test_idx]
-            fold_seed = int(fold_seeds[fold_idx])
+        for condition in CONDITION_ORDER:
+            inner_results_dir = output_dir / "inner_cv_results" / condition
+            inner_results_dir.mkdir(parents=True, exist_ok=True)
 
-            for model_name, model in self.models.items():
-                pipe = Pipeline([
-                    *feature_pipeline(
-                        **FEATURE_SELECTION_CONFIG, k_best=k_best, random_state=fold_seed, n_jobs=1
-                    ).steps,
-                    ("clf", clone(model)),
-                ], memory=str(cache_dir))
-                gs = GridSearchCV(
-                    pipe,
-                    param_grids[model_name],
-                    cv=StratifiedKFold(n_splits=inner_cv, shuffle=True, random_state=fold_seed),
-                    scoring=scoring,
-                    n_jobs=48,
-                    refit=False,
+            for fold_idx, (train_idx, test_idx) in enumerate(folds):
+                X_tr, X_te = self.X.iloc[train_idx], self.X.iloc[test_idx]
+                y_tr, y_te = self.y_enc[train_idx], self.y.to_numpy()[test_idx]
+                fold_seed = int(fold_seeds[fold_idx])
+                random_genes = sorted(
+                    np.random.default_rng(fold_seed).choice(
+                        self.X.columns.difference(sorted(fs_genes)),
+                        size=len(fs_genes),
+                        replace=False,
+                    )
                 )
-                fit_params = {"clf__sample_weight": compute_sample_weight("balanced", y_tr)}
-                print(f"  Outer fold {fold_idx} — tuning {model_name}...")
-                gs.fit(X_tr, y_tr, **fit_params)
-                best = pipe.set_params(
-                    **gs.best_params_, select_forest__estimator__n_jobs=48
-                ).fit(X_tr, y_tr, **fit_params)
-                y_pred = self.label_encoder.inverse_transform(best.predict(X_te))
 
-                per_fold_rows.append({
-                    "model": model_name,
-                    "outer_fold": fold_idx,
-                    "best_params": json.dumps(gs.best_params_, default=str),
-                    "inner_best_score": gs.best_score_,
-                    **make_score(y_te, y_pred),
-                })
-                pd.DataFrame(gs.cv_results_).to_csv(
-                    inner_results_dir / f"{model_name}_fold_{fold_idx}.csv", index=False
-                )
-                oof_frames.append(pd.DataFrame({
-                    "sample_id": X_te.index,
-                    "true_label": y_te,
-                    "pred_label": y_pred,
-                    "outer_fold": fold_idx,
-                    "model": model_name,
-                }))
+                for model_name, model in self.models.items():
+                    pre_steps = preprocessing_pipeline().steps
+                    if condition == "all_genes":
+                        head = pre_steps
+                    elif condition == "feature_selection":
+                        head = feature_pipeline(
+                            **FEATURE_SELECTION_CONFIG, k_best=k_best,
+                            random_state=fold_seed, n_jobs=1,
+                        ).steps
+                    else:
+                        # Gene subsetting sits after library-size normalisation, as in
+                        # refit(), so nested CV and deployment preprocess identically.
+                        genes = fs_plus_de if condition == "fs_plus_de" else random_genes
+                        head = [
+                            pre_steps[0],
+                            ("select_genes", ColumnSelector(genes)),
+                            *pre_steps[1:],
+                        ]
+                    pipe = Pipeline(
+                        [*head, ("clf", clone(model))], memory=str(cache_dir)
+                    )
+                    gs = GridSearchCV(
+                        pipe,
+                        param_grids[model_name],
+                        cv=StratifiedKFold(n_splits=inner_cv, shuffle=True, random_state=fold_seed),
+                        scoring=scoring,
+                        n_jobs=24,
+                        refit=False,
+                    )
+                    fit_params = {"clf__sample_weight": compute_sample_weight("balanced", y_tr)}
+                    print(f"  {condition} — outer fold {fold_idx} — tuning {model_name}...")
+                    gs.fit(X_tr, y_tr, **fit_params)
+                    # Only the feature_selection pipeline carries the ExtraTrees selector.
+                    best_params = dict(gs.best_params_)
+                    if condition == "feature_selection":
+                        best_params["select_forest__estimator__n_jobs"] = 24
+                    start = time.perf_counter()
+                    best = pipe.set_params(**best_params).fit(X_tr, y_tr, **fit_params)
+                    training_time = time.perf_counter() - start
+                    y_pred = self.label_encoder.inverse_transform(best.predict(X_te))
+
+                    per_fold_rows.append({
+                        "condition": condition,
+                        "model": model_name,
+                        "outer_fold": fold_idx,
+                        "best_params": json.dumps(gs.best_params_, default=str),
+                        "inner_best_score": gs.best_score_,
+                        "n_genes": len(best[:-1].get_feature_names_out()),
+                        "training_time": training_time,
+                        **make_score(y_te, y_pred),
+                    })
+                    pd.DataFrame(gs.cv_results_).to_csv(
+                        inner_results_dir / f"{model_name}_fold_{fold_idx}.csv", index=False
+                    )
+                    oof_frames.append(pd.DataFrame({
+                        "sample_id": X_te.index,
+                        "true_label": y_te,
+                        "pred_label": y_pred,
+                        "outer_fold": fold_idx,
+                        "condition": condition,
+                        "model": model_name,
+                    }))
 
         per_fold = pd.DataFrame(per_fold_rows)
         per_fold.to_csv(output_dir / "nested_cv_per_fold.csv", index=False)
         oof = pd.concat(oof_frames, ignore_index=True)
         oof.to_csv(output_dir / "oof_predictions.csv", index=False)
 
-        pooled = pd.DataFrame({
-            m: evaluate(d.true_label, d.pred_label, m, "train_ligands", output_dir, fig_dir)
-            for m, d in oof.groupby("model")
-        }).T.add_prefix("pooled_")
+        pooled_rows = []
+        for (condition, model_name), d in oof.groupby(["condition", "model"]):
+            condition_dir = output_dir / condition
+            condition_dir.mkdir(parents=True, exist_ok=True)
+            scores = evaluate(
+                d.true_label, d.pred_label, model_name, "train_ligands",
+                condition_dir, fig_dir / condition,
+            )
+            pooled_rows.append({
+                "condition": condition,
+                "model": model_name,
+                **{f"pooled_{k}": v for k, v in scores.items()},
+            })
         metric_cols = ["accuracy", "balanced_accuracy", "precision", "recall", "f1",
-                       "f1_weighted", "inner_best_score"]
-        summary = per_fold.groupby("model")[metric_cols].agg(["mean", "std"])
+                       "f1_weighted", "inner_best_score", "n_genes", "training_time"]
+        summary = per_fold.groupby(["condition", "model"])[metric_cols].agg(["mean", "std"])
         summary.columns = [f"{m}_{s}" for m, s in summary.columns]
-        summary = summary.join(pooled).reset_index()
+        summary = summary.reset_index().merge(
+            pd.DataFrame(pooled_rows), on=["condition", "model"]
+        )
 
         # Tie-break the majority vote by mean inner f1_macro, then mean outer f1.
         self.selected_params_ = {}
-        for model_name, rows in per_fold.groupby("model", sort=False):
+        selected = per_fold[per_fold["condition"] == "feature_selection"]
+        for model_name, rows in selected.groupby("model", sort=False):
             ranking = (
                 rows.groupby("best_params")
                 .agg(

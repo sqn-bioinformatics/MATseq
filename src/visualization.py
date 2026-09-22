@@ -58,16 +58,13 @@ def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: s
 
 
 def plot_probability_heatmap(proba_df, class_order, true_labels, output_path: Path,
-                             output_filename: str, title=None, all_controls=False, seed=42):
-    """Render a per-sample prediction-probability heatmap."""
+                             output_filename: str, title=None, seed=42):
+    """Render a per-sample prediction-probability heatmap, one sample per control class."""
     rng = np.random.default_rng(seed)
     control_idx = []
     for cls in ("negative_control", "LPS"):
         idx = true_labels.index[true_labels == cls]
-        if all_controls or not len(idx):
-            control_idx += list(idx)
-        else:
-            control_idx += list(rng.choice(idx, size=1, replace=False))
+        control_idx += list(rng.choice(idx, size=1, replace=False))
     remaining = [
         i
         for cls in class_order
@@ -290,9 +287,9 @@ def plot_volcano(
 
     annotation_subset = pd.concat(
         [
-            sorted_grapher_padj_log.head(20),
-            sorted_grapher_log2foldchange.head(10),
-            sorted_grapher_log2foldchange.tail(10),
+            sorted_grapher_padj_log.head(12),
+            sorted_grapher_log2foldchange.head(4),
+            sorted_grapher_log2foldchange.tail(4),
         ]
     ).drop_duplicates()
 
@@ -313,32 +310,33 @@ def plot_volcano(
 
     texts = [
         plt.text(x=row.log2FoldChange, y=row.padj_log, s=row.name,
-                 weight="bold", size=11)
+                 weight="bold", size=7)
         for _, row in annotation_subset.iterrows()
     ]
 
-    adjust_text(texts, arrowprops=dict(arrowstyle="-", color="k"))
-    plt.legend(loc="upper left", bbox_to_anchor=(1.02, 1),
-               prop={"size": 13, "weight": "bold"})
-    plt.xticks(size=17, weight="bold")
-    plt.yticks(size=17, weight="bold")
-    plt.xlabel("$log_{2}$ fold change", fontsize=17)
-    plt.ylabel("-$log_{10}$ FDR", fontsize=17)
-    plt.ylim(-2, grapher["padj_log"].max() + 5)
+    plt.legend(loc="upper left", bbox_to_anchor=(1.02, 1), frameon=False,
+               prop={"size": 9})
+    plt.xticks(size=10)
+    plt.yticks(size=10)
+    plt.xlabel("$log_{2}$ fold change", fontsize=11)
+    plt.ylabel("-$log_{10}$ FDR", fontsize=11)
+    plt.ylim(-2, grapher["padj_log"].max() * 1.15)
     plt.title(
         f"{analysis_name} Differentially Expressed Genes",
-        fontsize=17,
-        fontweight="bold",
+        fontsize=12,
+        pad=20,
     )
 
     ax.spines[["top", "right"]].set_visible(False)
     ax.spines[["left", "bottom"]].set_linewidth(1.5)
 
+    adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle="-", color="k"))
+
     fig.patch.set_facecolor("white")
 
     output_path.mkdir(parents=True, exist_ok=True)
     save_path = output_path / f"{analysis_name}_volcano.png"
-    fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    fig.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0.25)
     print(f"Figure saved: {save_path}")
     plt.close(fig)
 
@@ -383,8 +381,8 @@ def plot_heatmap(
 
     vmin, vmax = g.ax_heatmap.collections[0].get_clim()
     g.ax_cbar.set_yticks([vmin, 0, vmax])
-    g.ax_cbar.set_yticklabels([f"{vmin:.1f}", "0", f"{vmax:.1f}"], fontsize=7)
-    g.ax_cbar.yaxis.label.set_size(7)
+    g.ax_cbar.set_yticklabels([f"{vmin:.1f}", "0", f"{vmax:.1f}"], fontsize=5)
+    g.ax_cbar.yaxis.label.set_size(5)
 
     handles = [Patch(facecolor=lut[name], label=name) for name in lut]
 
@@ -392,7 +390,7 @@ def plot_heatmap(
         handles=handles,
         bbox_to_anchor=(1.0, 1.0),
         loc="upper left",
-        fontsize=9,
+        fontsize=7,
         fancybox=True,
         frameon=True,
         facecolor="white",
@@ -405,13 +403,12 @@ def plot_heatmap(
 
     reordered_genes = grapher.index[g.dendrogram_row.reordered_ind]
     g.ax_heatmap.set_yticks(np.arange(len(reordered_genes)) + 0.5)
-    g.ax_heatmap.set_yticklabels(reordered_genes, fontsize=6)
+    g.ax_heatmap.set_yticklabels(reordered_genes, fontsize=5)
 
     g.ax_col_dendrogram.set_title(
         f"{analysis_name} Differentially Expressed Genes",
-        fontsize=17,
-        fontweight="bold",
-        pad=2,
+        fontsize=12,
+        pad=20,
     )
 
     g.figure.subplots_adjust(hspace=0.01, right=0.82)
@@ -419,7 +416,7 @@ def plot_heatmap(
     output_path.mkdir(parents=True, exist_ok=True)
 
     save_path = output_path / f"{analysis_name}_histogram.png"
-    g.figure.savefig(save_path, dpi=300, bbox_inches="tight")
+    g.figure.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0.25)
     print(f"Figure saved: {save_path}")
     plt.close(g.figure)
 
