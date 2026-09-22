@@ -381,8 +381,8 @@ def run_pipeline(
     )
 
     print("\n--- STEP 8: ASSEMBLE COMPOSITE TABLES AND FIGURE COLLAGES ---")
-    manuscript_tables_dir = RESULTS_DIR / "tables"
-    composite_figures_dir = Path(__file__).parent / "paper" / "paper_updated" / "figures"
+    manuscript_tables_dir = RESULTS_DIR / "paper"/ "tables"
+    composite_figures_dir = RESULTS_DIR/ "paper" / "figures"
     format_table2(
         panels["main"]["nested_csv"],
         output_dir=manuscript_tables_dir,

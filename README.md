@@ -9,264 +9,150 @@
 
 ## Abstract
 
-The monocyte activation test is an in vitro pyrogenicity assessment method that can utilise human peripheral blood mononuclear cells to detect pyrogens in injectable drugs, providing a binary outcome that indicates the presence or absence of a pyrogen. The added ability to distinguish between different types of pyrogens would greatly expand the applicability of the test, for example, by allowing to pinpoint the source of a contaminating pyrogen in pharmaceutical products. Pyrogens activate a unique set of pattern recognition receptors (PRRs), which contribute to inflammation, yielding distinct transcriptomic activation signatures. In this paper, we capture the unique expression signatures of activated monocytes through bulk RNA sequencing and introduce a data preprocessing pipeline that allows the training of a machine-learning model to classify pyrogenic contaminants. Using a dataset of 108 samples stimulated with five classes of PRR agonists, we could differentiate between these classes with more than 97% F1 on test data. We further demonstrate the model's capacity to generalise on the previously unseen data using different ligands for the same PRRs as well as heat-killed Escherichia coli and Staphylococcus aureus.
+The monocyte activation test is an in vitro pyrogenicity assessment method that can utilise human peripheral blood mononuclear cells to detect pyrogens in injectable drugs, providing a binary outcome that indicates the presence or absence of a pyrogen. The added ability to distinguish between different types of pyrogens would greatly expand the applicability of the test, for example, by allowing to pinpoint the source of a contaminating pyrogen in pharmaceutical products. Pyrogens activate a unique set of pattern recognition receptors (PRRs), which contribute to inflammation, yielding distinct transcriptomic activation signatures. In this paper, we capture the unique expression signatures of activated monocytes through bulk RNA sequencing and introduce a data preprocessing pipeline that allows the training of a machine-learning model to classify pyrogenic contaminants. Using a dataset of 108 samples stimulated with five classes of PRR agonists, we could differentiate between these classes with more than 97% F1 on test data. We further demonstrate the model's capacity to generalise on the previously unseen data using different ligands for the same PRRs as well as heat-killed *Escherichia coli* and *Staphylococcus aureus*.
 
-MATseq integrates differential expression analysis (DESeq2), feature selection, and machine learning models to classify ligand-induced transcriptomic signatures in monocyte samples. The pipeline processes raw RNA-seq counts through quality control, normalization, feature engineering, and model training to predict ligand classes with high accuracy.
-
+MATseq runs the full analysis end to end: Snakemake read preprocessing, DESeq2 differential expression with GO enrichment, data-driven selection of the classifier gene panel, nested cross-validated model tuning, external-batch validation, and assembly of the manuscript tables and composite figures.
 
 ## Installation
 
-### Prerequisites
-
-- Python >=3.10, <3.13
-- [Poetry](https://python-poetry.org/) for dependency management
-
-
-### Setup
+Requires Python >=3.10,<3.13 and [Poetry](https://python-poetry.org/). Snakemake rules pull their own tools through Conda (`pipeline/environment.yml`).
 
 ```bash
-# Clone repository
 git clone https://github.com/sqn-bioinformatics/MATseq.git MATseq
 cd MATseq
-
-# Install dependencies via Poetry
 poetry install
-
-# Validate Snakemake pipeline without running
-poetry run python MATseq.py --snakemake dry-run
-
-## Run Snakemake preprocessing
-poetry run python MATseq.py --snakemake run
-
-## Run Analysis
-poetry run python MATseq.py
 ```
 
-Optional arguments:
-- `--snakemake {dry-run,run}`: Validate (`dry-run`) or execute (`run`) Snakemake preprocessing
-- `--genome-dir PATH`: Genome reference directory for Snakemake
-- `--fastq-dir PATH`: Raw data (zipped FASTQ) directory for Snakemake
-- `--force-recompute`: Skip cache and recompute all steps
-- `--cache-dir PATH`: Directory for cached files (default: results/cache)
+## Usage
 
-## Pipeline Steps
+```bash
+poetry run python MATseq.py --snakemake dry-run   # validate the Snakemake DAG, then exit
+poetry run python MATseq.py --snakemake run       # FASTQ -> featureCounts, then exit
+poetry run python MATseq.py                       # analysis on existing featureCounts
+```
 
-### Snakemake Preprocessing
+| Option | Description |
+| --- | --- |
+| `--snakemake {dry-run,run}` | Run read preprocessing; omit to start from existing featureCounts output |
+| `--fastq-dir PATH` | Override `snakemake.sample_dir` |
+| `--genome-dir PATH` | Override `snakemake.genome_dir` |
 
-Snakemake pipeline processes raw FASTQ into MATseq_count_summary.csv. It must be run before the remainder of the pipeline. Snakemake will request a path to the raw data in fastq.gz format. Download the raw data from [NCBI GEO database](https://www.ncbi.nlm.nih.gov/geo/), GEO accession number GSE313994. Provide it with --genome-dir or in the config.json. It will also request a path to a reference genome; we used GRCh38_GCA_000001405.15. Download a reference genome from [NCBI](https://www.ncbi.nlm.nih.gov/datasets/genome/). Provide it with --fastq-dir or in the config.json.
+All output locations are defined in `MATseq.py` and passed into `src/`; only the inputs are configurable.
 
-Run with `--snakemake run` to execute the RNA-seq preprocessing:
-1. **Quality Control** - FastQC on raw reads
-2. **Trimming** - Adapter removal with fastp
-3. **Alignment** - STAR alignment to reference genome
-4. **Merge/Sort/Index** - SAMtools BAM processing
-5. **Deduplication** - UMI-tools deduplication
-6. **Quantification** - featureCounts gene-level counting
+## Input data
 
-### Configuration
+| Input | Source |
+| --- | --- |
+| Raw reads (`fastq.gz`) | [GEO GSE313994](https://www.ncbi.nlm.nih.gov/geo/) → `data/raw/` |
+| Reference genome (GRCh38_GCA_000001405.15) | [NCBI Datasets](https://www.ncbi.nlm.nih.gov/datasets/genome/) → `snakemake.genome_dir` |
+| `go-basic.obo` | https://current.geneontology.org/ontology/go-basic.obo → `data/go_terms_support/` |
+| `gene2go.gz` | https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2go.gz → `data/go_terms_support/` |
+| HEK-Blue TLR reporter readouts | `data/supplementary_data/` |
 
-The configuration is managed through `config.json`:
+The GO support files are downloaded automatically if absent. Sample labels are parsed from the third underscore-separated token of the FASTQ name; batch `7128` is the main dataset and batch `7086` the external test batch.
 
-**Snakemake preprocessing:**
-- `snakemake.sample_dir`: Raw FASTQ files directory
-- `snakemake.work_dir`: Snakemake working directory
-- `snakemake.genome_dir`: Reference genome directory
-- `snakemake.threads`: Number of threads
+## Configuration
 
-**Paths:**
-- `paths.data_dir`: Input data directory
-- `paths.go_terms_support_dir`: GO enrichment support files directory
-- `paths.results_dir`: Output results directory
-- `paths.featurecounts_dir`: featureCounts output location
+`config.json`:
 
-**GO Enrichment Files:**
-The following files must be in `data/go_terms_support/`:
-- `go-basic.obo` - Download from: https://current.geneontology.org/ontology/go-basic.obo
-- `gene2go.gz` - Download from: https://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2go.gz
+| Key | Description |
+| --- | --- |
+| `snakemake.sample_dir`, `.genome_dir`, `.work_dir`, `.threads` | Read-preprocessing inputs and resources |
+| `paths.featurecounts_dir` | featureCounts tables consumed by the analysis |
+| `deseq2.padj_threshold`, `.log2fc_threshold`, `.n_cpus` | Significance calls (default padj < 0.05, \|log2FC\| > 2) |
+| `feature_selection.n_estimators`, `.max_depth`, `.max_features` | ExtraTrees selector; `k_best` is not set here but derived from the MI elbow |
+| `model_training.random_state` | Seed for every split, selector and classifier |
+| `hyperparameter_grids` | Per-model grids searched by the inner CV |
+| `ligands.*`, `ligand_aliases` | Subset membership and sample-name normalisation |
+| `class_order_for_plotting`, `class_display_names`, `subset_display_names`, `colors`, `subset_palettes` | Figure labelling and palettes |
 
-MATseq will attempt to download these files automatically if missing (may be slow).
+## Pipeline
 
-**DESeq2 parameters:**
-- `deseq2.padj_threshold`: Adjusted p-value threshold (default: 0.05)
-- `deseq2.log2fc_threshold`: Log2 fold-change threshold (default: 2)
-- `deseq2.n_cpus`: Number of CPUs for parallel processing
+**Step 0 — Read preprocessing (Snakemake, `pipeline/`).** FastQC → fastp trimming → STAR alignment → SAMtools merge/sort/index → UMI-tools deduplication → featureCounts gene-level quantification.
 
-**Feature selection:**
-- `feature_selection.k_best`: Number of top genes kept by mutual-information selection
-- `feature_selection.n_estimators`: Trees in the ExtraTrees selector
-- `feature_selection.max_depth`: Maximum depth of the ExtraTrees selector
-- `feature_selection.max_features`: Maximum genes kept by the ExtraTrees selector
+**Step 1 — Count table.** featureCounts tables are merged into a samples × genes matrix, samples below 1M reads are dropped, labels are derived from sample names, and the matrix is split into the `train_ligands`, `test_ligands` (batch 7086), `additional_ligands` and `bacterial_ligands` subsets.
 
-**Model training:**
-- `model_training.random_state`: Reproducibility seed for training and CV splits
-- `hyperparameter_grids`: Per-model search grids used by the nested cross-validation
+**Step 2 — Differential expression.** DESeq2 for each ligand versus `negative_control` within every subset, with volcano plots, clustered heatmaps of the top 50 genes, and per-ligand GO enrichment merged per subset.
 
-### Main Pipeline
+**Step 3 — Panel size.** The mutual-information curve is averaged over three seeds and its elbow sets `k_best`. An ExtraTrees importance ranking within those genes is scanned with k-means, scoring ARI against the true ligand labels at every panel size.
 
-The pipeline runs as eight steps in `MATseq.py` (`run_pipeline`). Intermediate
-results (counts, DESeq2 contrasts, feature-selection runs, tuned models) are
-cached under `results/cache`; rerun with `--force-recompute` to ignore the cache.
+**Step 4 — PCA.** Per subset, before and after feature selection, labelled and unlabelled. The selector is fit once on the training subset so all subsets share one gene panel.
 
-1. **Data Preprocessing** (`prepare_counts`)
-   - Merge featureCounts outputs into a samples × genes matrix
-   - Filter samples by read-count threshold (>1M reads)
-   - Derive ligand labels from sample names (with `ligand_aliases`)
-   - Write `counts/MATseq_count_summary.csv`
+**Step 5 — Feature selection versus differential expression.** Venn of the selected panel against the DE gene set, GO enrichment of DE ∩ FS and FS \ DE, and the importance-ranked gene tables.
 
-2. **DESeq2 Differential Expression** (per subset: main, additional, bacteria)
-   - PCA plot per subset (RPM → log1p → standardised), labelled and unlabelled
-   - Each ligand vs negative control; significant genes (padj < 0.05, |log2FC| > 2)
-   - Volcano plots and clustered heatmaps per ligand
-   - GO enrichment per ligand, merged into `GO_merged_results.csv`
+**Step 6 — Modelling.** For the `main` and `no_flapa` panels: nested stratified CV (5 outer × 3 inner) tunes LinearSVC, SGDClassifier, LogisticRegression, RandomForest and XGBoost on macro F1. Feature selection sits inside the CV pipeline and is refit on each outer training fold only, so no test-fold information reaches the panel and the reported metrics are leakage-free. Class imbalance is handled with balanced sample weights. Hyperparameters are chosen by majority vote across outer folds (ties broken by mean inner then outer F1) and refit on the full panel for three gene sets — `selected_<max_features>`, `de_overlap` (FS ∩ DE) and `union_stable_de` (FS ∪ DE). Each refit is validated on the external batch and applied to the additional and bacterial ligands.
 
-3. **Feature-selection vs DE Venn** (training subset)
-   - Run the selection pipeline 1000× with different seeds (parallelised across cores)
-   - Compare the union of selected genes against the DESeq2 DE genes (Venn diagram)
-   - Gene-frequency table; GO enrichment on DE ∩ FS and FS \ DE gene sets
+**Step 7 — TLR reporter figure.** HEK-Blue TLR2 (Pam3) and TLR4 (LPS) dose-response with the Fla-PA reference.
 
-4. **Nested CV tuning + refit per gene set** (main panel, with and without Fla-PA)
-   - Nested stratified CV (5 outer, 3 inner) tuning LinearSVC, SGDClassifier, LogisticRegression, RandomForest, XGBoost
-   - Feature selection is embedded in the cross-validation pipeline and re-fit on each outer training fold only (no test-fold information reaches selection), so reported metrics are leakage-free
-   - Inner `GridSearchCV` tunes classifier hyperparameters on macro F1
-   - Class imbalance handled with balanced class/sample weights (no SMOTE)
-   - Hyperparameters chosen by majority vote across outer folds, then refit on the full panel for each gene set
-   - Writes per-fold and pooled out-of-fold metrics, confusion matrices, and `selected_params.json`
-   - A second model set is trained on the main panel excluding Fla-PA
-
-4c. **Table 2 formatting** (`src/make_tables.py`)
-   - Uses the nested-CV summary produced by `MATseq.py` at `results/nested_cv/supp_nested_cv_main.csv`
-   - Formats existing model-performance metrics into the publication table (`results/tables/table2_formatted.csv`, `results/tables/Table_2.xlsx`, and `results/tables/table2.tex`)
-   - Does not run model training, feature selection, DESeq2, or any benchmark calls from `src/make_tables.py`
-
-5. **Model validation on external test batch**
-   - Apply the deployed models to an independent sequencing batch (`test.work_dir/featurecounts`)
-   - Predictions, probabilities and probability heatmaps, with and without Fla-PA
-   - PCA before and after feature selection (reusing the main-panel palette and class order)
-   - DESeq2 of each ligand vs negative control on the external batch
-   - Skipped automatically if no external featureCounts are present
-
-6. **Prediction on additional and bacterial ligands**
-   - Apply the deployed main-panel models to held-out ligands (LTA, MPLA, Pam2) and heat-killed bacteria
-   - Generate predictions, probabilities and probability heatmaps
-
-7. **TLR Reporter Visualization** (`src/tlr_analysis.py`)
-   - HEK-Blue TLR2 (Pam3) and TLR4 (LPS) dose-response with Fla-PA reference
-
-8. **Prediction without Fla-PA**
-   - Apply the no-Fla-PA models to the additional and bacterial ligands
-
-
-## Output Structure
+## Output
 
 ```
 results/
-├── cache/                                  # Cached intermediates + manifest.json
-├── counts/
-│   └── MATseq_count_summary.csv
+├── counts/MATseq_count_summary.csv
 ├── differential_gene_expression/
-│   └── {ligand}_deseq2_results.csv
+│   ├── de_genes_{subset}.csv
+│   └── {subset}/{ligand}_deseq2_results.csv
 ├── go_terms/
-│   ├── {ligand}_go_terms.csv               # Per-ligand GO enrichment
-│   ├── GO_merged_results.csv               # All per-ligand terms merged
-│   ├── de_intersect_fs_go_terms.csv        # GO for DE ∩ FS gene set
-│   └── fs_only_go_terms.csv                # GO for FS \ DE gene set
-├── nested_cv/
-│   ├── supp_nested_cv_main.csv             # Nested CV summary (main panel)
-│   └── supp_nested_cv_no_flapa.csv         # Nested CV summary (no Fla-PA)
-├── tables/
-│   ├── table2_formatted.csv                # Publication Table 2 (mean ± SD grid)
-│   ├── Table_2.xlsx                        # Publication Table 2 (Excel)
-│   ├── table2.tex                          # Publication Table 2 (booktabs LaTeX)
-│   └── Supplementary_Table_{1..12}.csv      # Publication supplementary tables
-├── feature_analysis/
-│   └── gene_frequency_table.csv            # Gene selection frequency across 1000 runs
-├── models/                                 # Main-panel models refit per gene set
-│   ├── {gene_set}/
-│   │   ├── label_encoder.pkl
-│   │   └── {model}.pkl
-│   └── no_flapa/{gene_set}/                # Models trained without Fla-PA
-├── hyperparameter_tuning/                  # Nested CV outputs (main panel)
+│   ├── {de_intersect_fs,fs_only}_go_terms.csv
+│   └── {subset}/{{ligand}_go_terms.csv, GO_merged_results.csv}
+├── feature_selection/{mutual_information.csv, forest_kmeans.csv}
+├── fs_de_genesets/
+│   ├── fs_genes_ranked.csv                  # selected genes by ExtraTrees importance
+│   ├── fs_gene_names.csv
+│   └── selected_vs_de_overlap_table.csv
+├── nested_cv/supp_nested_cv_{main,no_flapa}.csv
+├── hyperparameter_tuning/{panel}/
 │   ├── nested_cv_per_fold.csv
-│   ├── oof_predictions.csv                 # Pooled out-of-fold predictions
-│   ├── {model}_classification_report.csv
-│   ├── {model}_confusion_matrix.csv
-│   ├── selected_params.json                # Selected hyperparameters
+│   ├── oof_predictions.csv                  # pooled out-of-fold predictions
+│   ├── selected_params.json
+│   ├── {model}_{classification_report,confusion_matrix}.csv
 │   └── inner_cv_results/{model}_fold_{n}.csv
-├── hyperparameter_tuning_no_flapa/         # Same, for the no-Fla-PA models
-├── figures/
-│   ├── deseq2/
-│   │   ├── {ligand}_volcano.png
-│   │   └── {ligand}_histogram.png
-│   ├── go/
-│   │   ├── {ligand}_go.png
-│   │   ├── de_intersect_fs_go.png
-│   │   └── fs_only_go.png
-│   ├── pca/
-│   │   ├── {subset}_pca.png
-│   │   └── {subset}_pca_labeled.png
-│   ├── venn/
-│   │   └── venn_de_vs_fs.png
-│   ├── model_evaluation/
-│   │   ├── Confusion_Matrix_{model}.png
-│   │   └── no_flapa/Confusion_Matrix_{model}.png
-│   └── supplementary/
-│       └── tlr_hek_blue.png
-├── validation/{test_name}/                 # External test batch (e.g. 7086)
-│   ├── test_ligands/
-│   │   ├── {model}_predictions.csv
-│   │   ├── {model}_probabilities.csv
-│   │   └── {model}_probabilities_heatmap.png
-│   └── no_flapa/
-└── predictions/
-    ├── additional_ligands/
-    │   ├── {model}_predictions.csv
-    │   ├── {model}_probabilities.csv
-    │   └── {model}_probabilities_heatmap.png
-    ├── bacterial_ligands/
-    └── no_flapa/                          # No-Fla-Pa model predictions
-        ├── additional_ligands/
-        └── bacterial_ligands/
+├── models/{panel}/{gene_set}/{label_encoder.pkl, {model}.pkl}
+├── validation/
+│   ├── external_validation_{panel}_performance.csv
+│   └── test_set_{panel}/{gene_set}/test_ligands/
+├── predictions/{panel}/{gene_set}/{additional,bacterial}_ligands/
+│   ├── {model}_{predictions,probabilities}.csv
+│   ├── {model}_probabilities_heatmap.png
+│   └── test_scores_summary.csv
+├── tables/{table2_formatted.csv, Table_2.xlsx, Supplementary_Table_{1..12}.csv}
+└── figures/
+    ├── deseq2/{subset}/{ligand}_{volcano,histogram}.png
+    ├── go/{subset}/{ligand}_go.png
+    ├── feature_selection/{mutual_information,forest_ari_sweep}.png
+    ├── pca/pca_{subset}[_fs][_labeled].png
+    ├── venn/venn_de_vs_fs.png
+    ├── model_evaluation/{panel}/Confusion_Matrix_{model}.png
+    └── supplementary/tlr_hek_blue.png
+
 ```
 
-## Project Structure
+`{panel}` is `main` or `no_flapa`; `{gene_set}` is `selected_<max_features>`, `de_overlap` or `union_stable_de`.
+
+## Repository layout
 
 ```
 MATseq/
-├── MATseq.py           
-├── config.json         
-├── pyproject.toml      
-├── pipeline/           
-│   ├── 0_MATseq.smk                       
-│   ├── 1_control_quality_fastqc.smk       
-│   ├── 2_trim_fastp.smk                   
-│   ├── 3_align_star.smk                   
-│   ├── 4_merge_sort_index_samtools.smk    
-│   ├── 5_deduplicate_umitools.smk         
-│   ├── 6_count_reads_featurecounts.smk    
-│   └── environment.yml                    
+├── MATseq.py                  # orchestration; defines every output path
+├── config.json
+├── pipeline/                  # 0_MATseq.smk .. 6_count_reads_featurecounts.smk, environment.yml
 ├── src/
-│   ├── cache.py               
-│   ├── config.py              
-│   ├── preprocessing.py       
-│   ├── feature_engineering.py 
-│   ├── model_training.py      
-│   ├── make_tables.py          # Formats raw pipeline CSVs into publication tables
-│   ├── prediction.py          
-│   ├── pydeseq2.py           
-│   ├── visualization.py       
-│   └── go_term_analysis.py    
-├── scripts/            # Standalone helper/exploratory scripts (PCA comparisons, figure composition)
-├── data/               
-│   ├── go_terms_support/      
-│   │   ├── go-basic.obo                                                        # (required)
-│   │   ├── gene2go.gz                                                          # (required)
-│   │   └──  gene_result_ncbi_human_proteincoding.txt 
-│   ├── reference_genome/
-│   │   └── GRCh38_GCA_000001405.15/
-│   │   │   ├── GCA_000001405.15_GRCh38_full_analysis_set.refseq_annotation     # (required)
-│   │   │   └── GCA_000001405.15_GRCh38_no_alt_analysis_set                     # (required)
-│   └── raw/                                                                    # FASTQ (required)
-└── results/            
+│   ├── config.py              # config.json loader and path expansion
+│   ├── preprocessing.py       # featureCounts loading, filtering, labelling, RPM
+│   ├── feature_engineering.py # MI/ExtraTrees selection, MI elbow, ARI sweep
+│   ├── pydeseq2.py            # DESeq2 wrapper
+│   ├── go_term_analysis.py    # GO enrichment
+│   ├── model_training.py      # nested CV tuning and per-gene-set refit
+│   ├── prediction.py          # prediction, probabilities, scoring
+│   ├── visualization.py       # PCA, volcano, heatmap, GO, Venn, confusion matrices
+│   ├── tlr_analysis.py        # HEK-Blue reporter figure
+│   ├── make_tables.py         # manuscript tables from raw CSVs
+│   └── compose_figures.py     # multi-panel manuscript figures
+├── data/
+│   ├── raw/                   # FASTQ (required)
+│   ├── go_terms_support/      # go-basic.obo, gene2go.gz (required)
+│   └── supplementary_data/    # HEK-Blue reporter readouts
+└── results/
 ```
 
 ## Citation
