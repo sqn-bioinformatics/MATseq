@@ -5,8 +5,7 @@ import shutil
 import pandas as pd
 from pathlib import Path
 from collections import namedtuple
-from typing import Dict, Any, List
-
+from typing import Any
 
 from goatools.base import download_go_basic_obo
 from goatools.base import download_ncbi_associations
@@ -14,10 +13,11 @@ from goatools.obo_parser import GODag
 from goatools.anno.genetogo_reader import Gene2GoReader
 from goatools.goea.go_enrichment_ns import GOEnrichmentStudyNS
 
+from .visualization import plot_go
 
-def _parse_geneid2nt(gene_file: Path) -> Dict[int, Any]:
-    """Parse NCBI gene result file to namedtuple dictionary.
-    """
+
+def _parse_geneid2nt(gene_file: Path) -> dict[int, Any]:
+    """Parse NCBI gene result file to namedtuple dictionary."""
     ntncbi = namedtuple(
         "ntncbi",
         "tax_id Org_name GeneID CurrentID Status Symbol Aliases description "
@@ -127,8 +127,7 @@ def initialize_go(data_dir: Path) -> tuple:
 
 
 def generate_go_table(genes: set, goeaobj, geneid_symbol_mapper: dict) -> pd.DataFrame:
-    """Generate GO enrichment table for a set of gene symbols.
-    """
+    """Generate GO enrichment table for a set of gene symbols."""
     genes_list = [str(g) for g in genes]
     sigs_ids = [
         int(geneid_symbol_mapper[gene])
@@ -156,7 +155,7 @@ def generate_go_table(genes: set, goeaobj, geneid_symbol_mapper: dict) -> pd.Dat
                 r.ratio_in_study[0],
                 r.ratio_in_study[1],
                 r.ratio_in_study[0] / r.ratio_in_study[1] if r.ratio_in_study[1] else 0,
-                list(map(lambda y: inverted_mapping.get(y, str(y)), r.study_items)),
+                [inverted_mapping.get(g, str(g)) for g in r.study_items],
             ]
             for r in goea_results_sig
         ],
@@ -184,8 +183,7 @@ def run_go_analysis(
     goeaobj,
     geneid_symbol_mapper: dict,
 ) -> pd.DataFrame:
-    """Run GO enrichment analysis and save results to CSV.
-    """
+    """Run GO enrichment analysis and save results to CSV."""
     go_df = generate_go_table(genes, goeaobj, geneid_symbol_mapper)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -204,8 +202,7 @@ def create_fs_de_go_table(
     output_dir: Path,
     fig_dir: Path,
 ) -> tuple:
-    """Create GO tables for de intersect fs and fs-only gene sets.
-    """
+    """Create GO tables for de intersect fs and fs-only gene sets."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     de_intersect_fs = de_genes & fs_genes
@@ -227,8 +224,6 @@ def create_fs_de_go_table(
         geneid_symbol_mapper=geneid_symbol_mapper,
     )
 
-    from .visualization import plot_go
-
     if not go_df_intersect.empty:
         plot_go(
             go_df_intersect,
@@ -249,28 +244,18 @@ def create_fs_de_go_table(
 
 
 def merge_go_tables(
-    go_files: List[Path],
+    go_files: list[Path],
     output_dir: Path,
     output_filename: str = "GO_merged_results.csv",
 ) -> pd.DataFrame:
-    """Merge GO enrichment results from multiple ligand analyses.
-    """
-    if not go_files:
-        raise ValueError("No GO files provided")
-
-    merged_df = None
-
+    """Merge GO enrichment results from multiple ligand analyses."""
+    frames = []
     for go_file in go_files:
-        ligand_name = go_file.stem.split("_")[0]
         df = pd.read_csv(go_file)
+        df.insert(0, "Ligand", go_file.stem.split("_")[0])
+        frames.append(df)
 
-        df.insert(0, "Ligand", ligand_name)
-
-        if merged_df is None:
-            merged_df = df
-        else:
-            merged_df = pd.concat([merged_df, df], axis=0)
-
+    merged_df = pd.concat(frames, axis=0, ignore_index=True)
     merged_df = merged_df.sort_values("fdr", ascending=True).reset_index(drop=True)
 
     output_dir.mkdir(parents=True, exist_ok=True)

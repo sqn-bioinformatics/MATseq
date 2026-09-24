@@ -2,7 +2,6 @@
 
 import pandas as pd
 from pathlib import Path
-from typing import Tuple
 from anndata import AnnData
 from pydeseq2.dds import DeseqDataSet
 from pydeseq2.ds import DeseqStats
@@ -20,67 +19,25 @@ class DataProcessor:
         sample_labels: pd.Series,
         classes: list[str],
         n_cpus: int,
-        name: str = None,
     ):
-        """Initialize data processor.
-        """
-        if not isinstance(raw_counts, pd.DataFrame):
-            raise TypeError(f"raw_counts must be DataFrame, got {type(raw_counts)}")
-        if not isinstance(sample_labels, pd.Series):
-            raise TypeError(f"sample_labels must be Series, got {type(sample_labels)}")
-        if not isinstance(classes, list):
-            raise TypeError(f"classes must be list, got {type(classes)}")
-        if not isinstance(n_cpus, int):
-            raise TypeError(f"n_cpus must be int, got {type(n_cpus)}")
-
-        if len(raw_counts) != len(sample_labels):
-            raise ValueError(
-                f"raw_counts ({len(raw_counts)}) and sample_labels ({len(sample_labels)}) must have same length"
-            )
         self.raw_counts = raw_counts
         self.sample_labels = sample_labels
         self.classes = classes
         self.n_cpus = n_cpus
-        self.name = name
 
     def prepare_metadata(self) -> pd.DataFrame:
-        """Prepare metadata for DESeq2 analysis.
-        """
-        if len(self.classes) != 2:
-            raise ValueError(
-                f"Expected exactly 2 classes for comparison, got {len(self.classes)}: {self.classes}"
-            )
-
+        """Restrict the samples to the two compared classes and build DESeq2 metadata."""
         mask = self.sample_labels.isin(self.classes)
-        sample_names = self.raw_counts.index[mask]
-        labels = self.sample_labels[mask]
-
-        unique_labels = labels.unique()
-        if len(unique_labels) < 2:
-            raise ValueError(
-                f"Must have at least 2 unique classes in data. Got {len(unique_labels)}: {unique_labels.tolist()}"
-            )
-
-        # Verify both classes exist in the filtered data
-        for cls in self.classes:
-            if cls not in unique_labels:
-                raise ValueError(
-                    f"Class '{cls}' not found in sample labels. Available: {unique_labels.tolist()}"
-                )
-
-        # Create metadata DataFrame with condition as categorical
-        # This is required by pydeseq2 to properly set reference levels
-        condition_cat = pd.Categorical(
-            labels.values, categories=self.classes, ordered=False
+        # Categorical with explicit categories is what sets the pydeseq2 reference level.
+        condition = pd.Categorical(
+            self.sample_labels[mask].values, categories=self.classes, ordered=False
+        )
+        return pd.DataFrame(
+            {"condition": condition}, index=self.raw_counts.index[mask]
         )
 
-        metadata = pd.DataFrame({"condition": condition_cat}, index=sample_names)
-
-        return metadata
-
     def make_dds(self) -> AnnData:
-        """Create and run DESeq2 analysis.
-        """
+        """Create and run DESeq2 analysis."""
         metadata = self.prepare_metadata()
         counts = self.raw_counts.loc[metadata.index].copy()
         print(f"DESeq2 analysis: {counts.shape[0]} samples, {counts.shape[1]} genes")
@@ -100,7 +57,7 @@ class DataProcessor:
         self,
         padj_threshold: float = 0.05,
         log2fc_threshold: float = 2.0,
-    ) -> Tuple[AnnData, pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[AnnData, pd.DataFrame, pd.DataFrame]:
         dds = self.make_dds()
 
         tested_level = self.classes[0].replace("_", "-")
@@ -142,11 +99,8 @@ class DESeq2:
         padj_threshold: float = 0.05,
         log2fc_threshold: float = 2.0,
         n_cpus: int = 42,
-        name: str = None,
+        name: str | None = None,
     ):
-        """Initialize analysis pipeline.
-        """
-
         if len(raw_counts) != len(sample_labels):
             raise ValueError(
                 f"raw_counts ({len(raw_counts)}) and sample_labels ({len(sample_labels)}) must have same length"
@@ -175,8 +129,7 @@ class DESeq2:
     def run_analysis(
         self, class_list: list[str], class_to_compare_to: str = "negative_control"
     ) -> dict:
-        """Run DESeq2 analysis against a condition/class.
-        """
+        """Run DESeq2 analysis against a condition/class."""
         present = set(self.sample_labels.unique())
         filtered_list = [
             c for c in class_list if c != class_to_compare_to and c in present
@@ -192,7 +145,6 @@ class DESeq2:
                 sample_labels=self.sample_labels,
                 classes=class_pair,
                 n_cpus=self.n_cpus,
-                name=self.name,
             )
 
             dds, res, sigs = processor.make_statistics(
@@ -227,8 +179,7 @@ class DESeq2:
     def _generate_figures(
         self, ligand_name: str, dds: AnnData, res: pd.DataFrame, sigs: pd.DataFrame
     ):
-        """Generate visualization figures for analysis.
-        """
+        """Generate visualization figures for analysis."""
         plot_volcano(res, ligand_name, output_path=self.figures_dir)
         plot_heatmap(dds, sigs, ligand_name, output_path=self.figures_dir)
 
@@ -247,6 +198,6 @@ class DESeq2:
         except Exception as e:
             print(f"Warning: GO enrichment failed for {ligand_name}: {e}")
 
-    def get_de_genes(self):
+    def get_de_genes(self) -> set[str]:
         """Return set of all differentially expressed genes."""
         return self.de_genes

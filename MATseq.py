@@ -37,6 +37,9 @@ from src import (
     plot_venn,
     predict_samples,
     prepare_counts,
+    assemble_supplementary_tables,
+    compose_figures,
+    format_table2,
 )
 from src.config import (
     ADDITIONAL_LIGANDS,
@@ -47,8 +50,6 @@ from src.config import (
     get_sample_dir,
     get_work_dir,
 )
-from src.compose_figures import compose_figures
-from src.compose_tables import assemble_supplementary_tables, format_table2
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
@@ -125,7 +126,7 @@ def run_pipeline(
             dry_run=dry_run,
         )
         if not ok or dry_run:
-            return None
+            return
 
     print("\n--- STEP 1: COUNT TABLE GENERATION ---")
     counts_dir = RESULTS_DIR / "counts"
@@ -133,18 +134,16 @@ def run_pipeline(
 
     count_df = prepare_counts()
     count_df.to_csv(counts_dir / "MATseq_count_summary.csv")
-    batch_specs = {"main_dataset": "7128", "external_test": "7086"}
 
-    for split, batch in batch_specs.items():
-        df = count_df.loc[count_df.index.str.contains(f"_{batch}_", regex=False)]
-        features = df.drop(columns="label")
-        labels = df["label"]
-        if split == "external_test":
-            X_test, y_test = extract_subset(features, labels, "main_ligands")
-        else:
-            X_train, y_train = extract_subset(features, labels, "main_ligands")
-            X_other, y_other = extract_subset(features, labels, "additional_ligands")
-            X_bact, y_bact = extract_subset(features, labels, "bacterial_ligands")    
+    main = count_df.loc[count_df.index.str.contains("_7128_", regex=False)]
+    external = count_df.loc[count_df.index.str.contains("_7086_", regex=False)]
+    main_features, main_labels = main.drop(columns="label"), main["label"]
+    X_train, y_train = extract_subset(main_features, main_labels, "main_ligands")
+    X_other, y_other = extract_subset(main_features, main_labels, "additional_ligands")
+    X_bact, y_bact = extract_subset(main_features, main_labels, "bacterial_ligands")
+    X_test, y_test = extract_subset(
+        external.drop(columns="label"), external["label"], "main_ligands"
+    )
 
     subset_xy: dict[str, tuple[pd.DataFrame, pd.Series]] = {
         "train_ligands": (X_train, y_train),
@@ -162,6 +161,7 @@ def run_pipeline(
         Path(__file__).parent / "data" / "go_terms_support"
     )
 
+    deseq2_runs: dict[str, DESeq2] = {}
     for subset, (X_sub, y_sub) in subset_xy.items():
         deseq2 = DESeq2(
             raw_counts=X_sub,
@@ -178,12 +178,13 @@ def run_pipeline(
         deseq2.run_analysis(
             CLASS_ORDER[subset], class_to_compare_to="negative_control"
         )
-        if subset == "train_ligands":
-            deseq2_train = deseq2
-            de_genes = deseq2_train.get_de_genes()
+        deseq2_runs[subset] = deseq2
         pd.Series(sorted(deseq2.get_de_genes()), name="gene").to_csv(
             de_dir / f"de_genes_{subset}.csv", index=False
         )
+
+    deseq2_train = deseq2_runs["train_ligands"]
+    de_genes = deseq2_train.get_de_genes()
 
     print("\n--- STEP 3: FEATURE ENGINEERING GENE NUMBER DETERMINATION ---")
     out_dir = RESULTS_DIR / "feature_selection"
@@ -231,7 +232,7 @@ def run_pipeline(
         X_pca_pre = pre_pipe.fit_transform(X_pca) # Refitting on each subset
 
         # The fs_pipe is fit once to train to keep parameters constant
-        X_pca_selected = fs_pipe.transform(X_pca) 
+        X_pca_selected = fs_pipe.transform(X_pca)
         palette = SUBSET_PALETTES[subset]
         hue_order = CLASS_ORDER[subset]
         for with_names, label_suffix in [(False, ""), (True, "_labeled")]:
@@ -290,7 +291,7 @@ def run_pipeline(
     overlap_ranked[["gene", "in_de", "rank", "importance"]].to_csv(
         tables_dir / "selected_vs_de_overlap_table.csv", index=False
     )
- 
+
     print("\n--- STEP 6: NESTED CV, REFIT, VALIDATION AND PREDICTIONS ---")
     endpoint_subsets = {
         "additional_ligands": (X_other, y_other),
@@ -338,14 +339,13 @@ def run_pipeline(
         )
         cache_dir = panel["hp_dir"] / "pipeline_cache"
         trainer = ModelTrainer(panel["X"], panel["y"], **MODEL_TRAINING_CONFIG)
-        if cache_dir.exists():
-            shutil.rmtree(cache_dir)
+        shutil.rmtree(cache_dir, ignore_errors=True)
         trainer.tune_nested(
             HYPERPARAMETER_GRIDS, panel["hp_dir"], panel["fig_dir"], cache_dir,
             k_best=mi_elbow, fs_genes=panel["fs_genes"], de_genes=panel["de_genes"],
             outer_cv=5, inner_cv=3,
         ).to_csv(panel["nested_csv"], index=False)
-        shutil.rmtree(cache_dir)
+        shutil.rmtree(cache_dir, ignore_errors=True)
 
         trainer.refit(sorted(panel["fs_genes"]))
         trainer.save_models(panel["model_dir"])
@@ -467,7 +467,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    return run_pipeline(
+    run_pipeline(
         snakemake=args.snakemake,
         fastq_dir=args.fastq_dir,
         genome_dir=args.genome_dir,

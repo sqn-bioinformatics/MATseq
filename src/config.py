@@ -36,23 +36,11 @@ def _find_config_path() -> Path:
         Path(__file__).parent.parent / "config.json",
         Path.cwd() / "config.json",
     ]
-    for path in candidates:
-        if path.exists():
-            return path
-    return candidates[0]
-
-def _load_config() -> dict[str, Any]:
-    config_path = _find_config_path()
-    try:
-        with config_path.open() as f:
-            return json.load(f)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON in config file: {e}")
+    return next((path for path in candidates if path.exists()), candidates[0])
 
 
-_config = _load_config()
+with _find_config_path().open() as _f:
+    _config: dict[str, Any] = json.load(_f)
 
 DESEQ2_CONFIG = _config["deseq2"]
 FEATURE_SELECTION_CONFIG = _config["feature_selection"]
@@ -74,7 +62,7 @@ SUBSET_PALETTES = {
 
 def get_config(key: str) -> Any:
     """Get a configuration value using dot notation, e.g. 'paths.featurecounts_dir'."""
-    config = _load_config()
+    config = _config
     for part in key.split("."):
         try:
             config = config[part]
