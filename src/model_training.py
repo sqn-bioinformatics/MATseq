@@ -32,7 +32,7 @@ from .feature_engineering import ColumnSelector, feature_pipeline, preprocessing
 from .visualization import plot_confusion_matrix
 
 
-def make_score(y_true, y_pred) -> dict[str, float]:
+def make_score(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     """Accuracy, balanced accuracy, macro precision/recall/f1, and weighted f1."""
     return {
         "accuracy": accuracy_score(y_true, y_pred),

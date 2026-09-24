@@ -1,14 +1,14 @@
 """TLR reporter assay data loading and analysis."""
 
 from pathlib import Path
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
-def load_tlr_data(data_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Load TLR2 (Pam3) and TLR4 (LPS) data from supplementary tables.
-    """
+def load_tlr_data(
+    data_dir: Path,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float]]:
+    """Load TLR2 (Pam3) and TLR4 (LPS) data from supplementary tables."""
     tlr4_raw = pd.read_csv(data_dir / "Supplementary_Table_5.csv")
     tlr4_lps = tlr4_raw[tlr4_raw["OD630nm_LPS_Replicate1"].notna()]
     tlr4_df = pd.DataFrame(
@@ -20,7 +20,7 @@ def load_tlr_data(data_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
         }
     )
     tlr4_fla = tlr4_raw[tlr4_raw["OD630nm_Fla-PA_Replicate1"].notna()].iloc[0]
-    
+
     tlr2_raw = pd.read_csv(data_dir / "Supplementary_Table_6.csv")
     tlr2_pam = tlr2_raw[tlr2_raw["OD630nm_Pam3_Replicate1"].notna()]
     tlr2_df = pd.DataFrame(
@@ -33,19 +33,10 @@ def load_tlr_data(data_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     )
     tlr2_fla = tlr2_raw[tlr2_raw["OD630nm_Fla-PA_Replicate1"].notna()].iloc[0]
 
+    replicates = ["OD630nm_Fla-PA_Replicate1", "OD630nm_Fla-PA_Replicate2"]
     flapa_data = {
-        "tlr4": {
-            "concentration": tlr4_fla["Concentration_(EU_mL)"],
-            "average": np.mean(
-                [tlr4_fla["OD630nm_Fla-PA_Replicate1"], tlr4_fla["OD630nm_Fla-PA_Replicate2"]]
-            ),
-        },
-        "tlr2": {
-            "concentration": tlr2_fla["Concentration_(ng_mL)"],
-            "average": np.mean(
-                [tlr2_fla["OD630nm_Fla-PA_Replicate1"], tlr2_fla["OD630nm_Fla-PA_Replicate2"]]
-            ),
-        },
+        "tlr4": tlr4_fla[replicates].mean(),
+        "tlr2": tlr2_fla[replicates].mean(),
     }
 
     return tlr2_df, tlr4_df, flapa_data
@@ -56,26 +47,19 @@ def plot_tlr_panel(
     ax_bar,
     df: pd.DataFrame,
     conc_col: str,
-    fla_pa_val: float = None,
+    fla_pa_val: float | None = None,
     xlabel: str = "Concentration",
     title: str = "TLR",
     label: str = "Ligand",
     color: str = "#1f77b4",
-    xlim: tuple = (0.01, 100),
+    xlim: tuple[float, float] = (0.01, 100),
 ):
-    """Plot a single TLR dose-response panel with optional Fla-PA bar.
-    """
-    df_plot = df[df[conc_col] > 0].copy()
-
-    x = df_plot[conc_col].values
-    y = df_plot["Average"].values
-
-    sort_idx = np.argsort(x)
-    x_sorted = x[sort_idx]
-    y_sorted = y[sort_idx]
+    """Plot a single TLR dose-response panel with optional Fla-PA bar."""
+    df_plot = df[df[conc_col] > 0].sort_values(conc_col)
 
     ax_main.plot(
-        x_sorted, y_sorted, "o-", linewidth=2, markersize=8, color=color, label=label
+        df_plot[conc_col], df_plot["Average"], "o-", linewidth=2, markersize=8,
+        color=color, label=label,
     )
 
     ax_main.set_xscale("log")
@@ -108,12 +92,11 @@ def plot_tlr_panel(
 def plot_tlr_hek_blue(
     tlr2_df: pd.DataFrame,
     tlr4_df: pd.DataFrame,
-    fla_pa_data: dict,
+    fla_pa_data: dict[str, float],
     output_path: Path,
     output_filename: str,
 ) -> Path:
-    """Create TLR2/TLR4 dose-response plots with Fla-PA bar.
-    """
+    """Create TLR2/TLR4 dose-response plots with Fla-PA bar."""
     fig, axes = plt.subplots(
         2, 2, figsize=(10, 10), gridspec_kw={"width_ratios": [4, 1]}
     )
@@ -125,7 +108,7 @@ def plot_tlr_hek_blue(
         ax_bar=ax1_bar,
         df=tlr4_df,
         conc_col="Concentration_EU_mL",
-        fla_pa_val=fla_pa_data["tlr4"]["average"],
+        fla_pa_val=fla_pa_data["tlr4"],
         xlabel="Concentration (EU/ml)",
         title="HEK-Blue™ Reporter Line TLR4 LPS",
         label="LPS",
@@ -136,7 +119,7 @@ def plot_tlr_hek_blue(
         ax_bar=ax2_bar,
         df=tlr2_df,
         conc_col="Concentration_ng_mL",
-        fla_pa_val=fla_pa_data["tlr2"]["average"],
+        fla_pa_val=fla_pa_data["tlr2"],
         xlabel="Concentration (ng/mL)",
         title="HEK-Blue™ Reporter Line TLR2 Pam3",
         label="Pam3",

@@ -1,4 +1,4 @@
-"""Assemble the manuscript's Table 2 and Supplementary Tables S1-S8."""
+"""Assemble the manuscript's Table 2 and Supplementary Tables S1-S7."""
 from pathlib import Path
 
 import pandas as pd
@@ -40,6 +40,14 @@ S4_CONDITIONS = [
     ("Feature Selection Genes not Differentially Expressed",
      "fs_only_go_terms.csv"),
 ]
+
+# Reporter-assay source data (S5/S6): copied verbatim bar one renamed column.
+REPORTER_TABLES = {
+    "S5": ("SupplementaryTable5.csv",
+           {"Concentration_(EU_mL)": "Concentration_LPS_(eq_mL)"}),
+    "S6": ("SupplementaryTable6.csv",
+           {"Concentration_(ng_mL)": "Concentration_Pam3_(ng_mL)"}),
+}
 
 CONDITION_LABELS = {
     "all_genes": "all genes",
@@ -122,7 +130,7 @@ def assemble_supplementary_table_1(de_dir: Path, output_dir: Path) -> pd.DataFra
         block = block.rename(columns={block.columns[0]: "gene"})
         block = block.rename(columns={c: f"{c}_{suffix}" for c in DESEQ2_STATS})
         merged = block if merged is None else merged.merge(block, on="gene", how="outer")
-    merged.to_csv(output_dir / "Supplementary_Table_1.csv", index=False)
+    merged.to_csv(output_dir / "SupplementaryTable1.csv", index=False)
     return merged
 
 
@@ -135,7 +143,7 @@ def assemble_supplementary_table_2(go_dir: Path, output_dir: Path) -> pd.DataFra
         frames.append(df)
     merged = pd.concat(frames, axis=0, ignore_index=True)
     merged = merged.sort_values("fdr", ascending=True).reset_index(drop=True)
-    merged.to_csv(output_dir / "Supplementary_Table_2.csv", index=False)
+    merged.to_csv(output_dir / "SupplementaryTable2.csv", index=False)
     return merged
 
 
@@ -148,7 +156,7 @@ def assemble_supplementary_table_3(fs_de_dir: Path, output_dir: Path) -> pd.Data
         "Gene": src["gene"],
         "Differentially_Expressed": src["in_de"].astype(bool),
     })
-    out.to_csv(output_dir / "Supplementary_Table_3.csv", index=False)
+    out.to_csv(output_dir / "SupplementaryTable3.csv", index=False)
     return out
 
 
@@ -160,26 +168,8 @@ def assemble_supplementary_table_4(go_dir: Path, output_dir: Path) -> pd.DataFra
         df.insert(0, "Condition", label)
         frames.append(df)
     merged = pd.concat(frames, axis=0, ignore_index=True)
-    merged.to_csv(output_dir / "Supplementary_Table_4.csv", index=False)
+    merged.to_csv(output_dir / "SupplementaryTable4.csv", index=False)
     return merged
-
-
-def assemble_supplementary_table_5(supp_data_dir: Path, output_dir: Path) -> pd.DataFrame:
-    """TLR4 reporter assay source data (S5)."""
-    out = pd.read_csv(supp_data_dir / "Supplementary_Table_5.csv").rename(
-        columns={"Concentration_(EU_mL)": "Concentration_LPS_(eq_mL)"}
-    )
-    out.to_csv(output_dir / "Supplementary_Table_5.csv", index=False)
-    return out
-
-
-def assemble_supplementary_table_6(supp_data_dir: Path, output_dir: Path) -> pd.DataFrame:
-    """TLR2 reporter assay source data (S6)."""
-    out = pd.read_csv(supp_data_dir / "Supplementary_Table_6.csv").rename(
-        columns={"Concentration_(ng_mL)": "Concentration_Pam3_(ng_mL)"}
-    )
-    out.to_csv(output_dir / "Supplementary_Table_6.csv", index=False)
-    return out
 
 
 def assemble_supplementary_table_7(feature_selection_dir: Path,
@@ -192,7 +182,7 @@ def assemble_supplementary_table_7(feature_selection_dir: Path,
         out[raw_col.replace("ari_seed_", "ARI_seed_")] = src[raw_col]
     out["ARI_mean"] = src["ari_mean"]
     out["ARI_std"] = src["ari_std"]
-    out.to_csv(output_dir / "Supplementary_Table_7.csv", index=False)
+    out.to_csv(output_dir / "SupplementaryTable7.csv", index=False)
     return out
 
 
@@ -202,12 +192,14 @@ def assemble_supplementary_tables(
 ) -> dict[str, pd.DataFrame]:
     """Regenerate Supplementary Tables S1-S7 from raw pipeline outputs."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    return {
+    tables = {
         "S1": assemble_supplementary_table_1(de_dir, output_dir),
         "S2": assemble_supplementary_table_2(go_dir, output_dir),
         "S3": assemble_supplementary_table_3(fs_de_dir, output_dir),
         "S4": assemble_supplementary_table_4(go_dir, output_dir),
-        "S5": assemble_supplementary_table_5(supp_data_dir, output_dir),
-        "S6": assemble_supplementary_table_6(supp_data_dir, output_dir),
-        "S7": assemble_supplementary_table_7(feature_selection_dir, output_dir),
     }
+    for key, (filename, renames) in REPORTER_TABLES.items():
+        tables[key] = pd.read_csv(supp_data_dir / filename).rename(columns=renames)
+        tables[key].to_csv(output_dir / filename, index=False)
+    tables["S7"] = assemble_supplementary_table_7(feature_selection_dir, output_dir)
+    return tables

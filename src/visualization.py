@@ -15,7 +15,7 @@ from .config import CLASS_DISPLAY_NAMES
 
 
 def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: str,
-                          title=None):
+                          title: str | None = None) -> Path:
     """Render a confusion matrix normalized over the true classes (rows)."""
     fig, ax = plt.subplots(figsize=(6.5, 6))
     cm = np.asarray(cm, dtype=float)
@@ -58,7 +58,8 @@ def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: s
 
 
 def plot_probability_heatmap(proba_df, class_order, true_labels, output_path: Path,
-                             output_filename: str, title=None, seed=42):
+                             output_filename: str, title: str | None = None,
+                             seed: int = 42) -> Path:
     """Render a per-sample prediction-probability heatmap, one sample per control class."""
     rng = np.random.default_rng(seed)
     control_idx = []
@@ -118,7 +119,7 @@ def plot_venn(
     set_labels: tuple,
     output_path: Path,
     output_filename: str = "venn.png",
-    title: str = None,
+    title: str | None = None,
 ) -> Path:
     """Plot a 2-set Venn diagram and save it."""
     with plt.rc_context({"font.size": 22}):
@@ -210,8 +211,8 @@ def plot_pca(
     output_filename: str,
     output_path: Path,
     with_sample_names: bool = False,
-    palette: str = None,
-    hue_order: list = None,
+    palette: str | list | None = None,
+    hue_order: list | None = None,
 ) -> Path:
     """Create PCA visualization for pandas DataFrame data."""
     X_reduced = PCA(n_components=2).fit_transform(X)

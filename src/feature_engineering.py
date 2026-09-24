@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from functools import partial
-from typing import Dict, Optional, Sequence, Union
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -102,9 +103,9 @@ def selected_with_importance(fitted_pipeline: Pipeline) -> pd.DataFrame:
 
 def mutual_information(
     X_pre: pd.DataFrame,
-    y: Union[np.ndarray, pd.Series],
+    y: np.ndarray | pd.Series,
     seeds: Sequence[int] = SEEDS,
-) -> Dict:
+) -> dict[str, Any]:
     """Seed-averaged MI curve over all preprocessed genes plus its elbow."""
     curves = list(
         tqdm(
@@ -125,7 +126,7 @@ def mutual_information(
     return {"mi_elbow": elbow_index(mi_sorted), "scores": pd.DataFrame(scores)}
 
 
-def elbow_index(scores) -> int:
+def elbow_index(scores: np.ndarray) -> int:
     y = np.asarray(scores, dtype=float)
     xn = np.linspace(0.0, 1.0, len(y))
     yn = (y - y.min()) / (np.ptp(y) or 1)
@@ -134,10 +135,10 @@ def elbow_index(scores) -> int:
 
 def forest_kmeans(
     X_pre: pd.DataFrame,
-    y: Union[np.ndarray, pd.Series],
+    y: np.ndarray | pd.Series,
     k_best: int,
     n_estimators: int,
-    max_depth: Optional[int],
+    max_depth: int | None,
     seeds: Sequence[int] = SEEDS,
     random_state: int = 42,
 ) -> pd.DataFrame:
