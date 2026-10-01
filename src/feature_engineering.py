@@ -56,8 +56,8 @@ def selection_pipeline(
     n_estimators,
     max_depth,
     max_features,
-    random_state: int = 42,
-    n_jobs: int = -1,
+    random_state: int,
+    n_jobs: int,
 ) -> Pipeline:
     en = ExtraTreesClassifier(
         n_estimators=n_estimators, max_depth=max_depth,
@@ -139,8 +139,9 @@ def forest_kmeans(
     k_best: int,
     n_estimators: int,
     max_depth: int | None,
+    random_state: int,
+    n_jobs: int,
     seeds: Sequence[int] = SEEDS,
-    random_state: int = 42,
 ) -> pd.DataFrame:
     """k-means/ligand ARI per ExtraTrees gene rank within the top k_best MI genes."""
     X_k = (
@@ -165,11 +166,11 @@ def forest_kmeans(
             n_estimators=n_estimators,
             max_depth=max_depth,
             random_state=seed,
-            n_jobs=-1,
+            n_jobs=n_jobs,
             class_weight="balanced",
         ).fit(X_k, y)
         X_ranked = X_k.to_numpy()[:, np.argsort(forest.feature_importances_)[::-1]]
-        labels = Parallel(n_jobs=-1)(
+        labels = Parallel(n_jobs=n_jobs)(
             delayed(
                 KMeans(n_clusters=n_classes, n_init=10, random_state=seed).fit_predict
             )(X_ranked[:, :n])

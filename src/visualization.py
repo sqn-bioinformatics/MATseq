@@ -58,8 +58,8 @@ def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: s
 
 
 def plot_probability_heatmap(proba_df, class_order, true_labels, output_path: Path,
-                             output_filename: str, title: str | None = None,
-                             seed: int = 42) -> Path:
+                             output_filename: str, seed: int,
+                             title: str | None = None) -> Path:
     """Render a per-sample prediction-probability heatmap, one sample per control class."""
     rng = np.random.default_rng(seed)
     control_idx = []
@@ -271,7 +271,7 @@ def plot_volcano(
     log2foldchange: float = 2.0,
 ) -> Path:
     """Create volcano plot showing differentially expressed genes."""
-    grapher = res.assign(
+    grapher = grapher = res.dropna(subset=["padj"]).assign(
         padj_log=-np.log10(res["padj"].replace(0, 1e-300)),
         color="no_expression_change",
     )

@@ -115,7 +115,7 @@ results/
 │   ├── {model}_{predictions,probabilities}.csv
 │   ├── {model}_probabilities_heatmap.png
 │   └── test_scores_summary.csv
-├── tables/{table2_formatted.csv, Table_2.xlsx, Supplementary_Table_{1..12}.csv}
+├── tables/{table2_formatted.csv, Table_2.xlsx, SupplementaryTable{1..12}.csv}
 └── figures/
     ├── deseq2/{subset}/{ligand}_{volcano,histogram}.png
     ├── go/{subset}/{ligand}_go.png

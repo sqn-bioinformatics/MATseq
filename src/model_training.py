@@ -72,10 +72,11 @@ def evaluate(y_true, y_pred, model_name: str, subset: str, output_dir: Path,
 class ModelTrainer:
     """Nested-CV tuning and per-gene-set refitting of the five classifiers."""
 
-    def __init__(self, X: pd.DataFrame, y: pd.Series, random_state: int = 42) -> None:
+    def __init__(self, X: pd.DataFrame, y: pd.Series, random_state: int, n_jobs: int) -> None:
         self.X = X
         self.y = y
         self.random_state = random_state
+        self.n_jobs = n_jobs
         self.label_encoder = LabelEncoder()
         self.y_enc = self.label_encoder.fit_transform(y)
         self.trained_models: dict[str, Pipeline] = {}
@@ -198,7 +199,7 @@ class ModelTrainer:
                         param_grids[model_name],
                         cv=StratifiedKFold(n_splits=inner_cv, shuffle=True, random_state=fold_seed),
                         scoring=scoring,
-                        n_jobs=24,
+                        n_jobs=self.n_jobs,
                         refit=False,
                     )
                     fit_params = {"clf__sample_weight": compute_sample_weight("balanced", y_tr)}
@@ -207,7 +208,7 @@ class ModelTrainer:
                     # Only the feature_selection pipeline carries the ExtraTrees selector.
                     best_params = dict(gs.best_params_)
                     if condition == "feature_selection":
-                        best_params["select_forest__estimator__n_jobs"] = 24
+                        best_params["select_forest__estimator__n_jobs"] = self.n_jobs
                     start = time.perf_counter()
                     best = pipe.set_params(**best_params).fit(X_tr, y_tr, **fit_params)
                     training_time = time.perf_counter() - start

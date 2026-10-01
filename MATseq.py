@@ -52,6 +52,8 @@ from src.config import (
 )
 
 RESULTS_DIR = Path(__file__).parent / "results"
+N_JOBS = get_config("n_jobs")
+RANDOM_STATE = MODEL_TRAINING_CONFIG["random_state"]
 
 def run_snakemake_preprocessing(
     fastq_dir: Path | None = None,
@@ -205,6 +207,8 @@ def run_pipeline(
         k_best=mi_elbow,
         n_estimators=FEATURE_SELECTION_CONFIG["n_estimators"],
         max_depth=FEATURE_SELECTION_CONFIG["max_depth"],
+        random_state=RANDOM_STATE,
+        n_jobs=N_JOBS,
     )
     mi_result["scores"].to_csv(out_dir / "mutual_information.csv", index=False)
     ari_scan.to_csv(out_dir / "forest_kmeans.csv", index=False)
@@ -215,7 +219,9 @@ def run_pipeline(
     print("\n --- STEP 4: PLOT PCA GRAPHS ---")
     pca_dir = RESULTS_DIR / "figures" / "pca"
 
-    fs_pipe = feature_pipeline(**FEATURE_SELECTION_CONFIG, k_best=mi_elbow).set_output(
+    fs_pipe = feature_pipeline(
+        **FEATURE_SELECTION_CONFIG, k_best=mi_elbow, random_state=RANDOM_STATE, n_jobs=N_JOBS
+    ).set_output(
         transform="pandas"
     )
     fs_pipe.fit(X_train, y_train)
@@ -298,7 +304,9 @@ def run_pipeline(
         "bacterial_ligands": (X_bact, y_bact),
     }
     mask, mask_test = y_train != "Fla-PA", y_test != "Fla-PA"
-    fs_wo = feature_pipeline(**FEATURE_SELECTION_CONFIG, k_best=mi_elbow).set_output(
+    fs_wo = feature_pipeline(
+        **FEATURE_SELECTION_CONFIG, k_best=mi_elbow, random_state=RANDOM_STATE, n_jobs=N_JOBS
+    ).set_output(
         transform="pandas"
     )
     fs_wo.fit(X_train[mask], y_train[mask])
@@ -338,7 +346,7 @@ def run_pipeline(
             pred_fig_dir=RESULTS_DIR / "figures" / "predictions" / panel_name,
         )
         cache_dir = panel["hp_dir"] / "pipeline_cache"
-        trainer = ModelTrainer(panel["X"], panel["y"], **MODEL_TRAINING_CONFIG)
+        trainer = ModelTrainer(panel["X"], panel["y"], **MODEL_TRAINING_CONFIG, n_jobs=N_JOBS)
         shutil.rmtree(cache_dir, ignore_errors=True)
         trainer.tune_nested(
             HYPERPARAMETER_GRIDS, panel["hp_dir"], panel["fig_dir"], cache_dir,
@@ -378,7 +386,7 @@ def run_pipeline(
     )
     format_table2(
         panels["no_flapa"]["nested_csv"],
-        manuscript_tables_dir / "Supplementary_Table_8.csv",
+        manuscript_tables_dir / "SupplementaryTable8.csv",
     )
     assemble_supplementary_tables(
         de_dir, go_dir, tables_dir, out_dir, supp_data_dir,

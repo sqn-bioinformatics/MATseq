@@ -27,6 +27,7 @@ def predict_samples(trainer: ModelTrainer, X: pd.DataFrame, y: pd.Series, subset
             true_labels=y,
             output_path=fig_dir,
             output_filename=f"{model_name}_probabilities_heatmap.png",
+            seed=trainer.random_state,
         )
         rows.append({"model": model_name, **evaluate(y, y_pred, model_name, subset,
                                                      output_dir, fig_dir)})
