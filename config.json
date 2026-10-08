@@ -11,7 +11,7 @@
   "feature_selection": {
     "n_estimators": 8000,
     "max_depth": 8,
-    "max_features": 132
+    "max_features": 20
   },
   "model_training": {
     "random_state": 42
@@ -209,6 +209,6 @@
     "sample_dir": "~/MATseq/data/raw",
     "work_dir": "~/MATseq/results",
     "genome_dir": "/home/t.afanasyeva/reference_genome/GRCh38_GCA_000001405.15",
-    "threads": 42
+    "threads": 48
   }
 }

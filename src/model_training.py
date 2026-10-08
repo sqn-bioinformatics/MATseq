@@ -45,23 +45,28 @@ def make_score(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
 
 
 def evaluate(y_true, y_pred, model_name: str, subset: str, output_dir: Path,
-             fig_dir: Path) -> dict[str, float]:
+             fig_dir: Path, labels: list[str] | None = None) -> dict[str, float]:
     """Write the classification report and confusion matrix (CSV + PNG); return scores."""
-    present = set(y_true) | set(y_pred)
-    order = CLASS_ORDER[subset]
-    labels = [c for c in order if c in present] + sorted(present - set(order))
+    if labels is None:
+        present = set(y_true) | set(y_pred)
+        order = CLASS_ORDER[subset]
+        labels = [c for c in order if c in present] + sorted(present - set(order))
     report = classification_report(
         y_true, y_pred, labels=labels, zero_division=0, output_dict=True
     )
     pd.DataFrame(report).transpose().to_csv(
         output_dir / f"{model_name}_classification_report.csv"
     )
-    cm = confusion_matrix(y_true, y_pred, labels=labels, normalize="true")
-    pd.DataFrame(cm, index=labels, columns=labels).to_csv(
+    true_labels = [c for c in labels if c in set(y_true)]
+    cm = confusion_matrix(y_true, y_pred, labels=labels, normalize="true")[
+        [labels.index(c) for c in true_labels]
+    ]
+    pd.DataFrame(cm, index=true_labels, columns=labels).to_csv(
         output_dir / f"{model_name}_confusion_matrix.csv"
     )
     plot_confusion_matrix(
         cm, labels,
+        row_names=true_labels,
         title=model_name,
         output_path=fig_dir,
         output_filename=f"Confusion_Matrix_{model_name}.png",
@@ -183,8 +188,6 @@ class ModelTrainer:
                             random_state=fold_seed, n_jobs=1,
                         ).steps
                     else:
-                        # Gene subsetting sits after library-size normalisation, as in
-                        # refit(), so nested CV and deployment preprocess identically.
                         genes = fs_plus_de if condition == "fs_plus_de" else random_genes
                         head = [
                             pre_steps[0],
@@ -205,14 +208,16 @@ class ModelTrainer:
                     fit_params = {"clf__sample_weight": compute_sample_weight("balanced", y_tr)}
                     print(f"  {condition} — outer fold {fold_idx} — tuning {model_name}...")
                     gs.fit(X_tr, y_tr, **fit_params)
-                    # Only the feature_selection pipeline carries the ExtraTrees selector.
+
                     best_params = dict(gs.best_params_)
                     if condition == "feature_selection":
                         best_params["select_forest__estimator__n_jobs"] = self.n_jobs
-                    start = time.perf_counter()
                     best = pipe.set_params(**best_params).fit(X_tr, y_tr, **fit_params)
+
+                    X_clf = best[:-1].transform(X_tr)
+                    start = time.perf_counter()
+                    best[-1].fit(X_clf, y_tr, sample_weight=fit_params["clf__sample_weight"])
                     training_time = time.perf_counter() - start
-                    y_pred = self.label_encoder.inverse_transform(best.predict(X_te))
 
                     per_fold_rows.append({
                         "condition": condition,

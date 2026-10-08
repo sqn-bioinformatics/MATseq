@@ -397,7 +397,7 @@ def run_pipeline(
          deseq2_fig_dir / "train_ligands" / "LPS_histogram.png"],
         composite_figures_dir / "Figure2.png",
         ncols=2,
-        margins=(0.45, 0.4, 0.3, 0.3),
+        margins=(0.15, 0.3, 0.05, 0.05),
     )
     figure3_panels = [
         fs_fig_dir / "mutual_information.png",
@@ -444,7 +444,7 @@ def run_pipeline(
              for kind in ("volcano", "histogram")],
             composite_figures_dir / f"Supplementary_Figure1p{page + 1}.png",
             first_letter=start * 2,
-            margins=(0.45, 0.4, 0.3, 0.3),
+            margins=(0.15, 0.3, 0.05, 0.05),
         )
 
     print("\n" + "=" * 80)
