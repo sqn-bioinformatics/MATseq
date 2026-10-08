@@ -9,7 +9,7 @@ def load_tlr_data(
     data_dir: Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float]]:
     """Load TLR2 (Pam3) and TLR4 (LPS) data from supplementary tables."""
-    tlr4_raw = pd.read_csv(data_dir / "Supplementary_Table_5.csv")
+    tlr4_raw = pd.read_csv(data_dir / "SupplementaryTable5.csv")
     tlr4_lps = tlr4_raw[tlr4_raw["OD630nm_LPS_Replicate1"].notna()]
     tlr4_df = pd.DataFrame(
         {
@@ -21,7 +21,7 @@ def load_tlr_data(
     )
     tlr4_fla = tlr4_raw[tlr4_raw["OD630nm_Fla-PA_Replicate1"].notna()].iloc[0]
 
-    tlr2_raw = pd.read_csv(data_dir / "Supplementary_Table_6.csv")
+    tlr2_raw = pd.read_csv(data_dir / "SupplementaryTable6.csv")
     tlr2_pam = tlr2_raw[tlr2_raw["OD630nm_Pam3_Replicate1"].notna()]
     tlr2_df = pd.DataFrame(
         {

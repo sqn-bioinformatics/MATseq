@@ -12,8 +12,15 @@ def predict_samples(trainer: ModelTrainer, X: pd.DataFrame, y: pd.Series, subset
     """Predict X with every trained model, save predictions/probabilities/heatmaps, score against y."""
     output_dir.mkdir(parents=True, exist_ok=True)
     rows = []
+    preds = {
+        name: trainer.label_encoder.inverse_transform(model.predict(X))
+        for name, model in trainer.trained_models.items()
+    }
+    present = set(y).union(*map(set, preds.values()))
+    order = CLASS_ORDER[subset]
+    labels = [c for c in order if c in present] + sorted(present - set(order))
     for model_name, model in trainer.trained_models.items():
-        y_pred = trainer.label_encoder.inverse_transform(model.predict(X))
+        y_pred = preds[model_name]
         pd.DataFrame({"sample": X.index, "prediction": y_pred}).to_csv(
             output_dir / f"{model_name}_predictions.csv", index=False
         )
@@ -27,9 +34,10 @@ def predict_samples(trainer: ModelTrainer, X: pd.DataFrame, y: pd.Series, subset
             true_labels=y,
             output_path=fig_dir,
             output_filename=f"{model_name}_probabilities_heatmap.png",
+            seed=trainer.random_state,
         )
         rows.append({"model": model_name, **evaluate(y, y_pred, model_name, subset,
-                                                     output_dir, fig_dir)})
+                                                     output_dir, fig_dir, labels)})
     summary = pd.DataFrame(rows)
     summary.to_csv(output_dir / "test_scores_summary.csv", index=False)
     return summary

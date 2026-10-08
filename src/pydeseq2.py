@@ -40,7 +40,10 @@ class DataProcessor:
         """Create and run DESeq2 analysis."""
         metadata = self.prepare_metadata()
         counts = self.raw_counts.loc[metadata.index].copy()
-        print(f"DESeq2 analysis: {counts.shape[0]} samples, {counts.shape[1]} genes")
+
+        # Keep genes with >= 10 counts in at least the smallest group's sample count
+        min_group = int(metadata["condition"].value_counts().min())
+        counts = counts.loc[:, (counts >= 10).sum(axis=0) >= min_group]
 
         dds = DeseqDataSet(
             counts=counts,
@@ -96,9 +99,9 @@ class DESeq2:
         go_fig_dir: Path,
         goeaobj,
         geneid_symbol_mapper: dict,
+        n_cpus: int,
         padj_threshold: float = 0.05,
         log2fc_threshold: float = 2.0,
-        n_cpus: int = 42,
         name: str | None = None,
     ):
         if len(raw_counts) != len(sample_labels):

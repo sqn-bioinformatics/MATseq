@@ -15,27 +15,30 @@ from .config import CLASS_DISPLAY_NAMES
 
 
 def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: str,
-                          title: str | None = None) -> Path:
+                          title: str | None = None,
+                          row_names: list[str] | None = None) -> Path:
     """Render a confusion matrix normalized over the true classes (rows)."""
     fig, ax = plt.subplots(figsize=(6.5, 6))
     cm = np.asarray(cm, dtype=float)
     labels = [CLASS_DISPLAY_NAMES.get(c, c) for c in class_names]
-    n = cm.shape[0]
+    row_labels = [CLASS_DISPLAY_NAMES.get(c, c) for c in row_names or class_names]
+    n = cm.shape[1]
+    m = cm.shape[0]
     annot_fs = 15 if n <= 6 else (13 if n == 7 else 12)
     tick_fs = 18 if n <= 7 else 16
     im = ax.imshow(cm, cmap="Blues", vmin=0.0, vmax=1.0, aspect="auto")
-    ax.set_box_aspect(1)
+    ax.set_box_aspect(m / n)
 
     ax.set_xticks(range(n))
-    ax.set_yticks(range(n))
+    ax.set_yticks(range(m))
     ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=tick_fs)
-    ax.set_yticklabels(labels, fontsize=tick_fs)
+    ax.set_yticklabels(row_labels, fontsize=tick_fs)
     ax.set_xlabel("Predicted class", fontsize=20)
     ax.set_ylabel("True class", fontsize=20)
     if title:
         ax.set_title(title, fontsize=20, pad=8)
 
-    for i in range(n):
+    for i in range(m):
         for j in range(n):
             v = cm[i, j]
             # Drop the decimal for a full 100% so it never overruns the cell.
@@ -45,9 +48,9 @@ def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: s
 
     ax.tick_params(which="both", length=0)
     ax.spines[:].set_visible(False)
-    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar = fig.colorbar(im, cax=ax.inset_axes((1.04, 0.15, 0.035, 0.7)))
     cbar.outline.set_visible(False)
-    cbar.ax.tick_params(length=0, labelsize=16)
+    cbar.ax.tick_params(length=0, labelsize=12)
 
     output_path.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
@@ -58,8 +61,8 @@ def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: s
 
 
 def plot_probability_heatmap(proba_df, class_order, true_labels, output_path: Path,
-                             output_filename: str, title: str | None = None,
-                             seed: int = 42) -> Path:
+                             output_filename: str, seed: int,
+                             title: str | None = None) -> Path:
     """Render a per-sample prediction-probability heatmap, one sample per control class."""
     rng = np.random.default_rng(seed)
     control_idx = []
@@ -219,10 +222,11 @@ def plot_pca(
 
     with plt.rc_context({"figure.facecolor": "white", "axes.facecolor": "white"}):
         fig, ax = plt.subplots(figsize=(20, 20) if with_sample_names else (6, 6))
+        draw_order = np.argsort(np.asarray(labels) == "LTA", kind="stable")
         sns.scatterplot(
-            x=X_reduced[:, 0],
-            y=X_reduced[:, 1],
-            hue=labels,
+            x=X_reduced[draw_order, 0],
+            y=X_reduced[draw_order, 1],
+            hue=np.asarray(labels)[draw_order],
             hue_order=hue_order,
             s=200 if with_sample_names else 80,
             alpha=0.6,
@@ -271,7 +275,7 @@ def plot_volcano(
     log2foldchange: float = 2.0,
 ) -> Path:
     """Create volcano plot showing differentially expressed genes."""
-    grapher = res.assign(
+    grapher = grapher = res.dropna(subset=["padj"]).assign(
         padj_log=-np.log10(res["padj"].replace(0, 1e-300)),
         color="no_expression_change",
     )
@@ -375,7 +379,6 @@ def plot_heatmap(
             location="left",
             orientation="vertical",
             pad=2,
-            label="Row z-score (log1p normed counts)",
         ),
         col_colors=col_colors,
     )
@@ -383,7 +386,6 @@ def plot_heatmap(
     vmin, vmax = g.ax_heatmap.collections[0].get_clim()
     g.ax_cbar.set_yticks([vmin, 0, vmax])
     g.ax_cbar.set_yticklabels([f"{vmin:.1f}", "0", f"{vmax:.1f}"], fontsize=5)
-    g.ax_cbar.yaxis.label.set_size(5)
 
     handles = [Patch(facecolor=lut[name], label=name) for name in lut]
 
