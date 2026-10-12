@@ -273,28 +273,33 @@ def plot_volcano(
     analysis_name: str,
     output_path: Path,
     log2foldchange: float = 2.0,
+    padj: float = 0.05,
 ) -> Path:
     """Create volcano plot showing differentially expressed genes."""
-    grapher = grapher = res.dropna(subset=["padj"]).assign(
-        padj_log=-np.log10(res["padj"].replace(0, 1e-300)),
+    grapher = res.dropna(subset=["padj"])
+    grapher = grapher.assign(
+        padj_log=-np.log10(grapher["padj"].replace(0, 1e-300)),
         color="no_expression_change",
     )
 
-    grapher.loc[grapher["log2FoldChange"] > log2foldchange, "color"] = "overexpressed"
-    grapher.loc[grapher["log2FoldChange"] < -log2foldchange, "color"] = "underexpressed"
+    significant = grapher["padj"] < padj
+    grapher.loc[
+        significant & (grapher["log2FoldChange"] > log2foldchange), "color"
+    ] = "overexpressed"
+    grapher.loc[
+        significant & (grapher["log2FoldChange"] < -log2foldchange), "color"
+    ] = "underexpressed"
 
     grapher_subset = grapher[grapher["color"].isin(["overexpressed", "underexpressed"])]
-
-    sorted_grapher_padj_log = grapher_subset.sort_values(by="padj_log", ascending=False)
-    sorted_grapher_log2foldchange = grapher_subset.sort_values(
-        by="log2FoldChange", ascending=True
-    )
+    overexpressed = grapher_subset[grapher_subset["color"] == "overexpressed"]
+    underexpressed = grapher_subset[grapher_subset["color"] == "underexpressed"]
 
     annotation_subset = pd.concat(
         [
-            sorted_grapher_padj_log.head(12),
-            sorted_grapher_log2foldchange.head(4),
-            sorted_grapher_log2foldchange.tail(4),
+            overexpressed.nlargest(6, "stat"),
+            underexpressed.nsmallest(6, "stat"),
+            grapher_subset.nsmallest(4, "log2FoldChange"),
+            grapher_subset.nlargest(4, "log2FoldChange"),
         ]
     ).drop_duplicates()
 
@@ -309,7 +314,7 @@ def plot_volcano(
         alpha=0.7,
     )
 
-    ax.axhline(1.3, color="black", linestyle="--", linewidth=1)
+    ax.axhline(-np.log10(padj), color="black", linestyle="--", linewidth=1)
     ax.axvline(log2foldchange, color="black", linestyle="--", linewidth=1)
     ax.axvline(-log2foldchange, color="black", linestyle="--", linewidth=1)
 

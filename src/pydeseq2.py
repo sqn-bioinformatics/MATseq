@@ -183,7 +183,13 @@ class DESeq2:
         self, ligand_name: str, dds: AnnData, res: pd.DataFrame, sigs: pd.DataFrame
     ):
         """Generate visualization figures for analysis."""
-        plot_volcano(res, ligand_name, output_path=self.figures_dir)
+        plot_volcano(
+            res,
+            ligand_name,
+            output_path=self.figures_dir,
+            log2foldchange=self.log2fc_threshold,
+            padj=self.padj_threshold,
+        )
         plot_heatmap(dds, sigs, ligand_name, output_path=self.figures_dir)
 
         try:

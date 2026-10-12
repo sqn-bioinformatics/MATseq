@@ -218,6 +218,7 @@ class ModelTrainer:
                     start = time.perf_counter()
                     best[-1].fit(X_clf, y_tr, sample_weight=fit_params["clf__sample_weight"])
                     training_time = time.perf_counter() - start
+                    y_pred = self.label_encoder.inverse_transform(best.predict(X_te))
 
                     per_fold_rows.append({
                         "condition": condition,
