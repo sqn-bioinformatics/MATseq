@@ -11,7 +11,7 @@ from matplotlib_venn import venn2
 from sklearn.decomposition import PCA
 from adjustText import adjust_text
 
-from .config import CLASS_DISPLAY_NAMES
+from .config import CLASS_DISPLAY_NAMES, MODEL_TRAINING_CONFIG
 
 
 def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: str,
@@ -117,6 +117,66 @@ def plot_probability_heatmap(proba_df, class_order, true_labels, output_path: Pa
     return save_path
 
 
+def plot_panel_support(
+    results: dict,
+    genes: list[str],
+    ligands: list[str],
+    output_path: Path,
+    output_filename: str = "panel_support_heatmap.png",
+    title: str | None = None,
+) -> Path:
+    """Heatmap of per-ligand log2FC for the selected panel, starred at padj < 0.05."""
+    lfc = pd.DataFrame(
+        {l: results[l]["results"]["log2FoldChange"].reindex(genes) for l in ligands}
+    )
+    padj = pd.DataFrame(
+        {l: results[l]["results"]["padj"].reindex(genes) for l in ligands}
+    )
+    vmax = np.ceil(lfc.abs().max().max())
+
+    fig, ax = plt.subplots(figsize=(6.5, 0.42 * len(genes)))
+    sns.heatmap(
+        lfc, ax=ax, cmap="RdBu_r", center=0, vmin=-vmax, vmax=vmax,
+        linewidths=0.5, linecolor="white", annot=False,
+        xticklabels=[CLASS_DISPLAY_NAMES.get(c, c) for c in ligands],
+        yticklabels=genes,
+        cbar_kws={"label": "log\u2082 fold change", "fraction": 0.046, "pad": 0.04},
+    )
+    for i in range(len(genes)):
+        for j in range(len(ligands)):
+            value = lfc.iat[i, j]
+            if pd.isna(value):
+                continue
+            star = "*" if padj.iat[i, j] < 0.05 else ""
+            ax.text(
+                j + 0.5, i + 0.5, f"{value:.1f}{star}", ha="center", va="center",
+                fontsize=11,
+                color="white" if abs(value) >= 0.6 * vmax else "black",
+            )
+    ax.tick_params(labelsize=14, length=0)
+    ax.xaxis.tick_top()
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+    if title:
+        ax.set_title(title, fontsize=16, pad=12)
+    cbar = ax.collections[0].colorbar
+    cbar.set_label("log\u2082 fold change", fontsize=14)
+    cbar.ax.tick_params(labelsize=12, length=0)
+    cbar.outline.set_visible(False)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.text(0, -0.02, "* padj < 0.05", transform=ax.transAxes, fontsize=13,
+            ha="left", va="top")
+
+    output_path.mkdir(parents=True, exist_ok=True)
+    save_path = output_path / output_filename
+    fig.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0.25)
+    print(f"Figure saved: {save_path}")
+    plt.close(fig)
+
+    return save_path
+
+
 def plot_venn(
     sets: list,
     set_labels: tuple,
@@ -216,34 +276,73 @@ def plot_pca(
     with_sample_names: bool = False,
     palette: str | list | None = None,
     hue_order: list | None = None,
+    three_d: bool = False,
 ) -> Path:
     """Create PCA visualization for pandas DataFrame data."""
-    X_reduced = PCA(n_components=2).fit_transform(X)
+    pca = PCA(
+        n_components=3 if three_d else 2,
+        random_state=MODEL_TRAINING_CONFIG["random_state"],
+    )
+    X_reduced = pca.fit_transform(X)
+    variance = pca.explained_variance_ratio_ * 100
 
     with plt.rc_context({"figure.facecolor": "white", "axes.facecolor": "white"}):
-        fig, ax = plt.subplots(figsize=(20, 20) if with_sample_names else (6, 6))
-        draw_order = np.argsort(np.asarray(labels) == "LTA", kind="stable")
-        sns.scatterplot(
-            x=X_reduced[draw_order, 0],
-            y=X_reduced[draw_order, 1],
-            hue=np.asarray(labels)[draw_order],
-            hue_order=hue_order,
-            s=200 if with_sample_names else 80,
-            alpha=0.6,
-            palette=palette,
-            ax=ax,
-        )
-        ax.set_xlabel("PC1", fontsize=18)
-        ax.set_ylabel("PC2", fontsize=18)
-        ax.tick_params(axis="both", labelsize=16)
+        if three_d:
+            fig = plt.figure(figsize=(20, 20) if with_sample_names else (7.5, 6))
+            ax = fig.add_subplot(111, projection="3d")
+            # Orthographic keeps on-screen distances proportional to the PCA space.
+            ax.set_proj_type("ortho")
+            ax.view_init(elev=10, azim=30)
+            classes = hue_order or list(dict.fromkeys(np.asarray(labels)))
+            colors = (palette if isinstance(palette, list)
+                      else sns.color_palette(palette, len(classes)))
+            for name, color in zip(classes, colors):
+                mask = np.asarray(labels) == name
+                if not mask.any():
+                    continue
+                ax.scatter(
+                    X_reduced[mask, 0], X_reduced[mask, 1], X_reduced[mask, 2],
+                    s=200 if with_sample_names else 80, alpha=0.6, color=color,
+                    edgecolor="white", linewidth=0.6, depthshade=False,
+                    label=CLASS_DISPLAY_NAMES.get(name, name),
+                )
+            # Tight bbox ignores 3D axis labels, so the save below pads the
+            # canvas to keep the z label that sits left of the tick labels.
+            for set_label, index, pad in [(ax.set_xlabel, 0, 9),
+                                          (ax.set_ylabel, 1, 9),
+                                          (ax.set_zlabel, 2, 8)]:
+                set_label(f"PC{index + 1} ({variance[index]:.1f}%)",
+                          fontsize=14, labelpad=pad)
+            ax.tick_params(axis="both", labelsize=12)
+            ax.grid(True, alpha=0.25)
 
-        if with_sample_names:
-            texts = [
-                ax.text(x, y, name, ha="left", va="bottom", alpha=0.8, fontsize=12)
-                for (x, y), name in zip(X_reduced, X.index)
-            ]
-            adjust_text(texts, ax=ax,
-                        arrowprops=dict(arrowstyle="->", color="black"))
+            if with_sample_names:
+                for (x, y, z), name in zip(X_reduced, X.index):
+                    ax.text(x, y, z, name, alpha=0.8, fontsize=12)
+        else:
+            fig, ax = plt.subplots(figsize=(20, 20) if with_sample_names else (6, 6))
+            draw_order = np.argsort(np.asarray(labels) == "LTA", kind="stable")
+            sns.scatterplot(
+                x=X_reduced[draw_order, 0],
+                y=X_reduced[draw_order, 1],
+                hue=np.asarray(labels)[draw_order],
+                hue_order=hue_order,
+                s=200 if with_sample_names else 80,
+                alpha=0.6,
+                palette=palette,
+                ax=ax,
+            )
+            ax.set_xlabel("PC1", fontsize=18)
+            ax.set_ylabel("PC2", fontsize=18)
+            ax.tick_params(axis="both", labelsize=16)
+
+            if with_sample_names:
+                texts = [
+                    ax.text(x, y, name, ha="left", va="bottom", alpha=0.8, fontsize=12)
+                    for (x, y), name in zip(X_reduced, X.index)
+                ]
+                adjust_text(texts, ax=ax,
+                            arrowprops=dict(arrowstyle="->", color="black"))
 
         handles, labels_txt = ax.get_legend_handles_labels()
         if handles:
@@ -253,15 +352,18 @@ def plot_pca(
                       borderaxespad=0, ncol=1, fontsize=15,
                       frameon=False, handletextpad=0.4)
 
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.spines[["left", "bottom"]].set_linewidth(1.5)
-        ax.set_aspect("equal", adjustable="datalim")
-        ax.set_box_aspect(1)
-        plt.tight_layout()
+        if not three_d:
+            ax.spines[["top", "right"]].set_visible(False)
+            ax.spines[["left", "bottom"]].set_linewidth(1.5)
+            ax.set_aspect("equal", adjustable="datalim")
+            ax.set_box_aspect(1)
+            # tight_layout drops the z-axis label on 3D axes.
+            plt.tight_layout()
 
         output_path.mkdir(parents=True, exist_ok=True)
         save_path = output_path / output_filename
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        fig.savefig(save_path, dpi=300, bbox_inches="tight",
+                    pad_inches=0.5 if three_d else 0.1)
         print(f"Figure saved to: {save_path.absolute()}")
         plt.close(fig)
 
@@ -273,28 +375,33 @@ def plot_volcano(
     analysis_name: str,
     output_path: Path,
     log2foldchange: float = 2.0,
+    padj: float = 0.05,
 ) -> Path:
     """Create volcano plot showing differentially expressed genes."""
-    grapher = grapher = res.dropna(subset=["padj"]).assign(
-        padj_log=-np.log10(res["padj"].replace(0, 1e-300)),
+    grapher = res.dropna(subset=["padj"])
+    grapher = grapher.assign(
+        padj_log=-np.log10(grapher["padj"].replace(0, 1e-300)),
         color="no_expression_change",
     )
 
-    grapher.loc[grapher["log2FoldChange"] > log2foldchange, "color"] = "overexpressed"
-    grapher.loc[grapher["log2FoldChange"] < -log2foldchange, "color"] = "underexpressed"
+    significant = grapher["padj"] < padj
+    grapher.loc[
+        significant & (grapher["log2FoldChange"] > log2foldchange), "color"
+    ] = "overexpressed"
+    grapher.loc[
+        significant & (grapher["log2FoldChange"] < -log2foldchange), "color"
+    ] = "underexpressed"
 
     grapher_subset = grapher[grapher["color"].isin(["overexpressed", "underexpressed"])]
-
-    sorted_grapher_padj_log = grapher_subset.sort_values(by="padj_log", ascending=False)
-    sorted_grapher_log2foldchange = grapher_subset.sort_values(
-        by="log2FoldChange", ascending=True
-    )
+    overexpressed = grapher_subset[grapher_subset["color"] == "overexpressed"]
+    underexpressed = grapher_subset[grapher_subset["color"] == "underexpressed"]
 
     annotation_subset = pd.concat(
         [
-            sorted_grapher_padj_log.head(12),
-            sorted_grapher_log2foldchange.head(4),
-            sorted_grapher_log2foldchange.tail(4),
+            overexpressed.nlargest(6, "stat"),
+            underexpressed.nsmallest(6, "stat"),
+            grapher_subset.nsmallest(4, "log2FoldChange"),
+            grapher_subset.nlargest(4, "log2FoldChange"),
         ]
     ).drop_duplicates()
 
@@ -309,7 +416,7 @@ def plot_volcano(
         alpha=0.7,
     )
 
-    ax.axhline(1.3, color="black", linestyle="--", linewidth=1)
+    ax.axhline(-np.log10(padj), color="black", linestyle="--", linewidth=1)
     ax.axvline(log2foldchange, color="black", linestyle="--", linewidth=1)
     ax.axvline(-log2foldchange, color="black", linestyle="--", linewidth=1)
 

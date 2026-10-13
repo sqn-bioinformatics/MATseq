@@ -24,6 +24,7 @@ from .pydeseq2 import DESeq2
 from .visualization import (
     plot_mutual_information,
     plot_forest_ari_sweep,
+    plot_panel_support,
     plot_venn,
     plot_pca,
 )
