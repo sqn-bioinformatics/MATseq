@@ -35,6 +35,7 @@ from src import (
     load_tlr_data,
     plot_mutual_information,
     plot_forest_ari_sweep,
+    plot_panel_support,
     plot_pca,
     plot_tlr_hek_blue,
     plot_venn,
@@ -122,7 +123,7 @@ def run_pipeline(
 
     print("\n--- STEP 0: SNAKEMAKE ---")
     if snakemake is None:
-        print("Skipping Snakemake preprocessing; no --snakemake flag provided.")
+        print("Skipping Snakemake preprocessing.")
     else:
         dry_run = snakemake == "dry-run"
         ok = run_snakemake_preprocessing(
@@ -317,6 +318,18 @@ def run_pipeline(
 
         fs_ranked = selected_with_importance(panel["fs_pipe"])
         panel["fs_genes"] = set(fs_ranked["gene"])
+        plot_panel_support(
+            results=deseq2_train.results,
+            genes=list(fs_ranked["gene"]),
+            ligands=[
+                ligand
+                for ligand in CLASS_ORDER["train_ligands"]
+                if ligand in deseq2_train.results
+                and not (panel_name == "no_flapa" and ligand == "Fla-PA")
+            ],
+            output_path=panel["fs_fig_dir"],
+            title=f"{len(fs_ranked)}-gene panel support across TLR ligands",
+        )
         plot_venn(
             [panel["de_genes"], panel["fs_genes"]],
             set_labels=("Differentially Expressed Genes", "Feature Selection Genes"),
@@ -423,12 +436,13 @@ def run_pipeline(
             [
                 panel["fs_fig_dir"] / "mutual_information.png",
                 panel["fs_fig_dir"] / "forest_ari_sweep.png",
-                panel["venn_dir"] / "venn_de_vs_fs.png",
+                panel["fs_fig_dir"] / "panel_support_heatmap.png",
                 panel["pca_dir"] / "pca_train_ligands_3d.png",
                 panel["pca_dir"] / "pca_train_ligands_fs_3d.png",
-                panel["go_fig_dir"] / "de_intersect_fs_go.png",
             ],
             composite_figures_dir / f"{prefix}3.png",
+            spans=[1, 1, 2, 1, 1],
+            width_ratios=(1.3, 1.0),
         )
         for number, subset, cm_dir in [
             (4, "train_ligands", panel["fig_dir"] / "feature_selection"),
@@ -444,6 +458,16 @@ def run_pipeline(
                 max_size=(9.84, 6.69),
                 title=SUBSET_DISPLAY_NAMES[subset],
             )
+    compose_figures(
+        [
+            path
+            for panel in (panels["main"], panels["no_flapa"])
+            for path in (panel["venn_dir"] / "venn_de_vs_fs.png",
+                         panel["go_fig_dir"] / "de_intersect_fs_go.png")
+        ],
+        composite_figures_dir / "Supplementary_Figure8.png",
+        ncols=2,
+    )
 
     supp1_ligands = [
         (subset, ligand)

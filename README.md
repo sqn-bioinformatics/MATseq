@@ -9,7 +9,7 @@
 
 ## Abstract
 
-The monocyte activation test is an in vitro pyrogenicity assessment method that can utilise human peripheral blood mononuclear cells to detect pyrogens in injectable drugs, providing a binary outcome that indicates the presence or absence of a pyrogen. The added ability to distinguish between different types of pyrogens would greatly expand the applicability of the test, for example, by allowing to pinpoint the source of a contaminating pyrogen in pharmaceutical products. Pyrogens activate a unique set of pattern recognition receptors (PRRs), which contribute to inflammation, yielding distinct transcriptomic activation signatures. In this paper, we capture the unique expression signatures of activated monocytes through bulk RNA sequencing and introduce a data preprocessing pipeline that allows the training of a machine-learning model to classify pyrogenic contaminants. Using a dataset of 108 samples stimulated with five classes of PRR agonists, we could differentiate between these classes with more than 97% F1 on test data. We further demonstrate the model's capacity to generalise on the previously unseen data using different ligands for the same PRRs as well as heat-killed *Escherichia coli* and *Staphylococcus aureus*.
+The monocyte activation test is an in vitro pyrogenicity assessment method that can utilise human peripheral blood mononuclear cells to detect pyrogens in injectable drugs, providing a binary outcome that indicates the presence or absence of a pyrogen. The added ability to distinguish between different types of pyrogens would greatly expand the applicability of the test, for example, by allowing to pinpoint the source of a contaminating pyrogen in pharmaceutical products. Pyrogens activate a unique set of pattern recognition receptors (PRRs), which contribute to inflammation, yielding distinct transcriptomic activation signatures. In this paper, we capture the unique expression signatures of activated monocytes through bulk RNA sequencing and introduce a data preprocessing pipeline that allows the training of a machine-learning model to classify pyrogenic contaminants. We further demonstrate the model's capacity to generalise on the previously unseen data using different ligands for the same PRRs as well as heat-killed *Escherichia coli* and *Staphylococcus aureus*.
 
 MATseq runs the full analysis end to end: Snakemake read preprocessing, DESeq2 differential expression with GO enrichment, data-driven selection of the classifier gene panel, nested cross-validated model tuning, external-batch validation, and assembly of the manuscript tables and composite figures.
 
@@ -119,7 +119,7 @@ results/
 └── figures/
     ├── deseq2/{subset}/{ligand}_{volcano,histogram}.png
     ├── go/{subset}/{ligand}_go.png
-    ├── feature_selection/{mutual_information,forest_ari_sweep}.png
+    ├── feature_selection/{mutual_information,forest_ari_sweep,panel_support_heatmap}.png
     ├── pca/pca_{subset}[_fs][_labeled].png
     ├── venn/venn_de_vs_fs.png
     ├── model_evaluation/{panel}/Confusion_Matrix_{model}.png

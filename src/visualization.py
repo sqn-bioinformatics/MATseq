@@ -11,7 +11,7 @@ from matplotlib_venn import venn2
 from sklearn.decomposition import PCA
 from adjustText import adjust_text
 
-from .config import CLASS_DISPLAY_NAMES
+from .config import CLASS_DISPLAY_NAMES, MODEL_TRAINING_CONFIG
 
 
 def plot_confusion_matrix(cm, class_names, output_path: Path, output_filename: str,
@@ -117,6 +117,66 @@ def plot_probability_heatmap(proba_df, class_order, true_labels, output_path: Pa
     return save_path
 
 
+def plot_panel_support(
+    results: dict,
+    genes: list[str],
+    ligands: list[str],
+    output_path: Path,
+    output_filename: str = "panel_support_heatmap.png",
+    title: str | None = None,
+) -> Path:
+    """Heatmap of per-ligand log2FC for the selected panel, starred at padj < 0.05."""
+    lfc = pd.DataFrame(
+        {l: results[l]["results"]["log2FoldChange"].reindex(genes) for l in ligands}
+    )
+    padj = pd.DataFrame(
+        {l: results[l]["results"]["padj"].reindex(genes) for l in ligands}
+    )
+    vmax = np.ceil(lfc.abs().max().max())
+
+    fig, ax = plt.subplots(figsize=(6.5, 0.42 * len(genes)))
+    sns.heatmap(
+        lfc, ax=ax, cmap="RdBu_r", center=0, vmin=-vmax, vmax=vmax,
+        linewidths=0.5, linecolor="white", annot=False,
+        xticklabels=[CLASS_DISPLAY_NAMES.get(c, c) for c in ligands],
+        yticklabels=genes,
+        cbar_kws={"label": "log\u2082 fold change", "fraction": 0.046, "pad": 0.04},
+    )
+    for i in range(len(genes)):
+        for j in range(len(ligands)):
+            value = lfc.iat[i, j]
+            if pd.isna(value):
+                continue
+            star = "*" if padj.iat[i, j] < 0.05 else ""
+            ax.text(
+                j + 0.5, i + 0.5, f"{value:.1f}{star}", ha="center", va="center",
+                fontsize=11,
+                color="white" if abs(value) >= 0.6 * vmax else "black",
+            )
+    ax.tick_params(labelsize=14, length=0)
+    ax.xaxis.tick_top()
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+    if title:
+        ax.set_title(title, fontsize=16, pad=12)
+    cbar = ax.collections[0].colorbar
+    cbar.set_label("log\u2082 fold change", fontsize=14)
+    cbar.ax.tick_params(labelsize=12, length=0)
+    cbar.outline.set_visible(False)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.text(0, -0.02, "* padj < 0.05", transform=ax.transAxes, fontsize=13,
+            ha="left", va="top")
+
+    output_path.mkdir(parents=True, exist_ok=True)
+    save_path = output_path / output_filename
+    fig.savefig(save_path, dpi=300, bbox_inches="tight", pad_inches=0.25)
+    print(f"Figure saved: {save_path}")
+    plt.close(fig)
+
+    return save_path
+
+
 def plot_venn(
     sets: list,
     set_labels: tuple,
@@ -219,7 +279,10 @@ def plot_pca(
     three_d: bool = False,
 ) -> Path:
     """Create PCA visualization for pandas DataFrame data."""
-    pca = PCA(n_components=3 if three_d else 2)
+    pca = PCA(
+        n_components=3 if three_d else 2,
+        random_state=MODEL_TRAINING_CONFIG["random_state"],
+    )
     X_reduced = pca.fit_transform(X)
     variance = pca.explained_variance_ratio_ * 100
 
@@ -243,11 +306,11 @@ def plot_pca(
                     edgecolor="white", linewidth=0.6, depthshade=False,
                     label=CLASS_DISPLAY_NAMES.get(name, name),
                 )
-            # At this azimuth the z-axis sits left of the box, where a positive
-            # labelpad pushes its label off the canvas.
+            # Tight bbox ignores 3D axis labels, so the save below pads the
+            # canvas to keep the z label that sits left of the tick labels.
             for set_label, index, pad in [(ax.set_xlabel, 0, 9),
                                           (ax.set_ylabel, 1, 9),
-                                          (ax.set_zlabel, 2, -20)]:
+                                          (ax.set_zlabel, 2, 8)]:
                 set_label(f"PC{index + 1} ({variance[index]:.1f}%)",
                           fontsize=14, labelpad=pad)
             ax.tick_params(axis="both", labelsize=12)
@@ -299,7 +362,8 @@ def plot_pca(
 
         output_path.mkdir(parents=True, exist_ok=True)
         save_path = output_path / output_filename
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        fig.savefig(save_path, dpi=300, bbox_inches="tight",
+                    pad_inches=0.5 if three_d else 0.1)
         print(f"Figure saved to: {save_path.absolute()}")
         plt.close(fig)
 

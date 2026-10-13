@@ -212,9 +212,9 @@ class ModelTrainer:
                     best_params = dict(gs.best_params_)
                     if condition == "feature_selection":
                         best_params["select_forest__estimator__n_jobs"] = self.n_jobs
-                    best = pipe.set_params(**best_params).fit(X_tr, y_tr, **fit_params)
+                    best = pipe.set_params(**best_params)
 
-                    X_clf = best[:-1].transform(X_tr)
+                    X_clf = best[:-1].fit_transform(X_tr, y_tr)
                     start = time.perf_counter()
                     best[-1].fit(X_clf, y_tr, sample_weight=fit_params["clf__sample_weight"])
                     training_time = time.perf_counter() - start

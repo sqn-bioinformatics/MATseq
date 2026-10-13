@@ -16,6 +16,8 @@ def compose_figures(
     title: str | None = None,
     first_letter: int = 0,
     margins: tuple[float, float, float, float] = (0.3, 0.3, 0.05, 0.05),
+    spans: list[int] | None = None,
+    width_ratios: tuple[float, ...] | None = None,
 ) -> Path:
     missing = [p for p in panel_paths if not p.is_file()]
     if missing:
@@ -30,29 +32,47 @@ def compose_figures(
     gap, left, right, bottom = margins
     heading = textwrap.fill(title, 90) if title else ""
     top = 0.25 + (0.22 * (heading.count("\n") + 1) if title else 0.0)
-    nrows = -(-len(images) // ncols)
-    width = (max_size[0] - left - right - (ncols - 1) * gap) / ncols
-    heights = [
-        max(width * im.shape[0] / im.shape[1]
-            for im in images[r * ncols:(r + 1) * ncols])
-        for r in range(nrows)
-    ]
+    spans = spans or [1] * len(images)
+    ratios = width_ratios or (1.0,) * ncols
+    avail = max_size[0] - left - right - (ncols - 1) * gap
+    widths = [avail * r / sum(ratios) for r in ratios]
+    next_free = [0] * ncols
+    cells = []
+    for span in spans:
+        c = next_free.index(min(next_free))
+        cells.append((next_free[c], c, span))
+        next_free[c] += span
+    nrows = max(next_free)
+    heights = [0.0] * nrows
+    for im, (r, c, span) in zip(images, cells):
+        if span == 1:
+            heights[r] = max(heights[r], widths[c] * im.shape[0] / im.shape[1])
+    for im, (r, c, span) in zip(images, cells):
+        if span > 1:
+            deficit = (
+                widths[c] * im.shape[0] / im.shape[1]
+                - sum(heights[r:r + span]) - (span - 1) * gap
+            )
+            heights[r + span - 1] += max(deficit, 0.0)
     scale = min(
         1.0, (max_size[1] - top - bottom - (nrows - 1) * gap) / sum(heights)
     )
-    width, heights = width * scale, [h * scale for h in heights]
-    fig_w = left + ncols * width + (ncols - 1) * gap + right
+    widths, heights = [w * scale for w in widths], [h * scale for h in heights]
+    fig_w = left + sum(widths) + (ncols - 1) * gap + right
     fig_h = top + sum(heights) + (nrows - 1) * gap + bottom
     fig = plt.figure(figsize=(fig_w, fig_h))
     if title:
         fig.text(0.5, 1 - 0.1 / fig_h, heading, ha="center", va="top", fontsize=13)
-    for i, img in enumerate(images):
-        r, c = divmod(i, ncols)
-        h = width * img.shape[0] / img.shape[1]
-        x0 = left + c * (width + gap)
+    for i, (img, (r, c, span)) in enumerate(zip(images, cells)):
+        box_h = sum(heights[r:r + span]) + (span - 1) * gap
+        w = widths[c]
+        h = w * img.shape[0] / img.shape[1]
+        if h > box_h:
+            h, w = box_h, box_h * img.shape[1] / img.shape[0]
+        x0 = left + sum(widths[:c]) + c * gap
         y_top = fig_h - top - sum(heights[:r]) - r * gap
         ax = fig.add_axes(
-            (x0 / fig_w, (y_top - h) / fig_h, width / fig_w, h / fig_h)
+            (x0 / fig_w, (y_top - h) / fig_h, w / fig_w, h / fig_h)
         )
         ax.imshow(img)
         ax.axis("off")
