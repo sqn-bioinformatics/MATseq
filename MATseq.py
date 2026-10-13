@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 """MAT-seq pipeline orchestration script."""
 
+import os
 import argparse
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent))
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
 
 from src import (
     CLASS_ORDER,
@@ -283,26 +286,29 @@ def run_pipeline(
                 if c in present
             ]
             for with_names, label_suffix in [(False, ""), (True, "_labeled")]:
-                plot_pca(
-                    X=X_pca_pre,
-                    labels=y_pca,
-                    palette=palette,
-                    hue_order=hue_order,
-                    with_sample_names=with_names,
-                    output_path=panel["pca_dir"],
-                    output_filename=f"pca_{subset}{label_suffix}.png",
-                )
-                plot_pca(
-                    X=X_pca_selected,
-                    labels=y_pca,
-                    palette=palette,
-                    hue_order=hue_order,
-                    with_sample_names=with_names,
-                    output_path=panel["pca_dir"],
-                    output_filename=(
-                        f"pca_{subset}_fs{label_suffix}.png"
-                    ),
-                )
+                for three_d, dim_suffix in [(False, ""), (True, "_3d")]:
+                    plot_pca(
+                        X=X_pca_pre,
+                        labels=y_pca,
+                        palette=palette,
+                        hue_order=hue_order,
+                        with_sample_names=with_names,
+                        three_d=three_d,
+                        output_path=panel["pca_dir"],
+                        output_filename=f"pca_{subset}{dim_suffix}{label_suffix}.png",
+                    )
+                    plot_pca(
+                        X=X_pca_selected,
+                        labels=y_pca,
+                        palette=palette,
+                        hue_order=hue_order,
+                        with_sample_names=with_names,
+                        three_d=three_d,
+                        output_path=panel["pca_dir"],
+                        output_filename=(
+                            f"pca_{subset}_fs{dim_suffix}{label_suffix}.png"
+                        ),
+                    )
 
     print("\n--- STEP 5: FS vs DE VENN AND GO ---")
     for panel_name, panel in panels.items():
@@ -418,8 +424,8 @@ def run_pipeline(
                 panel["fs_fig_dir"] / "mutual_information.png",
                 panel["fs_fig_dir"] / "forest_ari_sweep.png",
                 panel["venn_dir"] / "venn_de_vs_fs.png",
-                panel["pca_dir"] / "pca_train_ligands.png",
-                panel["pca_dir"] / "pca_train_ligands_fs.png",
+                panel["pca_dir"] / "pca_train_ligands_3d.png",
+                panel["pca_dir"] / "pca_train_ligands_fs_3d.png",
                 panel["go_fig_dir"] / "de_intersect_fs_go.png",
             ],
             composite_figures_dir / f"{prefix}3.png",
@@ -431,7 +437,7 @@ def run_pipeline(
             (7, "bacterial_ligands", panel["pred_fig_dir"] / "bacterial_ligands"),
         ]:
             compose_figures(
-                [panel["pca_dir"] / f"pca_{subset}_fs.png"]
+                [panel["pca_dir"] / f"pca_{subset}_fs_3d.png"]
                 + [cm_dir / f"Confusion_Matrix_{model}.png" for model in HYPERPARAMETER_GRIDS],
                 composite_figures_dir / f"{prefix}{number}.png",
                 ncols=3,

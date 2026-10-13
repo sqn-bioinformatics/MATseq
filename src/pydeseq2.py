@@ -50,7 +50,7 @@ class DataProcessor:
             metadata=metadata,
             design_factors=["condition"],
             refit_cooks=True,
-            inference=DefaultInference(self.n_cpus),
+            inference=DefaultInference(n_cpus=self.n_cpus),
             quiet=True,
         )
         dds.deseq2()
@@ -71,7 +71,7 @@ class DataProcessor:
         stat_res = DeseqStats(
             dds,
             contrast=contrast,
-            inference=DefaultInference(self.n_cpus),
+            inference=DefaultInference(n_cpus=self.n_cpus),
             quiet=True,
         )
         stat_res.summary()

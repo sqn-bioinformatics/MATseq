@@ -1,0 +1,20 @@
+[17:06:40] === max_features=20 : setting config ===
+"max_features": 20
+[17:06:55] launched, waiting for Step 5 boundary (max 80 min)
+[17:39:51] Step 5 reached -> stopping run for mf=20
+[17:40:02] archived PCA figures -> results/figures/pca_genes20 (32 png)
+[17:40:02] steps completed for mf=20: STEP 0 STEP 1 STEP 2 STEP 3 STEP 4 STEP 5 
+[17:40:02] === max_features=21 : setting config ===
+"max_features": 21
+[17:40:17] launched, waiting for Step 5 boundary (max 80 min)
+[18:13:12] Step 5 reached -> stopping run for mf=21
+[18:13:23] archived PCA figures -> results/figures/pca_genes21 (32 png)
+[18:13:23] steps completed for mf=21: STEP 0 STEP 1 STEP 2 STEP 3 STEP 4 STEP 5 
+[18:13:23] === max_features=25 : setting config ===
+"max_features": 25
+[18:13:38] launched, waiting for Step 5 boundary (max 80 min)
+[18:47:04] Step 5 reached -> stopping run for mf=25
+[18:47:15] archived PCA figures -> results/figures/pca_genes25 (32 png)
+[18:47:15] steps completed for mf=25: STEP 0 STEP 1 STEP 2 STEP 3 STEP 4 STEP 5 
+[18:47:15] === SWEEP DONE; config restored to max_features=21 ===
+[18:47:15] archives: results/figures/pca_genes20 results/figures/pca_genes21 results/figures/pca_genes25 

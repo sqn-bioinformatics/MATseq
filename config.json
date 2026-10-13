@@ -2,7 +2,7 @@
   "paths": {
     "featurecounts_dir": "~/MATseq/results/featurecounts"
   },
-  "n_jobs": 24,
+  "n_jobs": 48,
   "deseq2": {
     "padj_threshold": 0.05,
     "log2fc_threshold": 2.0,

@@ -216,34 +216,70 @@ def plot_pca(
     with_sample_names: bool = False,
     palette: str | list | None = None,
     hue_order: list | None = None,
+    three_d: bool = False,
 ) -> Path:
     """Create PCA visualization for pandas DataFrame data."""
-    X_reduced = PCA(n_components=2).fit_transform(X)
+    pca = PCA(n_components=3 if three_d else 2)
+    X_reduced = pca.fit_transform(X)
+    variance = pca.explained_variance_ratio_ * 100
 
     with plt.rc_context({"figure.facecolor": "white", "axes.facecolor": "white"}):
-        fig, ax = plt.subplots(figsize=(20, 20) if with_sample_names else (6, 6))
-        draw_order = np.argsort(np.asarray(labels) == "LTA", kind="stable")
-        sns.scatterplot(
-            x=X_reduced[draw_order, 0],
-            y=X_reduced[draw_order, 1],
-            hue=np.asarray(labels)[draw_order],
-            hue_order=hue_order,
-            s=200 if with_sample_names else 80,
-            alpha=0.6,
-            palette=palette,
-            ax=ax,
-        )
-        ax.set_xlabel("PC1", fontsize=18)
-        ax.set_ylabel("PC2", fontsize=18)
-        ax.tick_params(axis="both", labelsize=16)
+        if three_d:
+            fig = plt.figure(figsize=(20, 20) if with_sample_names else (7.5, 6))
+            ax = fig.add_subplot(111, projection="3d")
+            # Orthographic keeps on-screen distances proportional to the PCA space.
+            ax.set_proj_type("ortho")
+            ax.view_init(elev=10, azim=30)
+            classes = hue_order or list(dict.fromkeys(np.asarray(labels)))
+            colors = (palette if isinstance(palette, list)
+                      else sns.color_palette(palette, len(classes)))
+            for name, color in zip(classes, colors):
+                mask = np.asarray(labels) == name
+                if not mask.any():
+                    continue
+                ax.scatter(
+                    X_reduced[mask, 0], X_reduced[mask, 1], X_reduced[mask, 2],
+                    s=200 if with_sample_names else 80, alpha=0.6, color=color,
+                    edgecolor="white", linewidth=0.6, depthshade=False,
+                    label=CLASS_DISPLAY_NAMES.get(name, name),
+                )
+            # At this azimuth the z-axis sits left of the box, where a positive
+            # labelpad pushes its label off the canvas.
+            for set_label, index, pad in [(ax.set_xlabel, 0, 9),
+                                          (ax.set_ylabel, 1, 9),
+                                          (ax.set_zlabel, 2, -20)]:
+                set_label(f"PC{index + 1} ({variance[index]:.1f}%)",
+                          fontsize=14, labelpad=pad)
+            ax.tick_params(axis="both", labelsize=12)
+            ax.grid(True, alpha=0.25)
 
-        if with_sample_names:
-            texts = [
-                ax.text(x, y, name, ha="left", va="bottom", alpha=0.8, fontsize=12)
-                for (x, y), name in zip(X_reduced, X.index)
-            ]
-            adjust_text(texts, ax=ax,
-                        arrowprops=dict(arrowstyle="->", color="black"))
+            if with_sample_names:
+                for (x, y, z), name in zip(X_reduced, X.index):
+                    ax.text(x, y, z, name, alpha=0.8, fontsize=12)
+        else:
+            fig, ax = plt.subplots(figsize=(20, 20) if with_sample_names else (6, 6))
+            draw_order = np.argsort(np.asarray(labels) == "LTA", kind="stable")
+            sns.scatterplot(
+                x=X_reduced[draw_order, 0],
+                y=X_reduced[draw_order, 1],
+                hue=np.asarray(labels)[draw_order],
+                hue_order=hue_order,
+                s=200 if with_sample_names else 80,
+                alpha=0.6,
+                palette=palette,
+                ax=ax,
+            )
+            ax.set_xlabel("PC1", fontsize=18)
+            ax.set_ylabel("PC2", fontsize=18)
+            ax.tick_params(axis="both", labelsize=16)
+
+            if with_sample_names:
+                texts = [
+                    ax.text(x, y, name, ha="left", va="bottom", alpha=0.8, fontsize=12)
+                    for (x, y), name in zip(X_reduced, X.index)
+                ]
+                adjust_text(texts, ax=ax,
+                            arrowprops=dict(arrowstyle="->", color="black"))
 
         handles, labels_txt = ax.get_legend_handles_labels()
         if handles:
@@ -253,11 +289,13 @@ def plot_pca(
                       borderaxespad=0, ncol=1, fontsize=15,
                       frameon=False, handletextpad=0.4)
 
-        ax.spines[["top", "right"]].set_visible(False)
-        ax.spines[["left", "bottom"]].set_linewidth(1.5)
-        ax.set_aspect("equal", adjustable="datalim")
-        ax.set_box_aspect(1)
-        plt.tight_layout()
+        if not three_d:
+            ax.spines[["top", "right"]].set_visible(False)
+            ax.spines[["left", "bottom"]].set_linewidth(1.5)
+            ax.set_aspect("equal", adjustable="datalim")
+            ax.set_box_aspect(1)
+            # tight_layout drops the z-axis label on 3D axes.
+            plt.tight_layout()
 
         output_path.mkdir(parents=True, exist_ok=True)
         save_path = output_path / output_filename

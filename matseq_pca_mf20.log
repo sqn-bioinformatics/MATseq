@@ -1,0 +1,296 @@
+================================================================================
+MAT-seq Analysis Pipeline
+================================================================================
+
+--- STEP 0: SNAKEMAKE ---
+Skipping Snakemake preprocessing; no --snakemake flag provided.
+
+--- STEP 1: COUNT TABLE GENERATION ---
+Processing feature counts:   0%|          | 0/144 [00:00<?, ?it/s]Processing feature counts:   1%|          | 1/144 [00:00<01:23,  1.70it/s]Processing feature counts:   1%|▏         | 2/144 [00:01<01:23,  1.70it/s]Processing feature counts:   2%|▏         | 3/144 [00:01<01:22,  1.72it/s]Processing feature counts:   3%|▎         | 4/144 [00:02<01:20,  1.73it/s]Processing feature counts:   3%|▎         | 5/144 [00:02<01:19,  1.74it/s]Processing feature counts:   4%|▍         | 6/144 [00:03<01:19,  1.74it/s]Processing feature counts:   5%|▍         | 7/144 [00:04<01:18,  1.75it/s]Processing feature counts:   6%|▌         | 8/144 [00:04<01:17,  1.75it/s]Processing feature counts:   6%|▋         | 9/144 [00:05<01:18,  1.73it/s]Processing feature counts:   7%|▋         | 10/144 [00:05<01:17,  1.73it/s]Processing feature counts:   8%|▊         | 11/144 [00:06<01:16,  1.74it/s]Processing feature counts:   8%|▊         | 12/144 [00:06<01:15,  1.74it/s]Processing feature counts:   9%|▉         | 13/144 [00:07<01:14,  1.75it/s]Processing feature counts:  10%|▉         | 14/144 [00:08<01:15,  1.73it/s]Processing feature counts:  10%|█         | 15/144 [00:08<01:14,  1.73it/s]Processing feature counts:  11%|█         | 16/144 [00:09<01:13,  1.74it/s]Processing feature counts:  12%|█▏        | 17/144 [00:09<01:12,  1.74it/s]Processing feature counts:  12%|█▎        | 18/144 [00:10<01:12,  1.75it/s]Processing feature counts:  13%|█▎        | 19/144 [00:10<01:11,  1.75it/s]Processing feature counts:  14%|█▍        | 20/144 [00:11<01:10,  1.75it/s]Processing feature counts:  15%|█▍        | 21/144 [00:12<01:10,  1.75it/s]Processing feature counts:  15%|█▌        | 22/144 [00:12<01:10,  1.73it/s]Processing feature counts:  16%|█▌        | 23/144 [00:13<01:09,  1.73it/s]Processing feature counts:  17%|█▋        | 24/144 [00:13<01:09,  1.74it/s]Processing feature counts:  17%|█▋        | 25/144 [00:14<01:08,  1.74it/s]Processing feature counts:  18%|█▊        | 26/144 [00:14<01:07,  1.74it/s]Processing feature counts:  19%|█▉        | 27/144 [00:15<01:06,  1.75it/s]Processing feature counts:  19%|█▉        | 28/144 [00:16<01:06,  1.75it/s]Processing feature counts:  20%|██        | 29/144 [00:16<01:05,  1.75it/s]Processing feature counts:  21%|██        | 30/144 [00:17<01:05,  1.75it/s]Processing feature counts:  22%|██▏       | 31/144 [00:17<01:05,  1.73it/s]Processing feature counts:  22%|██▏       | 32/144 [00:18<01:04,  1.74it/s]Processing feature counts:  23%|██▎       | 33/144 [00:18<01:03,  1.74it/s]Processing feature counts:  24%|██▎       | 34/144 [00:19<01:03,  1.75it/s]Processing feature counts:  24%|██▍       | 35/144 [00:20<01:02,  1.75it/s]Processing feature counts:  25%|██▌       | 36/144 [00:20<01:01,  1.75it/s]Processing feature counts:  26%|██▌       | 37/144 [00:21<01:01,  1.75it/s]Processing feature counts:  26%|██▋       | 38/144 [00:21<01:00,  1.75it/s]Processing feature counts:  27%|██▋       | 39/144 [00:22<00:59,  1.75it/s]Processing feature counts:  28%|██▊       | 40/144 [00:22<00:59,  1.75it/s]Processing feature counts:  28%|██▊       | 41/144 [00:23<00:58,  1.75it/s]Processing feature counts:  29%|██▉       | 42/144 [00:24<00:58,  1.75it/s]Processing feature counts:  30%|██▉       | 43/144 [00:24<00:57,  1.75it/s]Processing feature counts:  31%|███       | 44/144 [00:25<00:57,  1.75it/s]Processing feature counts:  31%|███▏      | 45/144 [00:25<00:56,  1.75it/s]Processing feature counts:  32%|███▏      | 46/144 [00:26<00:55,  1.75it/s]Processing feature counts:  33%|███▎      | 47/144 [00:26<00:55,  1.76it/s]Processing feature counts:  33%|███▎      | 48/144 [00:27<00:54,  1.76it/s]Processing feature counts:  34%|███▍      | 49/144 [00:28<00:54,  1.73it/s]Processing feature counts:  35%|███▍      | 50/144 [00:28<00:54,  1.74it/s]Processing feature counts:  35%|███▌      | 51/144 [00:29<00:53,  1.74it/s]Processing feature counts:  36%|███▌      | 52/144 [00:29<00:52,  1.75it/s]Processing feature counts:  37%|███▋      | 53/144 [00:30<00:52,  1.75it/s]Processing feature counts:  38%|███▊      | 54/144 [00:30<00:51,  1.75it/s]Processing feature counts:  38%|███▊      | 55/144 [00:31<00:50,  1.75it/s]Processing feature counts:  39%|███▉      | 56/144 [00:32<00:50,  1.75it/s]Processing feature counts:  40%|███▉      | 57/144 [00:32<00:49,  1.75it/s]Processing feature counts:  40%|████      | 58/144 [00:33<00:48,  1.76it/s]Processing feature counts:  41%|████      | 59/144 [00:33<00:48,  1.76it/s]Processing feature counts:  42%|████▏     | 60/144 [00:34<00:47,  1.76it/s]Processing feature counts:  42%|████▏     | 61/144 [00:34<00:47,  1.76it/s]Processing feature counts:  43%|████▎     | 62/144 [00:35<00:46,  1.76it/s]Processing feature counts:  44%|████▍     | 63/144 [00:36<00:46,  1.76it/s]Processing feature counts:  44%|████▍     | 64/144 [00:36<00:45,  1.76it/s]Processing feature counts:  45%|████▌     | 65/144 [00:37<00:45,  1.76it/s]Processing feature counts:  46%|████▌     | 66/144 [00:37<00:44,  1.76it/s]Processing feature counts:  47%|████▋     | 67/144 [00:38<00:43,  1.76it/s]Processing feature counts:  47%|████▋     | 68/144 [00:38<00:43,  1.76it/s]Processing feature counts:  48%|████▊     | 69/144 [00:39<00:42,  1.76it/s]Processing feature counts:  49%|████▊     | 70/144 [00:40<00:42,  1.76it/s]Processing feature counts:  49%|████▉     | 71/144 [00:40<00:41,  1.76it/s]Processing feature counts:  50%|█████     | 72/144 [00:41<00:40,  1.76it/s]Processing feature counts:  51%|█████     | 73/144 [00:41<00:40,  1.76it/s]Processing feature counts:  51%|█████▏    | 74/144 [00:42<00:39,  1.76it/s]Processing feature counts:  52%|█████▏    | 75/144 [00:42<00:39,  1.75it/s]Processing feature counts:  53%|█████▎    | 76/144 [00:43<00:38,  1.75it/s]Processing feature counts:  53%|█████▎    | 77/144 [00:44<00:38,  1.75it/s]Processing feature counts:  54%|█████▍    | 78/144 [00:44<00:37,  1.75it/s]Processing feature counts:  55%|█████▍    | 79/144 [00:45<00:37,  1.75it/s]Processing feature counts:  56%|█████▌    | 80/144 [00:45<00:36,  1.75it/s]Processing feature counts:  56%|█████▋    | 81/144 [00:46<00:35,  1.76it/s]Processing feature counts:  57%|█████▋    | 82/144 [00:46<00:35,  1.76it/s]Processing feature counts:  58%|█████▊    | 83/144 [00:47<00:34,  1.76it/s]Processing feature counts:  58%|█████▊    | 84/144 [00:48<00:34,  1.76it/s]Processing feature counts:  59%|█████▉    | 85/144 [00:48<00:33,  1.76it/s]Processing feature counts:  60%|█████▉    | 86/144 [00:49<00:33,  1.76it/s]Processing feature counts:  60%|██████    | 87/144 [00:49<00:32,  1.76it/s]Processing feature counts:  61%|██████    | 88/144 [00:50<00:31,  1.76it/s]Processing feature counts:  62%|██████▏   | 89/144 [00:50<00:31,  1.76it/s]Processing feature counts:  62%|██████▎   | 90/144 [00:51<00:30,  1.76it/s]Processing feature counts:  63%|██████▎   | 91/144 [00:52<00:30,  1.76it/s]Processing feature counts:  64%|██████▍   | 92/144 [00:52<00:29,  1.76it/s]Processing feature counts:  65%|██████▍   | 93/144 [00:53<00:29,  1.76it/s]Processing feature counts:  65%|██████▌   | 94/144 [00:53<00:28,  1.76it/s]Processing feature counts:  66%|██████▌   | 95/144 [00:54<00:27,  1.76it/s]Processing feature counts:  67%|██████▋   | 96/144 [00:54<00:27,  1.76it/s]Processing feature counts:  67%|██████▋   | 97/144 [00:55<00:26,  1.76it/s]Processing feature counts:  68%|██████▊   | 98/144 [00:56<00:26,  1.76it/s]Processing feature counts:  69%|██████▉   | 99/144 [00:56<00:25,  1.76it/s]Processing feature counts:  69%|██████▉   | 100/144 [00:57<00:25,  1.76it/s]Processing feature counts:  70%|███████   | 101/144 [00:57<00:24,  1.76it/s]Processing feature counts:  71%|███████   | 102/144 [00:58<00:23,  1.76it/s]Processing feature counts:  72%|███████▏  | 103/144 [00:58<00:23,  1.76it/s]Processing feature counts:  72%|███████▏  | 104/144 [00:59<00:22,  1.76it/s]Processing feature counts:  73%|███████▎  | 105/144 [00:59<00:22,  1.76it/s]Processing feature counts:  74%|███████▎  | 106/144 [01:00<00:21,  1.75it/s]Processing feature counts:  74%|███████▍  | 107/144 [01:01<00:21,  1.75it/s]Processing feature counts:  75%|███████▌  | 108/144 [01:01<00:20,  1.75it/s]Processing feature counts:  76%|███████▌  | 109/144 [01:02<00:19,  1.75it/s]Processing feature counts:  76%|███████▋  | 110/144 [01:02<00:19,  1.75it/s]Processing feature counts:  77%|███████▋  | 111/144 [01:03<00:18,  1.75it/s]Processing feature counts:  78%|███████▊  | 112/144 [01:03<00:18,  1.75it/s]Processing feature counts:  78%|███████▊  | 113/144 [01:04<00:17,  1.75it/s]Processing feature counts:  79%|███████▉  | 114/144 [01:05<00:17,  1.75it/s]Processing feature counts:  80%|███████▉  | 115/144 [01:05<00:16,  1.76it/s]Processing feature counts:  81%|████████  | 116/144 [01:06<00:15,  1.76it/s]Processing feature counts:  81%|████████▏ | 117/144 [01:06<00:15,  1.76it/s]Processing feature counts:  82%|████████▏ | 118/144 [01:07<00:14,  1.75it/s]Processing feature counts:  83%|████████▎ | 119/144 [01:07<00:14,  1.76it/s]Processing feature counts:  83%|████████▎ | 120/144 [01:08<00:13,  1.75it/s]Processing feature counts:  84%|████████▍ | 121/144 [01:09<00:13,  1.76it/s]Processing feature counts:  85%|████████▍ | 122/144 [01:09<00:12,  1.75it/s]Processing feature counts:  85%|████████▌ | 123/144 [01:10<00:11,  1.76it/s]Processing feature counts:  86%|████████▌ | 124/144 [01:10<00:11,  1.75it/s]Processing feature counts:  87%|████████▋ | 125/144 [01:11<00:10,  1.76it/s]Processing feature counts:  88%|████████▊ | 126/144 [01:11<00:10,  1.75it/s]Processing feature counts:  88%|████████▊ | 127/144 [01:12<00:09,  1.76it/s]Processing feature counts:  89%|████████▉ | 128/144 [01:13<00:09,  1.76it/s]Processing feature counts:  90%|████████▉ | 129/144 [01:13<00:08,  1.76it/s]Processing feature counts:  90%|█████████ | 130/144 [01:14<00:07,  1.76it/s]Processing feature counts:  91%|█████████ | 131/144 [01:14<00:07,  1.76it/s]Processing feature counts:  92%|█████████▏| 132/144 [01:15<00:06,  1.76it/s]Processing feature counts:  92%|█████████▏| 133/144 [01:15<00:06,  1.76it/s]Processing feature counts:  93%|█████████▎| 134/144 [01:16<00:05,  1.76it/s]Processing feature counts:  94%|█████████▍| 135/144 [01:17<00:05,  1.76it/s]Processing feature counts:  94%|█████████▍| 136/144 [01:17<00:04,  1.76it/s]Processing feature counts:  95%|█████████▌| 137/144 [01:18<00:03,  1.76it/s]Processing feature counts:  96%|█████████▌| 138/144 [01:18<00:03,  1.76it/s]Processing feature counts:  97%|█████████▋| 139/144 [01:19<00:02,  1.76it/s]Processing feature counts:  97%|█████████▋| 140/144 [01:19<00:02,  1.76it/s]Processing feature counts:  98%|█████████▊| 141/144 [01:20<00:01,  1.76it/s]Processing feature counts:  99%|█████████▊| 142/144 [01:21<00:01,  1.76it/s]Processing feature counts:  99%|█████████▉| 143/144 [01:21<00:00,  1.76it/s]Processing feature counts: 100%|██████████| 144/144 [01:22<00:00,  1.76it/s]Processing feature counts: 100%|██████████| 144/144 [01:22<00:00,  1.75it/s]
+
+--- STEP 2: DESeq2 DIFFERENTIAL EXPRESSION ANALYSIS ---
+Initializing GO terms...
+/home/t.afanasyeva/MATseq/data/go_terms_support/go-basic.obo: fmt(1.2) rel(2025-10-10) 42,666 Terms
+HMS:0:01:17.388428 496,234 annotations, 20,837 genes, 18,849 GOs, 1 taxids READ: /home/t.afanasyeva/MATseq/data/go_terms_support/gene2go 
+
+Load BP Ontology Enrichment Analysis ...
+ 84% 17,218 of 20,596 population items found in association
+GO initialization complete.
+Running analysis for LPS...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: LPS vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/train_ligands/LPS_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/LPS_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/LPS_histogram.png
+Mapped 80.00% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/train_ligands/LPS_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/train_ligands/LPS_go.png
+Running analysis for Pam3...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: Pam3 vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/train_ligands/Pam3_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/Pam3_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/Pam3_histogram.png
+Mapped 78.52% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/train_ligands/Pam3_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/train_ligands/Pam3_go.png
+Running analysis for R848...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: R848 vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/train_ligands/R848_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/R848_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/R848_histogram.png
+Mapped 78.21% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/train_ligands/R848_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/train_ligands/R848_go.png
+Running analysis for PGN...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: PGN vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/train_ligands/PGN_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/PGN_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/PGN_histogram.png
+Mapped 72.58% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/train_ligands/PGN_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/train_ligands/PGN_go.png
+Running analysis for Fla-PA...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+Fitting dispersions...
+... done in 0.01 seconds.
+
+Fitting MAP dispersions...
+... done in 0.01 seconds.
+
+Fitting LFCs...
+... done in 0.01 seconds.
+
+DESeq2 contrast: Fla-PA vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/train_ligands/Fla-PA_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/Fla-PA_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/train_ligands/Fla-PA_histogram.png
+Mapped 80.37% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/train_ligands/Fla-PA_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/train_ligands/Fla-PA_go.png
+Saved merged GO table to /home/t.afanasyeva/MATseq/results/go_terms/train_ligands/GO_merged_results.csv
+Running analysis for LPS...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:497: UserWarning: As the residual degrees of freedom is less than 3, the distribution of log dispersions is especially asymmetric and likely to be poorly estimated by the MAD.
+  self.fit_dispersion_prior()
+DESeq2 contrast: LPS vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/test_ligands/LPS_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/test_ligands/LPS_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/test_ligands/LPS_histogram.png
+Mapped 85.71% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/test_ligands/LPS_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/test_ligands/LPS_go.png
+Running analysis for Pam3...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:497: UserWarning: As the residual degrees of freedom is less than 3, the distribution of log dispersions is especially asymmetric and likely to be poorly estimated by the MAD.
+  self.fit_dispersion_prior()
+DESeq2 contrast: Pam3 vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/test_ligands/Pam3_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/test_ligands/Pam3_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/test_ligands/Pam3_histogram.png
+Mapped 71.21% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/test_ligands/Pam3_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/test_ligands/Pam3_go.png
+Running analysis for R848...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:497: UserWarning: As the residual degrees of freedom is less than 3, the distribution of log dispersions is especially asymmetric and likely to be poorly estimated by the MAD.
+  self.fit_dispersion_prior()
+DESeq2 contrast: R848 vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/test_ligands/R848_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/test_ligands/R848_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/test_ligands/R848_histogram.png
+Mapped 85.55% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/test_ligands/R848_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/test_ligands/R848_go.png
+Running analysis for Fla-PA...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:497: UserWarning: As the residual degrees of freedom is less than 3, the distribution of log dispersions is especially asymmetric and likely to be poorly estimated by the MAD.
+  self.fit_dispersion_prior()
+DESeq2 contrast: Fla-PA vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/test_ligands/Fla-PA_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/test_ligands/Fla-PA_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/test_ligands/Fla-PA_histogram.png
+Mapped 70.67% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/test_ligands/Fla-PA_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/test_ligands/Fla-PA_go.png
+Saved merged GO table to /home/t.afanasyeva/MATseq/results/go_terms/test_ligands/GO_merged_results.csv
+Running analysis for LPS...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: LPS vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/additional_ligands/LPS_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/additional_ligands/LPS_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/additional_ligands/LPS_histogram.png
+Mapped 80.00% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/additional_ligands/LPS_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/additional_ligands/LPS_go.png
+Running analysis for LTA...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: LTA vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/additional_ligands/LTA_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/additional_ligands/LTA_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/additional_ligands/LTA_histogram.png
+Mapped 79.66% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/additional_ligands/LTA_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/additional_ligands/LTA_go.png
+Running analysis for MPLA...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+Fitting dispersions...
+... done in 0.01 seconds.
+
+Fitting MAP dispersions...
+... done in 0.01 seconds.
+
+Fitting LFCs...
+... done in 0.01 seconds.
+
+DESeq2 contrast: MPLA vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/additional_ligands/MPLA_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/additional_ligands/MPLA_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/additional_ligands/MPLA_histogram.png
+Mapped 64.71% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/additional_ligands/MPLA_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/additional_ligands/MPLA_go.png
+Running analysis for Pam2...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: Pam2 vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/additional_ligands/Pam2_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/additional_ligands/Pam2_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/additional_ligands/Pam2_histogram.png
+Mapped 74.21% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/additional_ligands/Pam2_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/additional_ligands/Pam2_go.png
+Saved merged GO table to /home/t.afanasyeva/MATseq/results/go_terms/additional_ligands/GO_merged_results.csv
+Running analysis for LPS...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: LPS vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/bacterial_ligands/LPS_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/bacterial_ligands/LPS_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/bacterial_ligands/LPS_histogram.png
+Mapped 80.00% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/bacterial_ligands/LPS_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/bacterial_ligands/LPS_go.png
+Running analysis for HK E.coli...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: HK E.coli vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/bacterial_ligands/HK E.coli_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/bacterial_ligands/HK E.coli_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/bacterial_ligands/HK E.coli_histogram.png
+Mapped 72.04% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/bacterial_ligands/HK E.coli_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/bacterial_ligands/HK E.coli_go.png
+Running analysis for HK S.aureus...
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/pydeseq2/dds.py:270: UserWarning: Some factor levels in the design contain underscores ('_').
+                    They will be converted to hyphens ('-').
+  self.obsm["design_matrix"] = build_design_matrix(
+DESeq2 contrast: HK S.aureus vs negative-control
+Saved results to /home/t.afanasyeva/MATseq/results/differential_gene_expression/bacterial_ligands/HK S.aureus_deseq2_results.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/bacterial_ligands/HK S.aureus_volcano.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/deseq2/bacterial_ligands/HK S.aureus_histogram.png
+Mapped 77.68% of gene symbols to gene IDs.
+GO table saved: /home/t.afanasyeva/MATseq/results/go_terms/bacterial_ligands/HK S.aureus_go_terms.csv
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/go/bacterial_ligands/HK S.aureus_go.png
+Saved merged GO table to /home/t.afanasyeva/MATseq/results/go_terms/bacterial_ligands/GO_merged_results.csv
+
+--- STEP 3: FEATURE ENGINEERING GENE NUMBER DETERMINATION ---
+
+Panel: main
+Mutual information:   0%|          | 0/3 [00:00<?, ?seed/s]Mutual information:  33%|███▎      | 1/3 [03:21<06:43, 201.87s/seed]Mutual information: 100%|██████████| 3/3 [03:21<00:00, 67.29s/seed] 
+  MI elbow (mean curve): 5235 genes
+  k-means per gene rank:   0%|          | 0/3 [00:00<?, ?seed/s]  k-means per gene rank:  33%|███▎      | 1/3 [00:42<01:24, 42.34s/seed]  k-means per gene rank:  67%|██████▋   | 2/3 [01:22<00:40, 40.90s/seed]  k-means per gene rank: 100%|██████████| 3/3 [02:01<00:00, 39.99s/seed]  k-means per gene rank: 100%|██████████| 3/3 [02:01<00:00, 40.38s/seed]
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/feature_selection/mutual_information.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/feature_selection/forest_ari_sweep.png
+
+Panel: no_flapa
+Mutual information:   0%|          | 0/3 [00:00<?, ?seed/s]Mutual information:  33%|███▎      | 1/3 [02:51<05:43, 171.57s/seed]Mutual information: 100%|██████████| 3/3 [02:51<00:00, 57.19s/seed] 
+  MI elbow (mean curve): 5329 genes
+  k-means per gene rank:   0%|          | 0/3 [00:00<?, ?seed/s]  k-means per gene rank:  33%|███▎      | 1/3 [00:39<01:18, 39.12s/seed]  k-means per gene rank:  67%|██████▋   | 2/3 [01:16<00:38, 38.22s/seed]  k-means per gene rank: 100%|██████████| 3/3 [01:53<00:00, 37.67s/seed]  k-means per gene rank: 100%|██████████| 3/3 [01:53<00:00, 37.91s/seed]
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/feature_selection/no_flapa/mutual_information.png
+Figure saved: /home/t.afanasyeva/MATseq/results/figures/feature_selection/no_flapa/forest_ari_sweep.png
+
+ --- STEP 4: PLOT PCA GRAPHS ---
+
+Processing main train_ligands subset...
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_train_ligands.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_train_ligands_fs.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_train_ligands_labeled.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_train_ligands_fs_labeled.png
+
+Processing main test_ligands subset...
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_test_ligands.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_test_ligands_fs.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_test_ligands_labeled.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_test_ligands_fs_labeled.png
+
+Processing main additional_ligands subset...
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_additional_ligands.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_additional_ligands_fs.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_additional_ligands_labeled.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_additional_ligands_fs_labeled.png
+
+Processing main bacterial_ligands subset...
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_bacterial_ligands.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_bacterial_ligands_fs.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_bacterial_ligands_labeled.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/pca_bacterial_ligands_fs_labeled.png
+
+Processing no_flapa train_ligands subset...
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_train_ligands.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_train_ligands_fs.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_train_ligands_labeled.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_train_ligands_fs_labeled.png
+
+Processing no_flapa test_ligands subset...
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_test_ligands.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_test_ligands_fs.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_test_ligands_labeled.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_test_ligands_fs_labeled.png
+
+Processing no_flapa additional_ligands subset...
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_additional_ligands.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_additional_ligands_fs.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_additional_ligands_labeled.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_additional_ligands_fs_labeled.png
+
+Processing no_flapa bacterial_ligands subset...
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_bacterial_ligands.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_bacterial_ligands_fs.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_bacterial_ligands_labeled.png
+Figure saved to: /home/t.afanasyeva/MATseq/results/figures/pca/no_flapa/pca_bacterial_ligands_fs_labeled.png
+
+--- STEP 5: FS vs DE VENN AND GO ---
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/joblib/externals/loky/backend/resource_tracker.py:359: UserWarning: resource_tracker: There appear to be 6 leaked semlock objects to clean up at shutdown
+  warnings.warn(
+/home/t.afanasyeva/.cache/pypoetry/virtualenvs/mat-seq-e9QKtmSh-py3.12/lib/python3.12/site-packages/joblib/externals/loky/backend/resource_tracker.py:359: UserWarning: resource_tracker: There appear to be 96 leaked folder objects to clean up at shutdown
+  warnings.warn(
