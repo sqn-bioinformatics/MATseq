@@ -16,9 +16,7 @@ def predict_samples(trainer: ModelTrainer, X: pd.DataFrame, y: pd.Series, subset
         name: trainer.label_encoder.inverse_transform(model.predict(X))
         for name, model in trainer.trained_models.items()
     }
-    present = set(y).union(*map(set, preds.values()))
-    order = CLASS_ORDER[subset]
-    labels = [c for c in order if c in present] + sorted(present - set(order))
+    labels = [c for c in CLASS_ORDER["train_ligands"] if c in trainer.label_encoder.classes_]
     for model_name, model in trainer.trained_models.items():
         y_pred = preds[model_name]
         pd.DataFrame({"sample": X.index, "prediction": y_pred}).to_csv(
