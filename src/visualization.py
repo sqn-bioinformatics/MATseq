@@ -119,13 +119,17 @@ def plot_probability_heatmap(proba_df, class_order, true_labels, output_path: Pa
 
 def plot_panel_support(
     results: dict,
-    genes: list[str],
+    stability: pd.DataFrame,
     ligands: list[str],
     output_path: Path,
+    top_n: int,
+    top_k: int,
+    max_features: int,
     output_filename: str = "panel_support_heatmap.png",
-    title: str | None = None,
 ) -> Path:
-    """Heatmap of per-ligand log2FC for the selected panel, starred at padj < 0.05."""
+    """Per-ligand log2FC heatmap of the best-ranked genes across selector seeds."""
+    top = stability[stability["top20_frequency"] > 0].head(top_n)
+    genes = list(top.index)
     lfc = pd.DataFrame(
         {l: results[l]["results"]["log2FoldChange"].reindex(genes) for l in ligands}
     )
@@ -134,13 +138,16 @@ def plot_panel_support(
     )
     vmax = np.ceil(lfc.abs().max().max())
 
-    fig, ax = plt.subplots(figsize=(6.5, 0.42 * len(genes)))
+    fig, (ax, ax_freq) = plt.subplots(
+        1, 2, figsize=(8.5, 0.42 * len(genes)),
+        gridspec_kw={"width_ratios": [len(ligands), 2], "wspace": 0.08},
+    )
     sns.heatmap(
         lfc, ax=ax, cmap="RdBu_r", center=0, vmin=-vmax, vmax=vmax,
-        linewidths=0.5, linecolor="white", annot=False,
+        linewidths=0.5, linecolor="white",
         xticklabels=[CLASS_DISPLAY_NAMES.get(c, c) for c in ligands],
         yticklabels=genes,
-        cbar_kws={"label": "log\u2082 fold change", "fraction": 0.046, "pad": 0.04},
+        cbar_ax=ax_freq.inset_axes((1.3, 0.15, 0.22, 0.7)),
     )
     for i in range(len(genes)):
         for j in range(len(ligands)):
@@ -153,20 +160,32 @@ def plot_panel_support(
                 fontsize=11,
                 color="white" if abs(value) >= 0.6 * vmax else "black",
             )
+    side_labels = ["Mean\nrank", f"Top-{top_k}\nfreq."]
+    sns.heatmap(
+        pd.DataFrame({
+            side_labels[0]: 1 - (top["mean_rank"] - 1) / max_features,
+            side_labels[1]: top["top20_frequency"],
+        }),
+        ax=ax_freq, cmap="Greys", vmin=0, vmax=1.6, cbar=False,
+        linewidths=0.5, linecolor="white", yticklabels=False,
+    )
+    for i, (rank, freq) in enumerate(zip(top["mean_rank"], top["top20_frequency"])):
+        ax_freq.text(0.5, i + 0.5, f"{rank:.1f}", ha="center", va="center", fontsize=10)
+        ax_freq.text(1.5, i + 0.5, f"{freq:.0%}", ha="center", va="center", fontsize=10)
+    for a in (ax, ax_freq):
+        a.xaxis.tick_top()
+        a.set_xticklabels(a.get_xticklabels(), rotation=0)
+        a.set_xlabel("")
+        a.set_ylabel("")
     ax.tick_params(labelsize=14, length=0)
-    ax.xaxis.tick_top()
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
+    ax_freq.tick_params(labelsize=12, length=0)
     ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
-    if title:
-        ax.set_title(title, fontsize=16, pad=12)
+    for label, in_panel in zip(ax.get_yticklabels(), top["in_panel"]):
+        label.set_fontweight("bold" if in_panel else "normal")
     cbar = ax.collections[0].colorbar
     cbar.set_label("log\u2082 fold change", fontsize=14)
     cbar.ax.tick_params(labelsize=12, length=0)
     cbar.outline.set_visible(False)
-    ax.set_xlabel("")
-    ax.set_ylabel("")
-    ax.text(0, -0.02, "* padj < 0.05", transform=ax.transAxes, fontsize=13,
-            ha="left", va="top")
 
     output_path.mkdir(parents=True, exist_ok=True)
     save_path = output_path / output_filename

@@ -47,19 +47,21 @@ def make_score(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
 def evaluate(y_true, y_pred, model_name: str, subset: str, output_dir: Path,
              fig_dir: Path, labels: list[str] | None = None) -> dict[str, float]:
     """Write the classification report and confusion matrix (CSV + PNG); return scores."""
+    order = CLASS_ORDER[subset]
     if labels is None:
         present = set(y_true) | set(y_pred)
-        order = CLASS_ORDER[subset]
         labels = [c for c in order if c in present] + sorted(present - set(order))
+    true_set = set(y_true)
+    true_labels = [c for c in order if c in true_set] + sorted(true_set - set(order))
+    all_labels = labels + [c for c in true_labels if c not in labels]
     report = classification_report(
-        y_true, y_pred, labels=labels, zero_division=0, output_dict=True
+        y_true, y_pred, labels=all_labels, zero_division=0, output_dict=True
     )
     pd.DataFrame(report).transpose().to_csv(
         output_dir / f"{model_name}_classification_report.csv"
     )
-    true_labels = [c for c in labels if c in set(y_true)]
-    cm = confusion_matrix(y_true, y_pred, labels=labels, normalize="true")[
-        [labels.index(c) for c in true_labels]
+    cm = confusion_matrix(y_true, y_pred, labels=all_labels, normalize="true")[
+        np.ix_([all_labels.index(c) for c in true_labels], range(len(labels)))
     ]
     pd.DataFrame(cm, index=true_labels, columns=labels).to_csv(
         output_dir / f"{model_name}_confusion_matrix.csv"
@@ -213,12 +215,15 @@ class ModelTrainer:
                     if condition == "feature_selection":
                         best_params["select_forest__estimator__n_jobs"] = self.n_jobs
                     best = pipe.set_params(**best_params)
+                    pre = best[:-1]
 
-                    X_clf = best[:-1].fit_transform(X_tr, y_tr)
+                    X_clf = pre.fit_transform(X_tr, y_tr)
                     start = time.perf_counter()
                     best[-1].fit(X_clf, y_tr, sample_weight=fit_params["clf__sample_weight"])
                     training_time = time.perf_counter() - start
-                    y_pred = self.label_encoder.inverse_transform(best.predict(X_te))
+                    y_pred = self.label_encoder.inverse_transform(
+                        best[-1].predict(pre.transform(X_te))
+                    )
 
                     per_fold_rows.append({
                         "condition": condition,
@@ -226,7 +231,7 @@ class ModelTrainer:
                         "outer_fold": fold_idx,
                         "best_params": json.dumps(gs.best_params_, default=str),
                         "inner_best_score": gs.best_score_,
-                        "n_genes": len(best[:-1].get_feature_names_out()),
+                        "n_genes": len(pre.get_feature_names_out()),
                         "training_time": training_time,
                         **make_score(y_te, y_pred),
                     })

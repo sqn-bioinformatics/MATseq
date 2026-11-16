@@ -7,7 +7,9 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 
 sys.path.insert(0, str(Path(__file__).parent))
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -58,6 +60,13 @@ from src.config import (
 RESULTS_DIR = Path(__file__).parent / "results"
 N_JOBS = get_config("n_jobs")
 RANDOM_STATE = MODEL_TRAINING_CONFIG["random_state"]
+STABILITY_SEEDS = [
+    RANDOM_STATE,
+    *(int(s) for s in np.random.default_rng(RANDOM_STATE).integers(10_000, size=10)[1:]),
+]
+STABILITY_MAX_FEATURES = 100
+STABILITY_TOP_N = 35
+STABILITY_TOP_K = 20
 
 def run_snakemake_preprocessing(
     fastq_dir: Path | None = None,
@@ -211,7 +220,17 @@ def run_pipeline(
     }
     for panel_name, panel in panels.items():
         subdir = "" if panel_name == "main" else panel_name
+
+        # DeSeq2-style filter.
+        keep = (panel["X"] >= 10).sum() >= panel["y"].value_counts().min() 
+
         panel.update(
+            X=panel["X"].loc[:, keep],
+            X_test=panel["X_test"].loc[:, keep],
+            endpoint_subsets={
+                "additional_ligands": (X_other.loc[:, keep], y_other),
+                "bacterial_ligands": (X_bact.loc[:, keep], y_bact),
+            },
             fs_dir=out_dir / subdir,
             fs_fig_dir=RESULTS_DIR / "figures" / "feature_selection" / subdir,
             pca_dir=RESULTS_DIR / "figures" / "pca" / subdir,
@@ -249,10 +268,6 @@ def run_pipeline(
         plot_forest_ari_sweep(ari_scan, panel["fs_fig_dir"])
 
     print("\n --- STEP 4: PLOT PCA GRAPHS ---")
-    endpoint_subsets = {
-        "additional_ligands": (X_other, y_other),
-        "bacterial_ligands": (X_bact, y_bact),
-    }
     for panel_name, panel in panels.items():
         panel["fs_pipe"] = feature_pipeline(
             **FEATURE_SELECTION_CONFIG, k_best=panel["mi_elbow"],
@@ -265,7 +280,7 @@ def run_pipeline(
         for subset, (X_sub, y_sub) in {
             "train_ligands": (panel["X"], panel["y"]),
             "test_ligands": (panel["X_test"], panel["y_test"]),
-            **endpoint_subsets,
+            **panel["endpoint_subsets"],
         }.items():
             print(f"\nProcessing {panel_name} {subset} subset...")
             if subset in ["train_ligands", "test_ligands"]:
@@ -318,9 +333,54 @@ def run_pipeline(
 
         fs_ranked = selected_with_importance(panel["fs_pipe"])
         panel["fs_genes"] = set(fs_ranked["gene"])
+        seed_ranked = pd.concat([
+            selected_with_importance(pipe).assign(seed=seed)
+            for seed, pipe in zip(
+                STABILITY_SEEDS,
+                Parallel(n_jobs=len(STABILITY_SEEDS))(
+                    delayed(
+                        feature_pipeline(
+                            **{
+                                **FEATURE_SELECTION_CONFIG,
+                                "max_features": STABILITY_MAX_FEATURES,
+                            },
+                            k_best=panel["mi_elbow"],
+                            random_state=seed,
+                            n_jobs=N_JOBS // len(STABILITY_SEEDS),
+                        ).fit
+                    )(panel["X"], panel["y"])
+                    for seed in STABILITY_SEEDS
+                ),
+            )
+        ])
+        ranks = seed_ranked.pivot(
+            index="gene", columns="seed", values="rank"
+        ).fillna(STABILITY_MAX_FEATURES + 1)
+        stability = pd.DataFrame({
+            "mean_rank": ranks.mean(axis=1),
+            "top20_frequency": ranks.le(STABILITY_TOP_K).mean(axis=1),
+            "seed_frequency": ranks.le(STABILITY_MAX_FEATURES).mean(axis=1),
+            "mean_importance": (
+                seed_ranked.groupby("gene")["importance"].sum()
+                / len(STABILITY_SEEDS)
+            ),
+            "in_panel": ranks.index.isin(panel["fs_genes"]),
+        }).sort_values(["mean_rank", "top20_frequency"], ascending=[True, False])
+        seed_ranked.to_csv(panel["fs_dir"] / "seed_stability_per_seed.csv", index=False)
+        stability.to_csv(panel["fs_dir"] / "seed_stability_genes.csv")
+        print(
+            f"  [{panel_name}] "
+            f"{stability.loc[stability['in_panel'], 'seed_frequency'].eq(1).sum()}/"
+            f"{len(panel['fs_genes'])} panel genes in the top "
+            f"{STABILITY_MAX_FEATURES} of all {len(STABILITY_SEEDS)} seeds; "
+            f"{stability.head(STABILITY_TOP_N)['in_panel'].sum()} panel genes in the "
+            f"{STABILITY_TOP_N} best mean ranks; panel top-{STABILITY_TOP_K} "
+            f"frequency: "
+            f"{stability.loc[stability['in_panel'], 'top20_frequency'].to_dict()}"
+        )
         plot_panel_support(
             results=deseq2_train.results,
-            genes=list(fs_ranked["gene"]),
+            stability=stability,
             ligands=[
                 ligand
                 for ligand in CLASS_ORDER["train_ligands"]
@@ -328,7 +388,9 @@ def run_pipeline(
                 and not (panel_name == "no_flapa" and ligand == "Fla-PA")
             ],
             output_path=panel["fs_fig_dir"],
-            title=f"{len(fs_ranked)}-gene panel support across TLR ligands",
+            top_n=STABILITY_TOP_N,
+            top_k=STABILITY_TOP_K,
+            max_features=STABILITY_MAX_FEATURES,
         )
         plot_venn(
             [panel["de_genes"], panel["fs_genes"]],
@@ -392,7 +454,7 @@ def run_pipeline(
             trainer, panel["X_test"], panel["y_test"], "test_ligands",
             panel["val_dir"], panel["val_fig_dir"],
         ).to_csv(panel["perf_csv"], index=False)
-        for subset, (X_end, y_end) in endpoint_subsets.items():
+        for subset, (X_end, y_end) in panel["endpoint_subsets"].items():
             predict_samples(
                 trainer, X_end, y_end, subset,
                 panel["pred_dir"] / subset, panel["pred_fig_dir"] / subset,
